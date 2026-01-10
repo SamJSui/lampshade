@@ -1,0 +1,104 @@
+use crate::{common, context::Context};
+
+pub struct SortPipeline {
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub reduce_pipeline: wgpu::ComputePipeline,
+    pub scatter_pipeline: wgpu::ComputePipeline,
+    pub vt: u32,
+    pub block_size: u32,
+}
+
+impl SortPipeline {
+    pub fn new(ctx: &Context) -> Self {
+        let bind_group_layout =
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Fused Sort Layout"),
+                    entries: &[
+                        common::buffers::bind_entry(0, true, false),  // Input
+                        common::buffers::bind_entry(1, false, false), // Hist
+                        common::buffers::bind_entry(2, false, false), // Output
+                        common::buffers::bind_entry(3, false, true),  // Uniforms
+                    ],
+                });
+
+        let limits = ctx.device.limits();
+        let max_shared_mem = limits.max_compute_workgroup_storage_size;
+
+        let (vt, block_size) = if max_shared_mem >= 32768 {
+            (8, 256) // M3 / Desktop
+        } else {
+            (4, 128) // Mobile
+        };
+
+        let config = common::shader::ShaderConfig { vt, block_size };
+
+        common::shader::create_compute_pipeline(
+            &ctx.device,
+            &bind_group_layout,
+            include_str!("sort.wgsl"),
+            &format!("Reduce VT{}", vt),
+            "main_reduce",
+            Some(&config),
+        );
+
+        common::shader::create_compute_pipeline(
+            &ctx.device,
+            &bind_group_layout,
+            include_str!("sort.wgsl"),
+            &format!("Scatter VT{}", vt),
+            "main_scatter",
+            Some(&config),
+        );
+
+        let raw_shader = include_str!("sort.wgsl");
+        let final_source = raw_shader
+            .replace("{{VT}}", &vt.to_string())
+            .replace("{{BLOCK_SIZE}}", &block_size.to_string());
+
+        let shader_module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Fused Sort Shader"),
+                source: wgpu::ShaderSource::Wgsl(final_source.into()),
+            });
+
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Fused Pipeline Layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                immediate_size: 0,
+            });
+
+        let reduce_pipeline =
+            ctx.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("Reduce Pipeline"),
+                    layout: Some(&pipeline_layout),
+                    module: &shader_module,
+                    entry_point: Some("main_reduce"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+
+        let scatter_pipeline =
+            ctx.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("Scatter Pipeline"),
+                    layout: Some(&pipeline_layout),
+                    module: &shader_module,
+                    entry_point: Some("main_scatter"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+
+        Self {
+            bind_group_layout,
+            reduce_pipeline,
+            scatter_pipeline,
+            vt,
+            block_size,
+        }
+    }
+}
