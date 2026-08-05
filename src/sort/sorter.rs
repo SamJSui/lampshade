@@ -1,5 +1,5 @@
-use crate::Error;
 use crate::context::Context;
+use crate::{Error, GpuProfile};
 
 use super::core::RadixSorter;
 use super::pipeline::SortItemKind;
@@ -35,6 +35,18 @@ impl Sorter {
         num_items: u32,
     ) -> Result<(), Error> {
         self.core.sort_gpu_to_gpu(input, output, num_items)
+    }
+
+    /// Profiles a GPU-buffer radix sort using GPU timestamps.
+    pub async fn profile_sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        self.core
+            .profile_sort_gpu_to_gpu(input, output, num_items)
+            .await
     }
 
     /// Records a GPU radix sort without submitting or waiting for the work.

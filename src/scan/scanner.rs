@@ -1,10 +1,22 @@
-use super::pipeline::ScanPipeline;
-use crate::{Error, common, context::Context};
+use super::pipeline::{ScanDispatch, ScanPipeline};
+use crate::{
+    Error, common,
+    context::Context,
+    profiling::{GpuProfile, TimestampRecorder},
+};
 
 #[derive(Clone, Copy)]
 enum ScanMode {
     Inclusive,
     Exclusive,
+}
+
+struct ScanRecording<'a> {
+    input: &'a wgpu::Buffer,
+    output: &'a wgpu::Buffer,
+    num_items: u32,
+    mode: ScanMode,
+    profile_prefix: &'a str,
 }
 
 /// Performs inclusive and exclusive unsigned 32-bit prefix scans on a wgpu device.
@@ -88,9 +100,96 @@ impl Scanner {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.record_scan_with_mode(&mut encoder, input_buf, output_buf, num_items, mode)?;
+        self.record_scan_with_mode(
+            &mut encoder,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode,
+                profile_prefix: "scan",
+            },
+            None,
+        )?;
         self.queue.submit(Some(encoder.finish()));
         Ok(())
+    }
+
+    /// Profiles an inclusive scan of caller-owned GPU buffers using GPU timestamps.
+    pub async fn profile_scan_gpu_to_gpu(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        self.profile_scan_with_mode(input_buf, output_buf, num_items, ScanMode::Inclusive)
+            .await
+    }
+
+    /// Profiles an exclusive scan of caller-owned GPU buffers using GPU timestamps.
+    pub async fn profile_exclusive_scan_gpu_to_gpu(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        self.profile_scan_with_mode(input_buf, output_buf, num_items, ScanMode::Exclusive)
+            .await
+    }
+
+    async fn profile_scan_with_mode(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+        mode: ScanMode,
+    ) -> Result<GpuProfile, Error> {
+        let span_count = self.pipeline.compute_pass_count(num_items);
+        if span_count == 0 {
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Profiled Trivial Scan"),
+                });
+            self.record_scan_with_mode(
+                &mut encoder,
+                ScanRecording {
+                    input: input_buf,
+                    output: output_buf,
+                    num_items,
+                    mode,
+                    profile_prefix: "scan",
+                },
+                None,
+            )?;
+            let submission = self.queue.submit(Some(encoder.finish()));
+            self.device.poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })?;
+            return Ok(GpuProfile::empty());
+        }
+
+        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Profiled Prefix Scan"),
+            });
+        self.record_scan_with_mode(
+            &mut encoder,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode,
+                profile_prefix: "scan",
+            },
+            Some(&mut profiler),
+        )?;
+        profiler.resolve(&mut encoder);
+        let submission = self.queue.submit(Some(encoder.finish()));
+        profiler.read(&self.device, submission).await
     }
 
     /// Records a GPU prefix scan without submitting or waiting for the work.
@@ -103,10 +202,14 @@ impl Scanner {
     ) -> Result<(), Error> {
         self.record_scan_with_mode(
             encoder,
-            input_buf,
-            output_buf,
-            num_items,
-            ScanMode::Inclusive,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode: ScanMode::Inclusive,
+                profile_prefix: "scan",
+            },
+            None,
         )
     }
 
@@ -120,34 +223,69 @@ impl Scanner {
     ) -> Result<(), Error> {
         self.record_scan_with_mode(
             encoder,
-            input_buf,
-            output_buf,
-            num_items,
-            ScanMode::Exclusive,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode: ScanMode::Exclusive,
+                profile_prefix: "scan",
+            },
+            None,
         )
     }
 
-    fn record_scan_with_mode(
+    pub(crate) fn record_profiled_scan(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
         num_items: u32,
-        mode: ScanMode,
+        profile_prefix: &str,
+        profiler: &mut TimestampRecorder,
     ) -> Result<(), Error> {
+        self.record_scan_with_mode(
+            encoder,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode: ScanMode::Inclusive,
+                profile_prefix,
+            },
+            Some(profiler),
+        )
+    }
+
+    pub(crate) fn compute_pass_count(&self, num_items: u32) -> u32 {
+        self.pipeline.compute_pass_count(num_items)
+    }
+
+    fn record_scan_with_mode(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        recording: ScanRecording<'_>,
+        mut profiler: Option<&mut TimestampRecorder>,
+    ) -> Result<(), Error> {
+        let ScanRecording {
+            input,
+            output,
+            num_items,
+            mode,
+            profile_prefix,
+        } = recording;
         if num_items == 0 {
             return Ok(());
         }
 
         let size_bytes = common::math::checked_byte_size(u64::from(num_items), 4)?;
         common::buffers::validate_buffer(
-            input_buf,
+            input,
             "scan input",
             size_bytes,
             wgpu::BufferUsages::COPY_SRC,
         )?;
         common::buffers::validate_buffer(
-            output_buf,
+            output,
             "scan output",
             size_bytes,
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
@@ -156,14 +294,14 @@ impl Scanner {
         if num_items == 1 {
             match mode {
                 ScanMode::Inclusive => {
-                    encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
+                    encoder.copy_buffer_to_buffer(input, 0, output, 0, size_bytes);
                 }
-                ScanMode::Exclusive => encoder.clear_buffer(output_buf, 0, Some(size_bytes)),
+                ScanMode::Exclusive => encoder.clear_buffer(output, 0, Some(size_bytes)),
             }
             return Ok(());
         }
 
-        encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
+        encoder.copy_buffer_to_buffer(input, 0, output, 0, size_bytes);
 
         self.prepare_scratch(num_items);
 
@@ -180,7 +318,7 @@ impl Scanner {
 
         let mut levels = Vec::new();
         levels.push(Level {
-            buf: output_buf,
+            buf: output,
             offset: 0,
             count: num_items,
         });
@@ -203,14 +341,22 @@ impl Scanner {
                 (1, ScanMode::Exclusive) => &self.pipeline.exclusive_scan_pipeline,
                 _ => &self.pipeline.inclusive_scan_pipeline,
             };
+            let profile_label = profiler
+                .is_some()
+                .then(|| format!("{profile_prefix}.level.{}", levels.len() - 1));
 
             self.pipeline.dispatch(
                 &self.device,
                 encoder,
-                scan_pipeline,
-                (current.buf, current.offset),
-                (scratch, aux_offset),
-                current.count,
+                ScanDispatch {
+                    pipeline: scan_pipeline,
+                    data: (current.buf, current.offset),
+                    auxiliary: (scratch, aux_offset),
+                    num_items: current.count,
+                    pass_label: "Prefix Scan",
+                    profile_label,
+                },
+                profiler.as_deref_mut(),
             );
 
             levels.push(Level {
@@ -224,14 +370,22 @@ impl Scanner {
         for i in (0..levels.len() - 1).rev() {
             let data_level = &levels[i];
             let aux_level = &levels[i + 1];
+            let profile_label = profiler
+                .is_some()
+                .then(|| format!("{profile_prefix}.add.{i}"));
 
             self.pipeline.dispatch(
                 &self.device,
                 encoder,
-                &self.pipeline.add_pipeline,
-                (data_level.buf, data_level.offset),
-                (aux_level.buf, aux_level.offset),
-                data_level.count,
+                ScanDispatch {
+                    pipeline: &self.pipeline.add_pipeline,
+                    data: (data_level.buf, data_level.offset),
+                    auxiliary: (aux_level.buf, aux_level.offset),
+                    num_items: data_level.count,
+                    pass_label: "Prefix Add",
+                    profile_label,
+                },
+                profiler.as_deref_mut(),
             );
         }
 

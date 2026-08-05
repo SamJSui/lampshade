@@ -2,6 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 use crate::common;
+use crate::profiling::{self, GpuProfile, TimestampRecorder};
 use crate::scan::Scanner;
 
 use super::pipeline::{SortItemKind, SortPipeline};
@@ -84,8 +85,54 @@ impl RadixSorter {
         output: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
-        if num_items == 0 {
+        let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(());
+        };
+        self.record_radix_passes(encoder, input, output, problem, None)
+    }
+
+    pub async fn profile_sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        let Some(problem) = self.prepare_sort(input, output, num_items)? else {
+            return Ok(GpuProfile::empty());
+        };
+        let histogram_items = problem
+            .num_blocks
+            .checked_mul(4)
+            .ok_or(Error::SizeOverflow)?;
+        let spans_per_radix_pass = self
+            .scanner
+            .compute_pass_count(histogram_items)
+            .checked_add(2)
+            .ok_or(Error::SizeOverflow)?;
+        let span_count = RADIX_PASSES
+            .checked_mul(spans_per_radix_pass)
+            .ok_or(Error::SizeOverflow)?;
+
+        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Profiled Radix Sort"),
+            });
+        self.record_radix_passes(&mut encoder, input, output, problem, Some(&mut profiler))?;
+        profiler.resolve(&mut encoder);
+        let submission = self.queue.submit(Some(encoder.finish()));
+        profiler.read(&self.device, submission).await
+    }
+
+    fn prepare_sort(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<Option<PreparedSort>, Error> {
+        if num_items == 0 {
+            return Ok(None);
         }
 
         let problem = self.describe_sort(num_items)?;
@@ -103,7 +150,7 @@ impl RadixSorter {
         )?;
 
         self.ensure_workspace(problem.size_bytes)?;
-        self.record_radix_passes(encoder, input, output, problem)
+        Ok(Some(problem))
     }
 
     fn describe_sort(&self, num_items: u32) -> Result<PreparedSort, Error> {
@@ -135,6 +182,7 @@ impl RadixSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         problem: PreparedSort,
+        mut profiler: Option<&mut TimestampRecorder>,
     ) -> Result<(), Error> {
         let max_dispatch = 65_535;
         let x_groups = problem.num_blocks.min(max_dispatch);
@@ -167,25 +215,50 @@ impl RadixSorter {
                 uniform_offset,
             );
 
-            record_compute_pass(
+            let reduce_profile_label = profiler
+                .is_some()
+                .then(|| format!("radix.{radix_pass:02}.reduce"));
+            profiling::record_compute_pass(
                 encoder,
-                &self.pipeline.reduce_pipeline,
-                &reduce_bind_group,
-                x_groups,
-                y_groups,
+                "Radix Histogram Reduce",
+                reduce_profile_label,
+                profiler.as_deref_mut(),
+                |pass| {
+                    pass.set_pipeline(&self.pipeline.reduce_pipeline);
+                    pass.set_bind_group(0, &reduce_bind_group, &[]);
+                    pass.dispatch_workgroups(x_groups, y_groups, 1);
+                },
             );
-            self.scanner.record_scan(
+            if let Some(profiler) = profiler.as_deref_mut() {
+                self.scanner.record_profiled_scan(
+                    encoder,
+                    &workspace.histogram,
+                    &workspace.scanned_histogram,
+                    histogram_items,
+                    &format!("radix.{radix_pass:02}.scan"),
+                    profiler,
+                )?;
+            } else {
+                self.scanner.record_scan(
+                    encoder,
+                    &workspace.histogram,
+                    &workspace.scanned_histogram,
+                    histogram_items,
+                )?;
+            }
+            let scatter_profile_label = profiler
+                .is_some()
+                .then(|| format!("radix.{radix_pass:02}.scatter"));
+            profiling::record_compute_pass(
                 encoder,
-                &workspace.histogram,
-                &workspace.scanned_histogram,
-                histogram_items,
-            )?;
-            record_compute_pass(
-                encoder,
-                &self.pipeline.scatter_pipeline,
-                &scatter_bind_group,
-                x_groups,
-                y_groups,
+                "Radix Stable Scatter",
+                scatter_profile_label,
+                profiler.as_deref_mut(),
+                |pass| {
+                    pass.set_pipeline(&self.pipeline.scatter_pipeline);
+                    pass.set_bind_group(0, &scatter_bind_group, &[]);
+                    pass.dispatch_workgroups(x_groups, y_groups, 1);
+                },
             );
         }
 
@@ -312,17 +385,4 @@ fn create_sort_bind_group(
             },
         ],
     })
-}
-
-fn record_compute_pass(
-    encoder: &mut wgpu::CommandEncoder,
-    pipeline: &wgpu::ComputePipeline,
-    bind_group: &wgpu::BindGroup,
-    x_groups: u32,
-    y_groups: u32,
-) {
-    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-    pass.set_pipeline(pipeline);
-    pass.set_bind_group(0, bind_group, &[]);
-    pass.dispatch_workgroups(x_groups, y_groups, 1);
 }

@@ -1,4 +1,13 @@
-use crate::common;
+use crate::{common, profiling};
+
+pub struct ScanDispatch<'a> {
+    pub pipeline: &'a wgpu::ComputePipeline,
+    pub data: (&'a wgpu::Buffer, u64),
+    pub auxiliary: (&'a wgpu::Buffer, u64),
+    pub num_items: u32,
+    pub pass_label: &'static str,
+    pub profile_label: Option<String>,
+}
 
 pub struct ScanPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -88,17 +97,28 @@ impl ScanPipeline {
         size
     }
 
+    pub fn compute_pass_count(&self, num_items: u32) -> u32 {
+        let items_per_block = self.vt * self.block_size;
+        let mut levels = 0;
+        let mut current_items = num_items;
+
+        while current_items > 1 {
+            current_items = current_items.div_ceil(items_per_block);
+            levels += 1;
+        }
+
+        levels * 2
+    }
+
     pub fn dispatch(
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        pipeline: &wgpu::ComputePipeline,
-        data: (&wgpu::Buffer, u64),
-        auxiliary: (&wgpu::Buffer, u64),
-        num_items: u32,
+        dispatch: ScanDispatch<'_>,
+        profiler: Option<&mut profiling::TimestampRecorder>,
     ) {
-        let (data_buf, data_off) = data;
-        let (aux_buf, aux_off) = auxiliary;
+        let (data_buf, data_off) = dispatch.data;
+        let (aux_buf, aux_off) = dispatch.auxiliary;
 
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Scan Dispatch BG"),
@@ -123,12 +143,8 @@ impl ScanPipeline {
             ],
         });
 
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-        cpass.set_pipeline(pipeline);
-        cpass.set_bind_group(0, &bg, &[]);
-
         let items_per_block = self.vt * self.block_size;
-        let workgroups = common::math::calc_groups(num_items, items_per_block);
+        let workgroups = common::math::calc_groups(dispatch.num_items, items_per_block);
 
         let max_dispatch = 65535;
         let x = if workgroups > max_dispatch {
@@ -138,6 +154,16 @@ impl ScanPipeline {
         };
         let y = workgroups.div_ceil(max_dispatch);
 
-        cpass.dispatch_workgroups(x, y, 1);
+        profiling::record_compute_pass(
+            encoder,
+            dispatch.pass_label,
+            dispatch.profile_label,
+            profiler,
+            |pass| {
+                pass.set_pipeline(dispatch.pipeline);
+                pass.set_bind_group(0, &bg, &[]);
+                pass.dispatch_workgroups(x, y, 1);
+            },
+        );
     }
 }

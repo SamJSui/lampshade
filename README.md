@@ -131,12 +131,25 @@ Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is 
 
 At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, 2.287 billion elements/s for key-only sort, and 906.83 million pairs/s for stable key-value sort. See the [full methodology, confidence intervals, backend comparison, and memory accounting](benchmarks/2026-08-05-windows.md).
 
+## GPU profiling (unreleased)
+
+The current development branch adds capability-gated hardware timestamp queries to `Scanner`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve queries. Profiled calls return labeled dispatch spans, total dispatch time, and elapsed GPU time; the same compute passes carry stable labels for external tools such as NVIDIA Nsight Graphics.
+
+Run the steady-state profile from a source checkout:
+
+```powershell
+$env:WGPU_BACKEND = 'vulkan' # or 'dx12'
+cargo run --release --example profile_primitives
+```
+
+At 100M items, stable scatter accounted for 67-75% of measured sort dispatch time while histogram scanning accounted for 1% or less. Inter-pass gaps were below 0.7 ms. This identifies scatter as the next optimization target and rules out scan or submission gaps as the primary large-input bottleneck. See the [timestamp methodology and complete Vulkan/DX12 matrix](benchmarks/2026-08-05-gpu-timestamps.md).
+
 ## Roadmap
 
-Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. Version 0.3 adds exclusive scan and stable key-value radix sort. The next work is ordered by how much it improves the crate as a reusable primitive library:
+Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. Version 0.3 adds exclusive scan and stable key-value radix sort. Current development adds per-dispatch GPU timestamp profiling. The next work is ordered by measured impact:
 
-1. **Measure kernels directly:** add GPU timestamp-query benchmarks and per-pass profiling so optimization decisions are separated from command submission and synchronization cost.
-2. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer allocation and tune workgroup/radix configurations from measurements across DX12, Vulkan, and Metal.
+1. **Optimize stable scatter:** use Nsight Graphics to measure memory traffic, occupancy, and divergence, then tune the scatter workgroup prefix and writes against the timestamp baseline.
+2. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer and bind-group allocation after preserving the measured kernel profile.
 3. **Build derived primitives:** implement stream compaction and selection on top of scan after the lower-level APIs and performance contracts are stable.
 4. **Broaden hardware evidence:** publish reproducible benchmark reports from integrated and discrete GPUs, including crossover sizes, memory use, and resident versus round-trip behavior.
 

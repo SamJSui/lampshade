@@ -1,5 +1,5 @@
-use crate::Error;
 use crate::context::Context;
+use crate::{Error, GpuProfile};
 
 use super::core::RadixSorter;
 use super::pipeline::SortItemKind;
@@ -49,6 +49,18 @@ impl KeyValueSorter {
         num_items: u32,
     ) -> Result<(), Error> {
         self.core.sort_gpu_to_gpu(input, output, num_items)
+    }
+
+    /// Profiles a stable GPU-buffer key-value radix sort using GPU timestamps.
+    pub async fn profile_sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        self.core
+            .profile_sort_gpu_to_gpu(input, output, num_items)
+            .await
     }
 
     /// Records a stable GPU key-value radix sort without submitting or waiting.
