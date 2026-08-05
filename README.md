@@ -98,18 +98,11 @@ queue.submit(Some(encoder.finish()));
 
 ## Installation
 
-The crates.io `0.2` release contains inclusive scan and key-only radix sort:
+Version `0.3` contains inclusive and exclusive scan, key-only radix sort, and stable key-value radix sort:
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.2"
-```
-
-Exclusive scan and stable key-value sort are currently available from `main` and are planned for version 0.3:
-
-```toml
-[dependencies]
-wgpu-primitives = { git = "https://github.com/samjsui/wgpu-primitives" }
+wgpu-primitives = "0.3"
 ```
 
 ## Algorithms
@@ -140,7 +133,7 @@ At 100M items, resident throughput reached 17.96 billion elements/s for inclusiv
 
 ## Roadmap
 
-Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. The current main branch adds exclusive scan and stable key-value sort for the planned 0.3 release. The next work is ordered by how much it improves the crate as a reusable primitive library:
+Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. Version 0.3 adds exclusive scan and stable key-value radix sort. The next work is ordered by how much it improves the crate as a reusable primitive library:
 
 1. **Measure kernels directly:** add GPU timestamp-query benchmarks and per-pass profiling so optimization decisions are separated from command submission and synchronization cost.
 2. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer allocation and tune workgroup/radix configurations from measurements across DX12, Vulkan, and Metal.
