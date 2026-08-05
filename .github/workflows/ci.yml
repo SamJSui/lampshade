@@ -37,3 +37,9 @@ jobs:
         run: cargo test --doc
       - name: Verify package contents
         run: cargo package
+      - name: Check deprecated compatibility package
+        run: |
+          cargo fmt --manifest-path compat/wgpu-algorithms/Cargo.toml -- --check
+          cargo clippy --manifest-path compat/wgpu-algorithms/Cargo.toml -- -D warnings
+      - name: List compatibility package contents
+        run: cargo package --list --manifest-path compat/wgpu-algorithms/Cargo.toml
