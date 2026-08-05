@@ -5,9 +5,8 @@ use crate::common;
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 use crate::scan::Scanner;
 
-use super::pipeline::{SortItemKind, SortPipeline};
+use super::pipeline::{RadixVariant, SortItemKind, SortPipeline};
 
-const RADIX_PASSES: u32 = 16;
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
 const UNIFORM_SIZE_BYTES: u64 = 16;
 
@@ -36,11 +35,34 @@ pub struct RadixSorter {
 
 impl RadixSorter {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
+        Self::new_with_variant(device, queue, item_kind, RadixVariant::Portable)
+    }
+
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        Self::new_with_variant(
+            device,
+            queue,
+            item_kind,
+            RadixVariant::for_adapter(item_kind, adapter_info),
+        )
+    }
+
+    fn new_with_variant(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        radix_variant: RadixVariant,
+    ) -> Self {
         Self {
             device: device.clone(),
             queue: queue.clone(),
             scanner: Scanner::new(device, queue),
-            pipeline: SortPipeline::new(device, item_kind),
+            pipeline: SortPipeline::new(device, item_kind, radix_variant),
             workspace: None,
             item_size: item_kind.size_bytes(),
         }
@@ -102,14 +124,16 @@ impl RadixSorter {
         };
         let histogram_items = problem
             .num_blocks
-            .checked_mul(4)
+            .checked_mul(self.pipeline.bucket_count)
             .ok_or(Error::SizeOverflow)?;
         let spans_per_radix_pass = self
             .scanner
             .compute_pass_count(histogram_items)
             .checked_add(2)
             .ok_or(Error::SizeOverflow)?;
-        let span_count = RADIX_PASSES
+        let span_count = self
+            .pipeline
+            .pass_count
             .checked_mul(spans_per_radix_pass)
             .ok_or(Error::SizeOverflow)?;
 
@@ -189,13 +213,18 @@ impl RadixSorter {
         let y_groups = problem.num_blocks.div_ceil(max_dispatch);
         let histogram_items = problem
             .num_blocks
-            .checked_mul(4)
+            .checked_mul(self.pipeline.bucket_count)
             .ok_or(Error::SizeOverflow)?;
 
         let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
-        let (uniform, uniform_stride) = create_uniform_buffer(&self.device, problem);
+        let (uniform, uniform_stride) = create_uniform_buffer(
+            &self.device,
+            problem,
+            self.pipeline.bits_per_pass,
+            self.pipeline.pass_count,
+        );
 
-        for radix_pass in 0..RADIX_PASSES {
+        for radix_pass in 0..self.pipeline.pass_count {
             let (source, destination) = pass_buffers(radix_pass, input, output, &workspace.scratch);
             let uniform_offset = u64::from(radix_pass) * uniform_stride;
             let reduce_bind_group = create_sort_bind_group(
@@ -281,7 +310,10 @@ impl RadixSorter {
         let items_per_block = u64::from(self.pipeline.vt * self.pipeline.block_size);
         let max_items = capacity / self.item_size;
         let max_blocks = max_items.div_ceil(items_per_block);
-        let histogram_bytes = common::math::checked_byte_size(max_blocks, 16)?;
+        let histogram_items = max_blocks
+            .checked_mul(u64::from(self.pipeline.bucket_count))
+            .ok_or(Error::SizeOverflow)?;
+        let histogram_bytes = common::math::checked_byte_size(histogram_items, 4)?;
         let histogram_capacity = common::math::checked_align_to(histogram_bytes, 256)?;
 
         self.workspace = Some(SortWorkspace {
@@ -326,16 +358,21 @@ fn pass_buffers<'a>(
     }
 }
 
-fn create_uniform_buffer(device: &wgpu::Device, problem: PreparedSort) -> (wgpu::Buffer, u64) {
+fn create_uniform_buffer(
+    device: &wgpu::Device,
+    problem: PreparedSort,
+    bits_per_pass: u32,
+    pass_count: u32,
+) -> (wgpu::Buffer, u64) {
     let uniform_stride =
         u64::from(device.limits().min_uniform_buffer_offset_alignment).max(UNIFORM_SIZE_BYTES);
     let words_per_uniform = (uniform_stride / size_of::<u32>() as u64) as usize;
-    let mut data = vec![0_u32; words_per_uniform * RADIX_PASSES as usize];
+    let mut data = vec![0_u32; words_per_uniform * pass_count as usize];
 
-    for radix_pass in 0..RADIX_PASSES as usize {
+    for radix_pass in 0..pass_count as usize {
         let offset = radix_pass * words_per_uniform;
         data[offset..offset + 4].copy_from_slice(&[
-            radix_pass as u32 * 2,
+            radix_pass as u32 * bits_per_pass,
             problem.num_items,
             problem.num_blocks,
             0,

@@ -18,15 +18,18 @@ With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs d
 | Inclusive prefix scan | DX12 | 5.568 ms | 17.96 billion elements/s | Scalar CPU | 5.02x |
 | Exclusive prefix scan | DX12 | 6.238 ms | 16.03 billion elements/s | Scalar CPU | 4.58x |
 | Radix sort | Vulkan | 43.724 ms | 2.287 billion elements/s | Rayon | 6.35x |
-| Stable key-value radix sort | Vulkan | 110.270 ms | 906.83 million pairs/s | Stable Rayon | 6.23x |
+| Stable key-value radix sort | Vulkan | 61.429 ms | 1.628 billion pairs/s | Stable Rayon | 12.36x |
 
 These figures measure the composable resident-buffer path: command encoding, submission, primitive execution, and reusable workspace management are included, while host upload and readback are excluded. See [Performance](#performance) for smaller inputs and round-trip results.
+
+The stable key-value row uses the current unreleased NVIDIA Vulkan fast path. The
+remaining headline rows are from version 0.3.
 
 ## Features
 
 - Inclusive and exclusive `u32` prefix scan.
 - Stable 2-bit LSD radix sort for `u32` values.
-- Stable 2-bit LSD radix sort for `(u32 key, u32 value)` pairs.
+- Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
 - Convenience slice APIs that upload, execute, and read back.
 - GPU-buffer APIs that record into an existing command encoder.
 - Reusable internal scratch storage.
@@ -94,6 +97,9 @@ sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
 queue.submit(Some(encoder.finish()));
 ```
 
+`KeyValueSorter::new_for_adapter` enables measured adapter-specific kernels when
+adapter metadata is available. `KeyValueSorter::new` retains the portable path.
+
 `record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_sort` requires `STORAGE` on both buffers.
 
 ## Installation
@@ -109,9 +115,9 @@ wgpu-primitives = "0.3"
 
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
 
-The radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
+The portable radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
 
-`KeyValueSorter` runs the same stable passes over interleaved `KeyValue` items. Values move with their keys during every scatter, so equal keys retain their original value order.
+`KeyValueSorter` moves values with their keys during every scatter, so equal keys retain their original value order. On discrete NVIDIA Vulkan adapters, adapter-aware construction selects a profiled 4-bit kernel that halves the number of full-buffer passes. Other hardware and backends retain the portable 2-bit kernel.
 
 ## Performance
 
@@ -126,10 +132,10 @@ Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is 
 | Radix sort | 1M | 2.458 ms | 1.331 ms (Vulkan) | 1.85x | 2.453 ms (Vulkan) |
 | Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
 | Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
-| Stable key-value sort | 10M | 51.783 ms | 12.694 ms (Vulkan) | 4.08x | 34.142 ms (Vulkan) |
-| Stable key-value sort | 100M | 687.590 ms | 110.270 ms (Vulkan) | 6.23x | 576.340 ms (Vulkan) |
+| Stable key-value sort | 10M | 59.421 ms | 7.427 ms (Vulkan) | 8.00x | 59.726 ms (Vulkan) |
+| Stable key-value sort | 100M | 759.420 ms | 61.429 ms (Vulkan) | 12.36x | 477.790 ms (Vulkan) |
 
-At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, 2.287 billion elements/s for key-only sort, and 906.83 million pairs/s for stable key-value sort. See the [full methodology, confidence intervals, backend comparison, and memory accounting](benchmarks/2026-08-05-windows.md).
+At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, 2.287 billion elements/s for key-only sort, and 1.628 billion pairs/s for stable key-value sort. See the [base benchmark methodology](benchmarks/2026-08-05-windows.md) and [Vulkan key-value optimization report](benchmarks/2026-08-05-vulkan-key-value-radix.md).
 
 ## GPU profiling (unreleased)
 
@@ -142,16 +148,15 @@ $env:WGPU_BACKEND = 'vulkan' # or 'dx12'
 cargo run --release --example profile_primitives
 ```
 
-At 100M items, stable scatter accounted for 67-75% of measured sort dispatch time while histogram scanning accounted for 1% or less. Inter-pass gaps were below 0.7 ms. This identifies scatter as the next optimization target and rules out scan or submission gaps as the primary large-input bottleneck. See the [timestamp methodology and complete Vulkan/DX12 matrix](benchmarks/2026-08-05-gpu-timestamps.md).
+At 100M items, the baseline profile attributed 67-75% of sort dispatch time to stable scatter and 1% or less to histogram scanning. The resulting Vulkan key-value fast path reduced full-buffer radix passes from 16 to 8 and improved controlled resident wall time by 41.9%; Criterion measured a 44.1% improvement. See the [timestamp baseline](benchmarks/2026-08-05-gpu-timestamps.md) and [optimization report](benchmarks/2026-08-05-vulkan-key-value-radix.md).
 
 ## Roadmap
 
-Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. Version 0.3 adds exclusive scan and stable key-value radix sort. Current development adds per-dispatch GPU timestamp profiling. The next work is ordered by measured impact:
+Version 0.3 added exclusive scan and stable key-value radix sort. Current development adds per-dispatch GPU timestamp profiling and a measured NVIDIA Vulkan key-value fast path. The next work is ordered by measured impact:
 
-1. **Optimize stable scatter:** use Nsight Graphics to measure memory traffic, occupancy, and divergence, then tune the scatter workgroup prefix and writes against the timestamp baseline.
-2. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer and bind-group allocation after preserving the measured kernel profile.
-3. **Build derived primitives:** implement stream compaction and selection on top of scan after the lower-level APIs and performance contracts are stable.
-4. **Broaden hardware evidence:** publish reproducible benchmark reports from integrated and discrete GPUs, including crossover sizes, memory use, and resident versus round-trip behavior.
+1. **Reduce runtime overhead:** remove per-invocation uniform-buffer and bind-group allocation after preserving the measured kernel profile.
+2. **Profile more hardware:** validate radix-width selection on integrated GPUs and additional Vulkan implementations.
+3. **Build derived primitives:** implement stream compaction and selection on top of scan.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 

@@ -1,5 +1,8 @@
 # GPU Timestamp Profile
 
+This report is the pre-optimization baseline. Its scatter finding led to the
+[Vulkan key-value radix optimization](2026-08-05-vulkan-key-value-radix.md).
+
 This report separates steady-state resident wall time from hardware GPU timestamps for the scan and radix-sort dispatches. It profiles the current development branch after version 0.3.0; the profiling APIs are not part of the crates.io 0.3.0 release.
 
 ## System

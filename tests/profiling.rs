@@ -76,6 +76,8 @@ async fn profiles_prefix_scan_dispatches() {
 
 #[tokio::test]
 async fn profiles_key_and_key_value_radix_stages() {
+    const PORTABLE_RADIX_PASS_COUNT: usize = 16;
+
     let Some(context) = support::gpu_context().await else {
         return;
     };
@@ -103,7 +105,7 @@ async fn profiles_key_and_key_value_radix_stages() {
             .iter()
             .filter(|span| span.label.ends_with(".reduce"))
             .count(),
-        16
+        PORTABLE_RADIX_PASS_COUNT
     );
     assert_eq!(
         profile
@@ -111,7 +113,7 @@ async fn profiles_key_and_key_value_radix_stages() {
             .iter()
             .filter(|span| span.label.ends_with(".scatter"))
             .count(),
-        16
+        PORTABLE_RADIX_PASS_COUNT
     );
     assert!(
         profile
@@ -137,7 +139,20 @@ async fn profiles_key_and_key_value_radix_stages() {
     expected.sort_by_key(|item| item.key);
 
     assert_eq!(actual, expected);
-    assert_eq!(pair_profile.spans.len(), profile.spans.len());
+    let pair_reduce_passes = pair_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".reduce"))
+        .count();
+    assert!(matches!(pair_reduce_passes, 8 | PORTABLE_RADIX_PASS_COUNT));
+    assert_eq!(
+        pair_profile
+            .spans
+            .iter()
+            .filter(|span| span.label.ends_with(".scatter"))
+            .count(),
+        pair_reduce_passes
+    );
 }
 
 #[tokio::test]
