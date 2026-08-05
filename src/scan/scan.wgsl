@@ -9,6 +9,7 @@ var<workgroup> temp: array<u32, {{BLOCK_SIZE}}>;
 const VT: u32 = {{VT}}u;
 const BLOCK_SIZE: u32 = {{BLOCK_SIZE}}u;
 const ITEMS_PER_BLOCK: u32 = VT * BLOCK_SIZE;
+override EXCLUSIVE: bool = false;
 
 @compute @workgroup_size(BLOCK_SIZE)
 fn main(
@@ -52,8 +53,13 @@ fn main(
     for (var i = 0u; i < VT; i++) {
         let idx = thread_base + i;
         if (idx < arrayLength(&data)) {
-            running_prefix += my_vals[i];
-            data[idx] = running_prefix;
+            if (EXCLUSIVE) {
+                data[idx] = running_prefix;
+                running_prefix += my_vals[i];
+            } else {
+                running_prefix += my_vals[i];
+                data[idx] = running_prefix;
+            }
         }
     }
 

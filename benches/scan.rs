@@ -16,6 +16,14 @@ fn scan_on_cpu(input: &[u32], output: &mut [u32]) {
     }
 }
 
+fn exclusive_scan_on_cpu(input: &[u32], output: &mut [u32]) {
+    let mut sum = 0_u32;
+    for (value, prefix) in input.iter().zip(output) {
+        *prefix = sum;
+        sum = sum.wrapping_add(*value);
+    }
+}
+
 fn benchmark_scan(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let context = runtime.block_on(Context::init()).unwrap();
@@ -54,12 +62,35 @@ fn benchmark_scan(c: &mut Criterion) {
         );
 
         group.bench_with_input(
+            BenchmarkId::new("cpu_scalar_exclusive", item_count),
+            &item_count,
+            |b, &_| {
+                b.iter(|| {
+                    exclusive_scan_on_cpu(black_box(&input), &mut cpu_output);
+                    black_box(&cpu_output);
+                });
+            },
+        );
+
+        group.bench_with_input(
             BenchmarkId::new("gpu_round_trip", item_count),
             &item_count,
             |b, &_| {
                 b.iter(|| {
                     let output = pollster::block_on(scanner.scan(&input))
                         .expect("GPU round-trip scan failed");
+                    black_box(output);
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("gpu_round_trip_exclusive", item_count),
+            &item_count,
+            |b, &_| {
+                b.iter(|| {
+                    let output = pollster::block_on(scanner.scan_exclusive(&input))
+                        .expect("GPU round-trip exclusive scan failed");
                     black_box(output);
                 });
             },
@@ -73,6 +104,19 @@ fn benchmark_scan(c: &mut Criterion) {
                     scanner
                         .scan_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
                         .expect("GPU-resident scan failed");
+                    support::wait_for_gpu(&context.device);
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("gpu_resident_exclusive", item_count),
+            &item_count,
+            |b, &_| {
+                b.iter(|| {
+                    scanner
+                        .scan_exclusive_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
+                        .expect("GPU-resident exclusive scan failed");
                     support::wait_for_gpu(&context.device);
                 });
             },
