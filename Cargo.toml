@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-algorithms"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "High-performance, safe wgpu Radix Sort and Prefix Scan for Rust."
 authors = ["samjsui"]
@@ -8,8 +8,16 @@ license = "MIT"
 repository = "https://github.com/samjsui/wgpu-algorithms"
 keywords = ["gpgpu", "wgpu", "sort", "radix", "compute"]
 categories = ["algorithms", "graphics", "science"]
-include = ["src/**/*.rs", "src/**/*.wgsl", "Cargo.toml", "README.md", "LICENSE"]
-exclude = ["benches/*", "examples/*", "target/*"]
+include = [
+    "src/**/*.rs",
+    "src/**/*.wgsl",
+    "tests/**/*.rs",
+    "benches/**/*.rs",
+    "examples/**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 wgpu = "28.0.0"

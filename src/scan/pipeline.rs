@@ -1,5 +1,4 @@
 use crate::common;
-use crate::context::Context;
 
 pub struct ScanPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -10,18 +9,16 @@ pub struct ScanPipeline {
 }
 
 impl ScanPipeline {
-    pub fn new(ctx: &Context) -> Self {
-        let bind_group_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Scan Layout"),
-                    entries: &[
-                        common::buffers::bind_entry(0, false, false),
-                        common::buffers::bind_entry(1, false, false),
-                    ],
-                });
+    pub fn new(device: &wgpu::Device) -> Self {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Scan Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, false, false),
+                common::buffers::bind_entry(1, false, false),
+            ],
+        });
 
-        let limits = ctx.device.limits();
+        let limits = device.limits();
         let max_shared_mem = limits.max_compute_workgroup_storage_size;
 
         // High End (M3/Desktop): 32KB+ shared mem -> Use VT=8, Block=256
@@ -36,7 +33,7 @@ impl ScanPipeline {
         let config = common::shader::ShaderConfig { vt, block_size };
 
         let scan_pipeline = common::shader::create_compute_pipeline(
-            &ctx.device,
+            device,
             &bind_group_layout,
             include_str!("scan.wgsl"),
             &format!("Scan VT{} Pipeline", vt),
@@ -45,7 +42,7 @@ impl ScanPipeline {
         );
 
         let add_pipeline = common::shader::create_compute_pipeline(
-            &ctx.device,
+            device,
             &bind_group_layout,
             include_str!("add.wgsl"),
             &format!("Add VT{} Pipeline", vt),

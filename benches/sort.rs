@@ -1,12 +1,13 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rayon::prelude::*;
+use wgpu::util::DeviceExt;
 use wgpu_algorithms::context::Context;
 use wgpu_algorithms::sort::Sorter;
 
 fn benchmark_sorts(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let ctx = rt.block_on(Context::init()).unwrap();
-    let mut my_sorter = Sorter::new(&ctx);
+    let mut sorter = Sorter::from_context(&ctx);
 
     let mut group = c.benchmark_group("Sort");
 
@@ -15,6 +16,19 @@ fn benchmark_sorts(c: &mut Criterion) {
     for &n in &inputs {
         group.throughput(Throughput::Elements(n as u64));
         let data: Vec<u32> = (0..n).map(|_| rand::random()).collect();
+        let gpu_input = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Sort Benchmark Input"),
+                contents: bytemuck::cast_slice(&data),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let gpu_output = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Sort Benchmark Output"),
+            size: (n * size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
 
         if n >= 10_000_000 {
             group.sample_size(10);
@@ -33,28 +47,30 @@ fn benchmark_sorts(c: &mut Criterion) {
         // Includes: Upload -> Sort -> Download
         group.bench_with_input(BenchmarkId::new("GPU (Round Trip)", n), &n, |b, &_| {
             b.iter(|| {
-                pollster::block_on(my_sorter.sort_radix(&data))
-                    .expect("GPU round-trip sort failed");
+                pollster::block_on(sorter.sort(&data)).expect("GPU round-trip sort failed");
             });
         });
 
-        // 3. GPU (Output Resident) - The "Pipeline" use case
-        // Includes: Upload -> Sort
-        // Excludes: Download (the output remains on the GPU)
-        group.bench_with_input(BenchmarkId::new("GPU (Output Resident)", n), &n, |b, &_| {
-            b.iter(|| {
-                my_sorter
-                    .sort_resident(&data)
-                    .expect("GPU output-resident sort failed");
-                // Force GPU to finish execution to measure raw throughput
-                ctx.device
-                    .poll(wgpu::PollType::Wait {
-                        submission_index: None,
-                        timeout: None,
-                    })
-                    .unwrap();
-            });
-        });
+        // 3. GPU (Buffer to Buffer) - The composable pipeline use case
+        // Excludes upload and download; input and output remain on the GPU.
+        group.bench_with_input(
+            BenchmarkId::new("GPU (Buffer to Buffer)", n),
+            &n,
+            |b, &_| {
+                b.iter(|| {
+                    sorter
+                        .sort_gpu_to_gpu(&gpu_input, &gpu_output, n as u32)
+                        .expect("GPU buffer-to-buffer sort failed");
+                    // Force GPU to finish execution to measure raw throughput
+                    ctx.device
+                        .poll(wgpu::PollType::Wait {
+                            submission_index: None,
+                            timeout: None,
+                        })
+                        .unwrap();
+                });
+            },
+        );
     }
     group.finish();
 }

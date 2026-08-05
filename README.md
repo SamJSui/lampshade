@@ -1,82 +1,90 @@
 # wgpu-algorithms
 
+[![CI](https://github.com/samjsui/wgpu-algorithms/actions/workflows/ci.yml/badge.svg)](https://github.com/samjsui/wgpu-algorithms/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/wgpu-algorithms.svg)](https://crates.io/crates/wgpu-algorithms)
 [![Docs.rs](https://docs.rs/wgpu-algorithms/badge.svg)](https://docs.rs/wgpu-algorithms)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A high-performance, safe WebGPU sorting and scanning library for Rust.
-
-**Safe Rust API.** All memory management, bind groups, and synchronization are handled internally. No `unsafe` blocks in library code.
-
-## Performance Benchmarks
-
-Benchmarks run on **Apple M3 Max** (Metal backend).
-
-* **CPU:** Rayon Parallel Sort (`par_sort_unstable`)
-* **GPU Output Resident:** Uploads input and leaves sorted output on the GPU
-* **GPU Round-Trip:** Upload -> Sort -> Download (Utility use-case)
-
-| Items | CPU (Rayon) | GPU (Output Resident) | GPU (Round-Trip) | Verdict |
-| :--- | :--- | :--- | :--- | :--- |
-| **100k** | **0.52 ms** | 6.0 ms | 7.2 ms | ❌ **CPU Wins** (Driver Overhead) |
-| **1M** | **4.5 ms** | 9.1 ms | 10.1 ms | ❌ **CPU Wins** |
-| **10M** | 44.1 ms | **31.3 ms** | 40.9 ms | ✅ **GPU Wins** (1.4x) |
-| **100M** | 506 ms | **273 ms** | 407 ms | 🚀 **GPU Domination** (1.85x) |
-
-**Throughput (100M items):**
-* **Scan:** ~5.2 Billion items/sec
-* **Sort:** ~365 Million items/sec
-
-### Prefix Scan (Inclusive Add)
-Benchmarks include driver submission overhead (`queue.submit` + `device.poll`).
-
-| Items | Time | Throughput | Bandwidth (Effective) |
-| :--- | :--- | :--- | :--- |
-| **100 M** | **19.2 ms** | **5.2 Gelem/s** | **~41.6 GB/s** |
-
-> **Note:** Bandwidth calculated as Read + Write (4 bytes * 2 * items / time).
-
-## Architecture
-The library implements state-of-the-art parallel algorithms tailored for the WebGPU execution model:
-
-* **LSD Radix Sort:** A 2-bit pass (4 bins) decoupling "Counting" and "Scattering" kernels.
-* **Hierarchical Scan:** A "Reduce-Then-Scan" approach using 3 separate kernels (Downsweep, Scan-Aux, Upsweep) to handle arbitrary input sizes.
-* **Vector Tiling (VT):** Automatically adjusts items-per-thread based on GPU capability (e.g., `VT=8` for Desktop, `VT=4` for Mobile) to saturate memory bandwidth.
+Safe, composable GPU prefix scan and unsigned integer radix sort for Rust applications using wgpu.
 
 ## Features
-* **Adaptive Sorting:** Automatically switches between CPU (latency-optimized) and GPU (throughput-optimized) based on input size (< 1M items uses CPU).
-* **Reusable Sort Workspace:** Reuses internal buffers and bind groups when capacity is sufficient.
-* **WGPU Safe:** Runs on Metal, Vulkan, DX12, and WebGPU without experimental features.
+
+- Inclusive `u32` prefix scan.
+- Stable 2-bit LSD radix sort for `u32` values.
+- Convenience slice APIs that upload, execute, and read back.
+- GPU-buffer APIs that record into an existing command encoder.
+- Reusable internal scratch storage.
+- No `unsafe` blocks in library code.
 
 ## Usage
+
+The convenience context is useful for standalone compute programs:
 
 ```rust
 use wgpu_algorithms::{Context, Sorter};
 
 #[tokio::main]
 async fn main() -> Result<(), wgpu_algorithms::Error> {
-    // 1. Initialize GPU Context
-    let ctx = Context::init().await.unwrap();
-    let mut sorter = Sorter::new(&ctx);
+    let context = Context::init().await?;
+    let mut sorter = Sorter::from_context(&context);
+    let sorted = sorter.sort(&[10, 4, 7, 1]).await?;
 
-    // 2. Data
-    let data: Vec<u32> = (0..50_000_000).map(|_| rand::random()).collect();
-
-    // 3. Sort (Auto-selects CPU or GPU based on size)
-    let sorted = sorter.sort(&data).await?;
-    
-    // 4. Verification
-    assert!(sorted[0] <= sorted[1]);
-
+    assert_eq!(sorted, [1, 4, 7, 10]);
     Ok(())
 }
 ```
 
+Applications that already own a wgpu device should reuse it:
+
+```rust,ignore
+let mut scanner = Scanner::new(&device, &queue);
+let mut sorter = Sorter::new(&device, &queue);
+
+scanner.record_scan(&mut encoder, &scan_input, &scan_output, item_count)?;
+sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
+queue.submit(Some(encoder.finish()));
+```
+
+`record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_sort` requires `STORAGE` on both buffers.
+
 ## Installation
 
-Add this to your `Cargo.toml`:
-
-```
+```toml
 [dependencies]
-wgpu-algorithms = "0.1.0"
+wgpu-algorithms = "0.2"
 ```
+
+## Algorithms
+
+The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
+
+The radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
+
+## Historical Performance
+
+These v0.1 measurements were collected on an Apple M3 Max using the Metal backend. The upload-and-execute path excludes readback but still uploads input on every iteration.
+
+| Items | CPU Rayon | GPU upload + execute | GPU round trip |
+| ---: | ---: | ---: | ---: |
+| 100k | 0.52 ms | 6.0 ms | 7.2 ms |
+| 1M | 4.5 ms | 9.1 ms | 10.1 ms |
+| 10M | 44.1 ms | 31.3 ms | 40.9 ms |
+| 100M | 506 ms | 273 ms | 407 ms |
+
+At 100M items, the measured scan throughput was approximately 5.2 billion elements per second and sort throughput was approximately 365 million elements per second. Re-run the current Criterion suite before attributing these historical results to the buffer-to-buffer API.
+
+## Development
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --lib --tests
+cargo check --examples --benches
+cargo package
+```
+
+GPU integration tests skip when no compatible adapter is available. CI installs Mesa's Vulkan software adapter so the shader paths execute on Linux.
+
+## License
+
+MIT

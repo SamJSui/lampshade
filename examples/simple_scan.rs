@@ -11,7 +11,7 @@ async fn run() {
         .await
         .expect("Failed to create WGPU context");
 
-    let mut scanner: Scanner = Scanner::new(&ctx);
+    let mut scanner = Scanner::from_context(&ctx);
 
     let input = vec![1, 1, 1, 1, 1, 1, 1, 1];
     println!("Input: {:?}", input);

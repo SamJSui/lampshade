@@ -1,6 +1,7 @@
 use super::pipeline::ScanPipeline;
 use crate::{Error, common, context::Context};
 
+/// Performs an inclusive unsigned 32-bit prefix scan on a wgpu device.
 pub struct Scanner {
     pipeline: ScanPipeline,
     device: wgpu::Device,
@@ -10,16 +11,23 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(ctx: &Context) -> Self {
+    /// Creates a scanner that submits work through an existing wgpu device and queue.
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
-            pipeline: ScanPipeline::new(ctx),
-            device: ctx.device.clone(),
-            queue: ctx.queue.clone(),
+            pipeline: ScanPipeline::new(device),
+            device: device.clone(),
+            queue: queue.clone(),
             scratch_buffer: None,
             scratch_size_bytes: 0,
         }
     }
 
+    /// Creates a scanner from the crate's optional convenience context.
+    pub fn from_context(ctx: &Context) -> Self {
+        Self::new(&ctx.device, &ctx.queue)
+    }
+
+    /// Uploads values, scans them on the GPU, and downloads the inclusive prefixes.
     pub async fn scan(&mut self, input: &[u32]) -> Result<Vec<u32>, Error> {
         if input.is_empty() {
             return Ok(Vec::new());
@@ -36,6 +44,7 @@ impl Scanner {
         common::buffers::download_buffer(&self.device, &self.queue, &dst_buffer, size_bytes).await
     }
 
+    /// Scans caller-owned GPU buffers and submits the work immediately.
     pub fn scan_gpu_to_gpu(
         &mut self,
         input_buf: &wgpu::Buffer,
@@ -50,6 +59,7 @@ impl Scanner {
         Ok(())
     }
 
+    /// Records a GPU prefix scan without submitting or waiting for the work.
     pub fn record_scan(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,

@@ -5,7 +5,7 @@ use wgpu_algorithms::{Context, Scanner};
 fn benchmark_scan(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let ctx = rt.block_on(Context::init()).unwrap();
-    let mut scanner = Scanner::new(&ctx);
+    let mut scanner = Scanner::from_context(&ctx);
 
     let mut group = c.benchmark_group("Prefix Scan");
 

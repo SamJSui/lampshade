@@ -18,7 +18,7 @@ async fn scan_matches_cpu_across_boundaries_and_patterns() {
     let Some(context) = support::gpu_context().await else {
         return;
     };
-    let mut scanner = Scanner::new(&context);
+    let mut scanner = Scanner::from_context(&context);
     let sizes = [
         0, 1, 2, 31, 32, 33, 127, 128, 129, 511, 512, 513, 1_023, 1_024, 1_025, 2_047, 2_048,
         2_049, 4_097, 17,
@@ -49,7 +49,7 @@ async fn scan_uses_the_explicit_logical_length() {
     let Some(context) = support::gpu_context().await else {
         return;
     };
-    let mut scanner = Scanner::new(&context);
+    let mut scanner = Scanner::from_context(&context);
     let input = context
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -77,7 +77,7 @@ async fn scan_rejects_invalid_buffer_contracts() {
     let Some(context) = support::gpu_context().await else {
         return;
     };
-    let mut scanner = Scanner::new(&context);
+    let mut scanner = Scanner::from_context(&context);
     let missing_copy_source = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Invalid Scan Input"),
         size: 16,

@@ -8,7 +8,7 @@ fn main() {
 async fn run() {
     println!("Initializing Context...");
     let ctx = Context::init().await.expect("Failed");
-    let mut sorter = Sorter::new(&ctx);
+    let mut sorter = Sorter::from_context(&ctx);
 
     let input = vec![10, 5, 8, 1, 2, 9, 3, 4, 7, 6, 0, 11];
     println!("Input:  {:?}", input);
