@@ -1,0 +1,15 @@
+[package]
+name = "wgpu-algorithms"
+version = "0.2.0"
+edition = "2024"
+description = "Deprecated compatibility package for wgpu-primitives."
+authors = ["samjsui"]
+license = "MIT"
+repository = "https://github.com/samjsui/wgpu-primitives"
+readme = "README.md"
+keywords = ["gpgpu", "wgpu", "sort", "scan", "compute"]
+categories = ["algorithms", "graphics", "science"]
+include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
+
+[dependencies]
+wgpu-primitives = { version = "0.2.0", path = "../.." }
