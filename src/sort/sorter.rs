@@ -1,286 +1,331 @@
+use wgpu::util::DeviceExt;
+
+use crate::Error;
 use crate::common;
 use crate::context::Context;
 use crate::scan::Scanner;
 use crate::sort::pipeline::SortPipeline;
-use std::sync::Arc;
+
+const RADIX_PASSES: u32 = 16;
+const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
+const UNIFORM_SIZE_BYTES: u64 = 16;
 
 struct SortWorkspace {
     capacity_bytes: u64,
-    buf_a: wgpu::Buffer,
-    #[allow(dead_code)]
-    buf_b: wgpu::Buffer,
-    buf_hist: wgpu::Buffer,
-    buf_scanned_hist: wgpu::Buffer,
-    uniform_buffers: Vec<wgpu::Buffer>,
-    bind_groups: Vec<(wgpu::BindGroup, wgpu::BindGroup)>,
+    scratch: wgpu::Buffer,
+    histogram: wgpu::Buffer,
+    scanned_histogram: wgpu::Buffer,
 }
 
+#[derive(Clone, Copy)]
+struct PreparedSort {
+    num_items: u32,
+    num_blocks: u32,
+    size_bytes: u64,
+}
+
+/// Performs an unsigned 32-bit LSD radix sort on a wgpu device.
 pub struct Sorter {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
     scanner: Scanner,
     pipeline: SortPipeline,
     workspace: Option<SortWorkspace>,
 }
 
 impl Sorter {
-    pub fn new(ctx: &Context) -> Self {
+    /// Creates a sorter that submits work through an existing wgpu device and queue.
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
-            device: Arc::new(ctx.device.clone()),
-            queue: Arc::new(ctx.queue.clone()),
-            scanner: Scanner::new(ctx),
-            pipeline: SortPipeline::new(ctx),
+            device: device.clone(),
+            queue: queue.clone(),
+            scanner: Scanner::new(device, queue),
+            pipeline: SortPipeline::new(device),
             workspace: None,
         }
     }
 
-    pub async fn sort(&mut self, input: &[u32]) -> Vec<u32> {
-        const GPU_THRESHOLD: usize = 1_000_000;
-
-        if input.len() < GPU_THRESHOLD {
-            let mut data = input.to_vec();
-            data.sort_unstable();
-            return data;
-        } else {
-            return self.sort_radix(input).await;
-        }
+    /// Creates a sorter from the crate's optional convenience context.
+    pub fn from_context(ctx: &Context) -> Self {
+        Self::new(&ctx.device, &ctx.queue)
     }
 
-    pub async fn sort_radix(&mut self, input: &[u32]) -> Vec<u32> {
-        let n = input.len() as u64;
-        let n_bytes = n * 4;
-
-        let need_realloc = if let Some(ws) = &self.workspace {
-            ws.capacity_bytes < n_bytes
-        } else {
-            true
-        };
-
-        if need_realloc {
-            self.allocate_workspace(n_bytes);
+    /// Uploads values, sorts them on the GPU, and downloads the sorted result.
+    pub async fn sort(&mut self, input: &[u32]) -> Result<Vec<u32>, Error> {
+        if input.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let ws = self.workspace.as_mut().unwrap();
+        let num_items = common::math::checked_u32(input.len() as u64)?;
+        let size_bytes = common::math::checked_byte_size(input.len() as u64, 4)?;
+        let input_buffer = common::buffers::create_storage_buffer(&self.device, input);
+        let output_buffer = common::buffers::create_empty_storage_buffer(&self.device, size_bytes);
 
-        self.queue
-            .write_buffer(&ws.buf_a, 0, bytemuck::cast_slice(input));
+        self.sort_gpu_to_gpu(&input_buffer, &output_buffer, num_items)?;
+        common::buffers::download_buffer(&self.device, &self.queue, &output_buffer, size_bytes)
+            .await
+    }
 
-        let items_per_block = (self.pipeline.vt * self.pipeline.block_size) as u64;
-        let num_blocks = (n + items_per_block - 1) / items_per_block;
-
-        for i in 0..16 {
-            let bit = i * 2;
-            let uniform_data = [bit as u32, n as u32, num_blocks as u32, 0];
-            self.queue.write_buffer(
-                &ws.uniform_buffers[i],
-                0,
-                bytemuck::cast_slice(&uniform_data),
-            );
-        }
-
+    /// Sorts caller-owned GPU buffers and submits the work immediately.
+    pub fn sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Fused Sort"),
+                label: Some("Radix Sort"),
             });
-
-        let max_dispatch = 65535;
-        let x_groups = if num_blocks as u32 > max_dispatch {
-            max_dispatch
-        } else {
-            num_blocks as u32
-        };
-        let y_groups = (num_blocks as u32 + max_dispatch - 1) / max_dispatch;
-
-        for i in 0..16 {
-            let (reduce_bg, scatter_bg) = &ws.bind_groups[i];
-
-            {
-                let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-                cpass.set_pipeline(&self.pipeline.reduce_pipeline);
-                cpass.set_bind_group(0, reduce_bg, &[]);
-                cpass.dispatch_workgroups(x_groups, y_groups, 1);
-            }
-
-            self.scanner
-                .record_scan(&mut encoder, &ws.buf_hist, &ws.buf_scanned_hist);
-
-            {
-                let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-                cpass.set_pipeline(&self.pipeline.scatter_pipeline);
-                cpass.set_bind_group(0, scatter_bg, &[]);
-                cpass.dispatch_workgroups(x_groups, y_groups, 1);
-            }
-        }
-
+        self.record_sort(&mut encoder, input, output, num_items)?;
         self.queue.submit(Some(encoder.finish()));
-
-        common::buffers::download_buffer(&self.device, &self.queue, &ws.buf_a, n_bytes).await
+        Ok(())
     }
 
-    pub fn sort_resident(&mut self, input: &[u32]) -> &wgpu::Buffer {
-        let n = input.len() as u64;
-        let n_bytes = n * 4;
-
-        let need_realloc = if let Some(ws) = &self.workspace {
-            ws.capacity_bytes < n_bytes
-        } else {
-            true
-        };
-
-        if need_realloc {
-            self.allocate_workspace(n_bytes);
+    /// Records a GPU radix sort without submitting or waiting for the work.
+    pub fn record_sort(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        if num_items == 0 {
+            return Ok(());
         }
 
-        let ws = self.workspace.as_mut().unwrap();
+        let problem = self.describe_sort(num_items)?;
+        common::buffers::validate_buffer(
+            input,
+            "sort input",
+            problem.size_bytes,
+            wgpu::BufferUsages::STORAGE,
+        )?;
+        common::buffers::validate_buffer(
+            output,
+            "sort output",
+            problem.size_bytes,
+            wgpu::BufferUsages::STORAGE,
+        )?;
 
-        self.queue
-            .write_buffer(&ws.buf_a, 0, bytemuck::cast_slice(input));
+        self.ensure_workspace(problem.size_bytes)?;
+        self.record_radix_passes(encoder, input, output, problem)
+    }
 
-        let items_per_block = (self.pipeline.vt * self.pipeline.block_size) as u64;
-        let num_blocks = (n + items_per_block - 1) / items_per_block;
+    fn describe_sort(&self, num_items: u32) -> Result<PreparedSort, Error> {
+        let size_bytes = common::math::checked_byte_size(u64::from(num_items), 4)?;
+        let items_per_block = self.pipeline.vt * self.pipeline.block_size;
+        let num_blocks = num_items.div_ceil(items_per_block);
 
-        for i in 0..16 {
-            let bit = i * 2;
-            let uniform_data = [bit as u32, n as u32, num_blocks as u32, 0];
-            self.queue.write_buffer(
-                &ws.uniform_buffers[i],
-                0,
-                bytemuck::cast_slice(&uniform_data),
+        Ok(PreparedSort {
+            num_items,
+            num_blocks,
+            size_bytes,
+        })
+    }
+
+    fn ensure_workspace(&mut self, size_bytes: u64) -> Result<(), Error> {
+        let needs_allocation = self
+            .workspace
+            .as_ref()
+            .is_none_or(|workspace| workspace.capacity_bytes < size_bytes);
+        if needs_allocation {
+            self.allocate_workspace(size_bytes)?;
+        }
+        Ok(())
+    }
+
+    fn record_radix_passes(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        problem: PreparedSort,
+    ) -> Result<(), Error> {
+        let max_dispatch = 65_535;
+        let x_groups = problem.num_blocks.min(max_dispatch);
+        let y_groups = problem.num_blocks.div_ceil(max_dispatch);
+        let histogram_items = problem
+            .num_blocks
+            .checked_mul(4)
+            .ok_or(Error::SizeOverflow)?;
+
+        let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
+        let scanner = &mut self.scanner;
+        let (uniform, uniform_stride) = create_uniform_buffer(&self.device, problem);
+
+        for radix_pass in 0..RADIX_PASSES {
+            let (source, destination) = pass_buffers(radix_pass, input, output, &workspace.scratch);
+            let uniform_offset = u64::from(radix_pass) * uniform_stride;
+            let reduce_bind_group = create_sort_bind_group(
+                &self.device,
+                &self.pipeline.bind_group_layout,
+                "Reduce Bind Group",
+                (source, &workspace.histogram, destination),
+                &uniform,
+                uniform_offset,
+            );
+            let scatter_bind_group = create_sort_bind_group(
+                &self.device,
+                &self.pipeline.bind_group_layout,
+                "Scatter Bind Group",
+                (source, &workspace.scanned_histogram, destination),
+                &uniform,
+                uniform_offset,
+            );
+
+            record_compute_pass(
+                encoder,
+                &self.pipeline.reduce_pipeline,
+                &reduce_bind_group,
+                x_groups,
+                y_groups,
+            );
+            scanner.record_scan(
+                encoder,
+                &workspace.histogram,
+                &workspace.scanned_histogram,
+                histogram_items,
+            )?;
+            record_compute_pass(
+                encoder,
+                &self.pipeline.scatter_pipeline,
+                &scatter_bind_group,
+                x_groups,
+                y_groups,
             );
         }
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Fused Sort Resident"),
-            });
-
-        let max_dispatch = 65535;
-        let x_groups = if num_blocks as u32 > max_dispatch {
-            max_dispatch
-        } else {
-            num_blocks as u32
-        };
-        let y_groups = (num_blocks as u32 + max_dispatch - 1) / max_dispatch;
-
-        for i in 0..16 {
-            let (reduce_bg, scatter_bg) = &ws.bind_groups[i];
-
-            {
-                let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-                cpass.set_pipeline(&self.pipeline.reduce_pipeline);
-                cpass.set_bind_group(0, reduce_bg, &[]);
-                cpass.dispatch_workgroups(x_groups, y_groups, 1);
-            }
-
-            self.scanner
-                .record_scan(&mut encoder, &ws.buf_hist, &ws.buf_scanned_hist);
-
-            {
-                let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-                cpass.set_pipeline(&self.pipeline.scatter_pipeline);
-                cpass.set_bind_group(0, scatter_bg, &[]);
-                cpass.dispatch_workgroups(x_groups, y_groups, 1);
-            }
-        }
-
-        self.queue.submit(Some(encoder.finish()));
-
-        &ws.buf_a
+        Ok(())
     }
 
-    fn allocate_workspace(&mut self, requested_size: u64) {
-        let capacity = common::math::align_to(requested_size, 16 * 1024 * 1024);
-        let items_per_block = (self.pipeline.vt * self.pipeline.block_size) as u64;
-        let max_items = capacity / 4;
-        let max_blocks = (max_items + items_per_block - 1) / items_per_block;
-
-        let hist_bytes = max_blocks * 16;
-        let hist_bytes_aligned = common::math::align_to(hist_bytes, 256);
-
-        let buf_a = common::buffers::create_empty_storage_buffer(&self.device, capacity);
-        let buf_b = common::buffers::create_empty_storage_buffer(&self.device, capacity);
-        let buf_hist =
-            common::buffers::create_empty_storage_buffer(&self.device, hist_bytes_aligned);
-        let buf_scanned_hist =
-            common::buffers::create_empty_storage_buffer(&self.device, hist_bytes_aligned);
-
-        let mut uniform_buffers = Vec::with_capacity(16);
-        for _ in 0..16 {
-            uniform_buffers.push(self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Sort Uniform"),
-                size: 16,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }));
+    fn allocate_workspace(&mut self, requested_size: u64) -> Result<(), Error> {
+        let capacity = if requested_size < WORKSPACE_GROWTH_BYTES {
+            requested_size
+                .max(4)
+                .checked_next_power_of_two()
+                .ok_or(Error::SizeOverflow)?
+        } else {
+            common::math::checked_align_to(requested_size, WORKSPACE_GROWTH_BYTES)?
+        };
+        let limits = self.device.limits();
+        let buffer_limit = limits
+            .max_buffer_size
+            .min(u64::from(limits.max_storage_buffer_binding_size));
+        if capacity > buffer_limit {
+            return Err(Error::BufferLimitExceeded {
+                requested: capacity,
+                limit: buffer_limit,
+            });
         }
 
-        let mut bind_groups = Vec::with_capacity(16);
-        for i in 0..16 {
-            let (source, dest) = if i % 2 == 0 {
-                (&buf_a, &buf_b)
-            } else {
-                (&buf_b, &buf_a)
-            };
-
-            let reduce_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Reduce BG"),
-                layout: &self.pipeline.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: source.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: buf_hist.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: dest.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: uniform_buffers[i].as_entire_binding(),
-                    },
-                ],
-            });
-
-            let scatter_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Scatter BG"),
-                layout: &self.pipeline.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: source.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: buf_scanned_hist.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: dest.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: uniform_buffers[i].as_entire_binding(),
-                    },
-                ],
-            });
-
-            bind_groups.push((reduce_bg, scatter_bg));
-        }
+        let items_per_block = u64::from(self.pipeline.vt * self.pipeline.block_size);
+        let max_blocks = (capacity / 4).div_ceil(items_per_block);
+        let histogram_bytes = common::math::checked_byte_size(max_blocks, 16)?;
+        let histogram_capacity = common::math::checked_align_to(histogram_bytes, 256)?;
 
         self.workspace = Some(SortWorkspace {
             capacity_bytes: capacity,
-            buf_a,
-            buf_b,
-            buf_hist,
-            buf_scanned_hist,
-            uniform_buffers,
-            bind_groups,
+            scratch: common::buffers::create_empty_storage_buffer(&self.device, capacity),
+            histogram: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                histogram_capacity,
+            ),
+            scanned_histogram: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                histogram_capacity,
+            ),
         });
+        Ok(())
     }
+}
+
+fn pass_buffers<'a>(
+    radix_pass: u32,
+    input: &'a wgpu::Buffer,
+    output: &'a wgpu::Buffer,
+    scratch: &'a wgpu::Buffer,
+) -> (&'a wgpu::Buffer, &'a wgpu::Buffer) {
+    if radix_pass == 0 {
+        (input, scratch)
+    } else if radix_pass.is_multiple_of(2) {
+        (output, scratch)
+    } else {
+        (scratch, output)
+    }
+}
+
+fn create_uniform_buffer(device: &wgpu::Device, problem: PreparedSort) -> (wgpu::Buffer, u64) {
+    let uniform_stride =
+        u64::from(device.limits().min_uniform_buffer_offset_alignment).max(UNIFORM_SIZE_BYTES);
+    let words_per_uniform = (uniform_stride / size_of::<u32>() as u64) as usize;
+    let mut data = vec![0_u32; words_per_uniform * RADIX_PASSES as usize];
+
+    for radix_pass in 0..RADIX_PASSES as usize {
+        let offset = radix_pass * words_per_uniform;
+        data[offset..offset + 4].copy_from_slice(&[
+            radix_pass as u32 * 2,
+            problem.num_items,
+            problem.num_blocks,
+            0,
+        ]);
+    }
+
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Sort Uniform"),
+        contents: bytemuck::cast_slice(&data),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    (buffer, uniform_stride)
+}
+
+fn create_sort_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    label: &'static str,
+    buffers: (&wgpu::Buffer, &wgpu::Buffer, &wgpu::Buffer),
+    uniform: &wgpu::Buffer,
+    uniform_offset: u64,
+) -> wgpu::BindGroup {
+    let (source, histogram, destination) = buffers;
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(label),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: source.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: histogram.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: destination.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: uniform,
+                    offset: uniform_offset,
+                    size: wgpu::BufferSize::new(UNIFORM_SIZE_BYTES),
+                }),
+            },
+        ],
+    })
+}
+
+fn record_compute_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    pipeline: &wgpu::ComputePipeline,
+    bind_group: &wgpu::BindGroup,
+    x_groups: u32,
+    y_groups: u32,
+) {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+    pass.set_pipeline(pipeline);
+    pass.set_bind_group(0, bind_group, &[]);
+    pass.dispatch_workgroups(x_groups, y_groups, 1);
 }

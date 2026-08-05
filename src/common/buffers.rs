@@ -1,6 +1,8 @@
 use futures::channel::oneshot;
 use wgpu::util::DeviceExt;
 
+use crate::Error;
+
 // --- Allocation ---
 
 pub fn create_storage_buffer<T: bytemuck::Pod>(device: &wgpu::Device, data: &[T]) -> wgpu::Buffer {
@@ -50,7 +52,18 @@ pub async fn download_buffer(
     queue: &wgpu::Queue,
     buffer: &wgpu::Buffer,
     size_bytes: u64,
-) -> Vec<u32> {
+) -> Result<Vec<u32>, Error> {
+    if size_bytes == 0 {
+        return Ok(Vec::new());
+    }
+
+    validate_buffer(
+        buffer,
+        "readback source",
+        size_bytes,
+        wgpu::BufferUsages::COPY_SRC,
+    )?;
+
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Staging Buffer"),
         size: size_bytes,
@@ -65,23 +78,48 @@ pub async fn download_buffer(
 
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = oneshot::channel();
-    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+    buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
 
-    device
-        .poll(wgpu::PollType::Wait {
-            submission_index: Some(index),
-            timeout: None,
-        })
-        .unwrap();
+    device.poll(wgpu::PollType::Wait {
+        submission_index: Some(index),
+        timeout: None,
+    })?;
 
-    if let Ok(Ok(())) = receiver.await {
-        let result = {
-            let data = buffer_slice.get_mapped_range();
-            bytemuck::cast_slice(&data).to_vec()
-        };
-        staging_buffer.unmap();
-        result
-    } else {
-        panic!("Failed to download buffer")
+    receiver.await.map_err(|_| Error::ReadbackChannelClosed)??;
+
+    let result = {
+        let data = buffer_slice.get_mapped_range();
+        bytemuck::cast_slice(&data).to_vec()
+    };
+    staging_buffer.unmap();
+    Ok(result)
+}
+
+pub fn validate_buffer(
+    buffer: &wgpu::Buffer,
+    name: &'static str,
+    required_bytes: u64,
+    required_usage: wgpu::BufferUsages,
+) -> Result<(), Error> {
+    let actual_bytes = buffer.size();
+    if actual_bytes < required_bytes {
+        return Err(Error::BufferTooSmall {
+            name,
+            required: required_bytes,
+            actual: actual_bytes,
+        });
     }
+
+    let actual_usage = buffer.usage();
+    if !actual_usage.contains(required_usage) {
+        return Err(Error::MissingBufferUsage {
+            name,
+            required: required_usage,
+            actual: actual_usage,
+        });
+    }
+
+    Ok(())
 }

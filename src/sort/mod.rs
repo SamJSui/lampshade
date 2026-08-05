@@ -1,7 +1,4 @@
-pub mod pipeline;
-pub mod sorter;
-#[cfg(test)]
-mod tests;
+mod pipeline;
+mod sorter;
 
-pub use pipeline::SortPipeline;
 pub use sorter::Sorter;

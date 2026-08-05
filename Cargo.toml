@@ -1,15 +1,24 @@
 [package]
-name = "wgpu-algorithms"
-version = "0.1.0"
+name = "wgpu-primitives"
+version = "0.2.0"
 edition = "2024"
-description = "High-performance, safe wgpu Radix Sort and Prefix Scan for Rust."
+description = "Composable GPU primitives for Rust applications using wgpu."
 authors = ["samjsui"]
 license = "MIT"
-repository = "https://github.com/samjsui/wgpu-algorithms"
+repository = "https://github.com/samjsui/wgpu-primitives"
 keywords = ["gpgpu", "wgpu", "sort", "radix", "compute"]
 categories = ["algorithms", "graphics", "science"]
-include = ["src/**/*.rs", "src/**/*.wgsl", "Cargo.toml", "README.md", "LICENSE"]
-exclude = ["benches/*", "examples/*", "target/*"]
+include = [
+    "src/**/*.rs",
+    "src/**/*.wgsl",
+    "tests/**/*.rs",
+    "benches/**/*.rs",
+    "benchmarks/**/*.md",
+    "examples/**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 wgpu = "28.0.0"
@@ -24,7 +33,6 @@ pollster = "0.4"
 env_logger = "0.11.8"
 criterion = { version = "0.8.1", features = ["async_tokio", "html_reports"] }
 rayon = "1.10"
-wgpu_sort = "0.1"
 
 [[bench]]
 name = "sort"

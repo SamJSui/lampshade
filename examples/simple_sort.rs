@@ -1,4 +1,4 @@
-use wgpu_algorithms::{context::Context, sort::Sorter};
+use wgpu_primitives::{context::Context, sort::Sorter};
 
 fn main() {
     env_logger::init();
@@ -8,12 +8,12 @@ fn main() {
 async fn run() {
     println!("Initializing Context...");
     let ctx = Context::init().await.expect("Failed");
-    let mut sorter = Sorter::new(&ctx);
+    let mut sorter = Sorter::from_context(&ctx);
 
     let input = vec![10, 5, 8, 1, 2, 9, 3, 4, 7, 6, 0, 11];
     println!("Input:  {:?}", input);
 
-    let result = sorter.sort(&input).await;
+    let result = sorter.sort(&input).await.expect("GPU sort failed");
     println!("Output: {:?}", result);
 
     let mut expected = input.clone();

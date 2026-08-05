@@ -1,5 +1,4 @@
 use crate::common;
-use crate::context::Context;
 
 pub struct ScanPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -10,18 +9,16 @@ pub struct ScanPipeline {
 }
 
 impl ScanPipeline {
-    pub fn new(ctx: &Context) -> Self {
-        let bind_group_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Scan Layout"),
-                    entries: &[
-                        common::buffers::bind_entry(0, false, false),
-                        common::buffers::bind_entry(1, false, false),
-                    ],
-                });
+    pub fn new(device: &wgpu::Device) -> Self {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Scan Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, false, false),
+                common::buffers::bind_entry(1, false, false),
+            ],
+        });
 
-        let limits = ctx.device.limits();
+        let limits = device.limits();
         let max_shared_mem = limits.max_compute_workgroup_storage_size;
 
         // High End (M3/Desktop): 32KB+ shared mem -> Use VT=8, Block=256
@@ -36,7 +33,7 @@ impl ScanPipeline {
         let config = common::shader::ShaderConfig { vt, block_size };
 
         let scan_pipeline = common::shader::create_compute_pipeline(
-            &ctx.device,
+            device,
             &bind_group_layout,
             include_str!("scan.wgsl"),
             &format!("Scan VT{} Pipeline", vt),
@@ -45,7 +42,7 @@ impl ScanPipeline {
         );
 
         let add_pipeline = common::shader::create_compute_pipeline(
-            &ctx.device,
+            device,
             &bind_group_layout,
             include_str!("add.wgsl"),
             &format!("Add VT{} Pipeline", vt),
@@ -69,7 +66,7 @@ impl ScanPipeline {
         let items_per_block = self.vt * self.block_size;
 
         while current_items > 1 {
-            let aux_count = (current_items + items_per_block - 1) / items_per_block;
+            let aux_count = current_items.div_ceil(items_per_block);
             let raw_size = (aux_count * 4) as u64;
             let aligned_size = common::math::align_to(raw_size, 256);
             size += aligned_size;
@@ -83,14 +80,12 @@ impl ScanPipeline {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         pipeline: &wgpu::ComputePipeline,
-        data_buf: &wgpu::Buffer,
-        data_off: u64,
-        aux_buf: &wgpu::Buffer,
-        aux_off: u64,
+        data: (&wgpu::Buffer, u64),
+        auxiliary: (&wgpu::Buffer, u64),
         num_items: u32,
     ) {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-        cpass.set_pipeline(pipeline);
+        let (data_buf, data_off) = data;
+        let (aux_buf, aux_off) = auxiliary;
 
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Scan Dispatch BG"),
@@ -114,6 +109,9 @@ impl ScanPipeline {
                 },
             ],
         });
+
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        cpass.set_pipeline(pipeline);
         cpass.set_bind_group(0, &bg, &[]);
 
         let items_per_block = self.vt * self.block_size;
@@ -125,7 +123,7 @@ impl ScanPipeline {
         } else {
             workgroups
         };
-        let y = (workgroups + max_dispatch - 1) / max_dispatch;
+        let y = workgroups.div_ceil(max_dispatch);
 
         cpass.dispatch_workgroups(x, y, 1);
     }

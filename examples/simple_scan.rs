@@ -1,4 +1,4 @@
-use wgpu_algorithms::{context::Context, scan::Scanner};
+use wgpu_primitives::{context::Context, scan::Scanner};
 
 fn main() {
     env_logger::init();
@@ -11,16 +11,16 @@ async fn run() {
         .await
         .expect("Failed to create WGPU context");
 
-    let mut scanner: Scanner = Scanner::new(&ctx);
+    let mut scanner = Scanner::from_context(&ctx);
 
     let input = vec![1, 1, 1, 1, 1, 1, 1, 1];
     println!("Input: {:?}", input);
 
-    let result = scanner.scan(&input).await;
+    let result = scanner.scan(&input).await.expect("GPU scan failed");
 
     println!("Output: {:?}", result);
 
     let expected = vec![1, 2, 3, 4, 5, 6, 7, 8];
-    assert_eq!(result, expected, "GPU Scan failed!");
+    assert_eq!(result, expected, "GPU scan returned an incorrect result");
     println!("Scan Verified Successfully!");
 }
