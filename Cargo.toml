@@ -41,3 +41,7 @@ harness = false
 [[bench]]
 name = "scan"
 harness = false
+
+[[bench]]
+name = "key_value_sort"
+harness = false

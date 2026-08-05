@@ -55,8 +55,7 @@ impl Scanner {
 
         self.submit_scan(&data_buffer, &dst_buffer, num_items, mode)?;
 
-        let size_bytes = common::math::checked_byte_size(input.len() as u64, 4)?;
-        common::buffers::download_buffer(&self.device, &self.queue, &dst_buffer, size_bytes).await
+        common::buffers::download_buffer(&self.device, &self.queue, &dst_buffer, input.len()).await
     }
 
     /// Scans caller-owned GPU buffers and submits the work immediately.

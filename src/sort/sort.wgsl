@@ -1,6 +1,11 @@
-@group(0) @binding(0) var<storage, read> input: array<u32>;
+struct KeyValue {
+    key: u32,
+    value: u32,
+}
+
+@group(0) @binding(0) var<storage, read> input: array<{{ITEM_TYPE}}>;
 @group(0) @binding(1) var<storage, read_write> histograms: array<u32>; 
-@group(0) @binding(2) var<storage, read_write> output: array<u32>;
+@group(0) @binding(2) var<storage, read_write> output: array<{{ITEM_TYPE}}>;
 @group(0) @binding(3) var<uniform> uniforms: Uniforms;
 
 struct Uniforms {
@@ -34,7 +39,8 @@ fn main_reduce(
     for (var i = 0u; i < VT; i++) {
         let idx = thread_base_idx + i;
         if (idx < uniforms.num_items) {
-            let val = input[idx];
+            let item = input[idx];
+            let val = {{KEY_ACCESS}};
             let digit = (val >> uniforms.bit_index) & 3u;
             if (digit == 0u) { my_counts.x++; }
             else if (digit == 1u) { my_counts.y++; }
@@ -98,17 +104,18 @@ fn main_scatter(
         }
     }
 
-    var my_vals: array<u32, {{VT}}>;
+    var my_items: array<{{ITEM_TYPE}}, {{VT}}>;
     var my_digits: array<u32, {{VT}}>;
     var my_counts = vec4<u32>(0u);
 
     for (var i = 0u; i < VT; i++) {
         let idx = thread_base_idx + i;
         if (idx < uniforms.num_items) {
-            let val = input[idx];
+            let item = input[idx];
+            let val = {{KEY_ACCESS}};
             let digit = (val >> uniforms.bit_index) & 3u;
             
-            my_vals[i] = val;
+            my_items[i] = item;
             my_digits[i] = digit;
             
             if (digit == 0u) { my_counts.x++; }
@@ -156,7 +163,7 @@ fn main_scatter(
                 local_running_counts.w++;
             }
 
-            output[dest] = my_vals[i];
+            output[dest] = my_items[i];
         }
     }
 }
