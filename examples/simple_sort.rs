@@ -13,7 +13,7 @@ async fn run() {
     let input = vec![10, 5, 8, 1, 2, 9, 3, 4, 7, 6, 0, 11];
     println!("Input:  {:?}", input);
 
-    let result = sorter.sort(&input).await;
+    let result = sorter.sort(&input).await.expect("GPU sort failed");
     println!("Output: {:?}", result);
 
     let mut expected = input.clone();

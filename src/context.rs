@@ -1,3 +1,4 @@
+use crate::Error;
 use wgpu::{Backends, Device, Instance, MemoryHints, Queue, RequestAdapterOptions};
 
 pub struct Context {
@@ -6,7 +7,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn init() -> Option<Self> {
+    pub async fn init() -> Result<Self, Error> {
         let instance = Instance::new(&wgpu::InstanceDescriptor {
             backends: Backends::PRIMARY,
             ..Default::default()
@@ -18,21 +19,18 @@ impl Context {
                 compatible_surface: None,
                 force_fallback_adapter: false,
             })
-            .await
-            .ok()?;
+            .await?;
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Context Device"),
                 required_features: wgpu::Features::empty(),
-                // FIX: Pass the high limits here
                 required_limits: adapter.limits(),
                 memory_hints: MemoryHints::Performance,
                 ..Default::default()
             })
-            .await
-            .ok()?;
+            .await?;
 
-        Some(Self { device, queue })
+        Ok(Self { device, queue })
     }
 }

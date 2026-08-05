@@ -1,12 +1,11 @@
 use super::pipeline::ScanPipeline;
-use crate::{common, context::Context};
-use std::sync::Arc;
+use crate::{Error, common, context::Context};
 
 pub struct Scanner {
     pipeline: ScanPipeline,
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
-    pub scratch_buffer: Option<wgpu::Buffer>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    scratch_buffer: Option<wgpu::Buffer>,
     scratch_size_bytes: u64,
 }
 
@@ -14,30 +13,41 @@ impl Scanner {
     pub fn new(ctx: &Context) -> Self {
         Self {
             pipeline: ScanPipeline::new(ctx),
-            device: Arc::new(ctx.device.clone()),
-            queue: Arc::new(ctx.queue.clone()),
+            device: ctx.device.clone(),
+            queue: ctx.queue.clone(),
             scratch_buffer: None,
             scratch_size_bytes: 0,
         }
     }
 
-    pub async fn scan(&mut self, input: &[u32]) -> Vec<u32> {
+    pub async fn scan(&mut self, input: &[u32]) -> Result<Vec<u32>, Error> {
+        if input.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let num_items = common::math::checked_u32(input.len() as u64)?;
         let data_buffer = common::buffers::create_storage_buffer(&self.device, input);
         let dst_buffer =
             common::buffers::create_empty_storage_buffer(&self.device, data_buffer.size());
 
-        self.scan_gpu_to_gpu(&data_buffer, &dst_buffer).await;
+        self.scan_gpu_to_gpu(&data_buffer, &dst_buffer, num_items)?;
 
-        let size_bytes = (input.len() * 4) as u64;
+        let size_bytes = common::math::checked_byte_size(input.len() as u64, 4)?;
         common::buffers::download_buffer(&self.device, &self.queue, &dst_buffer, size_bytes).await
     }
 
-    pub async fn scan_gpu_to_gpu(&mut self, input_buf: &wgpu::Buffer, output_buf: &wgpu::Buffer) {
+    pub fn scan_gpu_to_gpu(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.record_scan(&mut encoder, input_buf, output_buf);
+        self.record_scan(&mut encoder, input_buf, output_buf, num_items)?;
         self.queue.submit(Some(encoder.finish()));
+        Ok(())
     }
 
     pub fn record_scan(
@@ -45,15 +55,38 @@ impl Scanner {
         encoder: &mut wgpu::CommandEncoder,
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
-    ) {
-        let size_bytes = input_buf.size();
-        let num_items = (size_bytes / 4) as u32;
+        num_items: u32,
+    ) -> Result<(), Error> {
+        if num_items == 0 {
+            return Ok(());
+        }
 
-        self.prepare_scratch(num_items);
+        let size_bytes = common::math::checked_byte_size(u64::from(num_items), 4)?;
+        common::buffers::validate_buffer(
+            input_buf,
+            "scan input",
+            size_bytes,
+            wgpu::BufferUsages::COPY_SRC,
+        )?;
+        common::buffers::validate_buffer(
+            output_buf,
+            "scan output",
+            size_bytes,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
+        )?;
 
         encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
 
-        let scratch = self.scratch_buffer.as_ref().unwrap();
+        if num_items == 1 {
+            return Ok(());
+        }
+
+        self.prepare_scratch(num_items);
+
+        let scratch = self
+            .scratch_buffer
+            .as_ref()
+            .expect("scan scratch exists for multi-element inputs");
 
         struct Level<'a> {
             buf: &'a wgpu::Buffer,
@@ -78,7 +111,7 @@ impl Scanner {
 
             let items_per_block = self.pipeline.vt * self.pipeline.block_size;
 
-            let aux_count = (current.count + items_per_block - 1) / items_per_block;
+            let aux_count = current.count.div_ceil(items_per_block);
             let aux_size = (aux_count * 4) as u64;
             let aux_offset = crate::common::math::align_to(current_scratch_offset, 256);
 
@@ -86,10 +119,8 @@ impl Scanner {
                 &self.device,
                 encoder,
                 &self.pipeline.scan_pipeline,
-                current.buf,
-                current.offset,
-                scratch,
-                aux_offset,
+                (current.buf, current.offset),
+                (scratch, aux_offset),
                 current.count,
             );
 
@@ -109,13 +140,13 @@ impl Scanner {
                 &self.device,
                 encoder,
                 &self.pipeline.add_pipeline,
-                data_level.buf,
-                data_level.offset,
-                aux_level.buf,
-                aux_level.offset,
+                (data_level.buf, data_level.offset),
+                (aux_level.buf, aux_level.offset),
                 data_level.count,
             );
         }
+
+        Ok(())
     }
 
     fn prepare_scratch(&mut self, num_items: u32) {

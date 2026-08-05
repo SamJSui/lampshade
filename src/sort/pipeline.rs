@@ -31,26 +31,6 @@ impl SortPipeline {
             (4, 128) // Mobile
         };
 
-        let config = common::shader::ShaderConfig { vt, block_size };
-
-        common::shader::create_compute_pipeline(
-            &ctx.device,
-            &bind_group_layout,
-            include_str!("sort.wgsl"),
-            &format!("Reduce VT{}", vt),
-            "main_reduce",
-            Some(&config),
-        );
-
-        common::shader::create_compute_pipeline(
-            &ctx.device,
-            &bind_group_layout,
-            include_str!("sort.wgsl"),
-            &format!("Scatter VT{}", vt),
-            "main_scatter",
-            Some(&config),
-        );
-
         let raw_shader = include_str!("sort.wgsl");
         let final_source = raw_shader
             .replace("{{VT}}", &vt.to_string())

@@ -33,16 +33,19 @@ fn benchmark_sorts(c: &mut Criterion) {
         // Includes: Upload -> Sort -> Download
         group.bench_with_input(BenchmarkId::new("GPU (Round Trip)", n), &n, |b, &_| {
             b.iter(|| {
-                pollster::block_on(my_sorter.sort_radix(&data));
+                pollster::block_on(my_sorter.sort_radix(&data))
+                    .expect("GPU round-trip sort failed");
             });
         });
 
-        // 3. GPU (Resident) - The "Pipeline" use case
+        // 3. GPU (Output Resident) - The "Pipeline" use case
         // Includes: Upload -> Sort
-        // Excludes: Download (The result stays on VRAM)
-        group.bench_with_input(BenchmarkId::new("GPU (Resident)", n), &n, |b, &_| {
+        // Excludes: Download (the output remains on the GPU)
+        group.bench_with_input(BenchmarkId::new("GPU (Output Resident)", n), &n, |b, &_| {
             b.iter(|| {
-                my_sorter.sort_resident(&data);
+                my_sorter
+                    .sort_resident(&data)
+                    .expect("GPU output-resident sort failed");
                 // Force GPU to finish execution to measure raw throughput
                 ctx.device
                     .poll(wgpu::PollType::Wait {

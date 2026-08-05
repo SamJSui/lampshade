@@ -1,7 +1,4 @@
-pub mod pipeline;
-pub mod scanner;
-#[cfg(test)]
-pub mod tests;
+mod pipeline;
+mod scanner;
 
-pub use pipeline::ScanPipeline;
 pub use scanner::Scanner;

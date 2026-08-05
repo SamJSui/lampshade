@@ -36,7 +36,9 @@ fn benchmark_scan(c: &mut Criterion) {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-            scanner.record_scan(&mut encoder, &src, &dst);
+            scanner
+                .record_scan(&mut encoder, &src, &dst, n)
+                .expect("failed to record scan commands");
 
             ctx.queue.submit(Some(encoder.finish()));
 
