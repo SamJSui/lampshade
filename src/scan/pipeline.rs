@@ -2,7 +2,8 @@ use crate::common;
 
 pub struct ScanPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
-    pub scan_pipeline: wgpu::ComputePipeline,
+    pub inclusive_scan_pipeline: wgpu::ComputePipeline,
+    pub exclusive_scan_pipeline: wgpu::ComputePipeline,
     pub add_pipeline: wgpu::ComputePipeline,
     pub vt: u32,
     pub block_size: u32,
@@ -32,13 +33,24 @@ impl ScanPipeline {
 
         let config = common::shader::ShaderConfig { vt, block_size };
 
-        let scan_pipeline = common::shader::create_compute_pipeline(
+        let inclusive_scan_pipeline = common::shader::create_compute_pipeline_with_constants(
             device,
             &bind_group_layout,
             include_str!("scan.wgsl"),
-            &format!("Scan VT{} Pipeline", vt),
+            &format!("Inclusive Scan VT{} Pipeline", vt),
             "main",
             Some(&config),
+            &[("EXCLUSIVE", 0.0)],
+        );
+
+        let exclusive_scan_pipeline = common::shader::create_compute_pipeline_with_constants(
+            device,
+            &bind_group_layout,
+            include_str!("scan.wgsl"),
+            &format!("Exclusive Scan VT{} Pipeline", vt),
+            "main",
+            Some(&config),
+            &[("EXCLUSIVE", 1.0)],
         );
 
         let add_pipeline = common::shader::create_compute_pipeline(
@@ -52,7 +64,8 @@ impl ScanPipeline {
 
         Self {
             bind_group_layout,
-            scan_pipeline,
+            inclusive_scan_pipeline,
+            exclusive_scan_pipeline,
             add_pipeline,
             vt,
             block_size,

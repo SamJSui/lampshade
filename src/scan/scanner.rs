@@ -1,7 +1,13 @@
 use super::pipeline::ScanPipeline;
 use crate::{Error, common, context::Context};
 
-/// Performs an inclusive unsigned 32-bit prefix scan on a wgpu device.
+#[derive(Clone, Copy)]
+enum ScanMode {
+    Inclusive,
+    Exclusive,
+}
+
+/// Performs inclusive and exclusive unsigned 32-bit prefix scans on a wgpu device.
 pub struct Scanner {
     pipeline: ScanPipeline,
     device: wgpu::Device,
@@ -29,6 +35,15 @@ impl Scanner {
 
     /// Uploads values, scans them on the GPU, and downloads the inclusive prefixes.
     pub async fn scan(&mut self, input: &[u32]) -> Result<Vec<u32>, Error> {
+        self.scan_slice(input, ScanMode::Inclusive).await
+    }
+
+    /// Uploads values, scans them on the GPU, and downloads the exclusive prefixes.
+    pub async fn scan_exclusive(&mut self, input: &[u32]) -> Result<Vec<u32>, Error> {
+        self.scan_slice(input, ScanMode::Exclusive).await
+    }
+
+    async fn scan_slice(&mut self, input: &[u32], mode: ScanMode) -> Result<Vec<u32>, Error> {
         if input.is_empty() {
             return Ok(Vec::new());
         }
@@ -38,7 +53,7 @@ impl Scanner {
         let dst_buffer =
             common::buffers::create_empty_storage_buffer(&self.device, data_buffer.size());
 
-        self.scan_gpu_to_gpu(&data_buffer, &dst_buffer, num_items)?;
+        self.submit_scan(&data_buffer, &dst_buffer, num_items, mode)?;
 
         let size_bytes = common::math::checked_byte_size(input.len() as u64, 4)?;
         common::buffers::download_buffer(&self.device, &self.queue, &dst_buffer, size_bytes).await
@@ -51,10 +66,30 @@ impl Scanner {
         output_buf: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
+        self.submit_scan(input_buf, output_buf, num_items, ScanMode::Inclusive)
+    }
+
+    /// Exclusively scans caller-owned GPU buffers and submits the work immediately.
+    pub fn scan_exclusive_gpu_to_gpu(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        self.submit_scan(input_buf, output_buf, num_items, ScanMode::Exclusive)
+    }
+
+    fn submit_scan(
+        &mut self,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+        mode: ScanMode,
+    ) -> Result<(), Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.record_scan(&mut encoder, input_buf, output_buf, num_items)?;
+        self.record_scan_with_mode(&mut encoder, input_buf, output_buf, num_items, mode)?;
         self.queue.submit(Some(encoder.finish()));
         Ok(())
     }
@@ -66,6 +101,40 @@ impl Scanner {
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
         num_items: u32,
+    ) -> Result<(), Error> {
+        self.record_scan_with_mode(
+            encoder,
+            input_buf,
+            output_buf,
+            num_items,
+            ScanMode::Inclusive,
+        )
+    }
+
+    /// Records an exclusive GPU prefix scan without submitting or waiting for the work.
+    pub fn record_exclusive_scan(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        self.record_scan_with_mode(
+            encoder,
+            input_buf,
+            output_buf,
+            num_items,
+            ScanMode::Exclusive,
+        )
+    }
+
+    fn record_scan_with_mode(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+        mode: ScanMode,
     ) -> Result<(), Error> {
         if num_items == 0 {
             return Ok(());
@@ -85,11 +154,17 @@ impl Scanner {
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
         )?;
 
-        encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
-
         if num_items == 1 {
+            match mode {
+                ScanMode::Inclusive => {
+                    encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
+                }
+                ScanMode::Exclusive => encoder.clear_buffer(output_buf, 0, Some(size_bytes)),
+            }
             return Ok(());
         }
+
+        encoder.copy_buffer_to_buffer(input_buf, 0, output_buf, 0, size_bytes);
 
         self.prepare_scratch(num_items);
 
@@ -125,10 +200,15 @@ impl Scanner {
             let aux_size = (aux_count * 4) as u64;
             let aux_offset = crate::common::math::align_to(current_scratch_offset, 256);
 
+            let scan_pipeline = match (levels.len(), mode) {
+                (1, ScanMode::Exclusive) => &self.pipeline.exclusive_scan_pipeline,
+                _ => &self.pipeline.inclusive_scan_pipeline,
+            };
+
             self.pipeline.dispatch(
                 &self.device,
                 encoder,
-                &self.pipeline.scan_pipeline,
+                scan_pipeline,
                 (current.buf, current.offset),
                 (scratch, aux_offset),
                 current.count,

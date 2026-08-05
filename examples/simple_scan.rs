@@ -16,11 +16,16 @@ async fn run() {
     let input = vec![1, 1, 1, 1, 1, 1, 1, 1];
     println!("Input: {:?}", input);
 
-    let result = scanner.scan(&input).await.expect("GPU scan failed");
+    let inclusive = scanner.scan(&input).await.expect("GPU scan failed");
+    let exclusive = scanner
+        .scan_exclusive(&input)
+        .await
+        .expect("GPU exclusive scan failed");
 
-    println!("Output: {:?}", result);
+    println!("Inclusive: {:?}", inclusive);
+    println!("Exclusive: {:?}", exclusive);
 
-    let expected = vec![1, 2, 3, 4, 5, 6, 7, 8];
-    assert_eq!(result, expected, "GPU scan returned an incorrect result");
-    println!("Scan Verified Successfully!");
+    assert_eq!(inclusive, [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(exclusive, [0, 1, 2, 3, 4, 5, 6, 7]);
+    println!("Scans verified successfully!");
 }

@@ -12,6 +12,26 @@ pub fn create_compute_pipeline(
     entry_point: &str,
     config: Option<&ShaderConfig>,
 ) -> wgpu::ComputePipeline {
+    create_compute_pipeline_with_constants(
+        device,
+        layout,
+        shader_source,
+        label,
+        entry_point,
+        config,
+        &[],
+    )
+}
+
+pub fn create_compute_pipeline_with_constants(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    shader_source: &str,
+    label: &str,
+    entry_point: &str,
+    config: Option<&ShaderConfig>,
+    constants: &[(&str, f64)],
+) -> wgpu::ComputePipeline {
     let final_source = if let Some(cfg) = config {
         shader_source
             .replace("{{VT}}", &cfg.vt.to_string())
@@ -36,7 +56,10 @@ pub fn create_compute_pipeline(
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: Some(entry_point),
-        compilation_options: Default::default(),
+        compilation_options: wgpu::PipelineCompilationOptions {
+            constants,
+            ..Default::default()
+        },
         cache: None,
     })
 }
