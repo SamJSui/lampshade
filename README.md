@@ -62,18 +62,20 @@ The scan recursively computes per-workgroup inclusive prefixes, scans the workgr
 
 The radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
 
-## Historical Performance
+## Performance
 
-These v0.1 measurements were collected on an Apple M3 Max using the Metal backend. The upload-and-execute path excludes readback but still uploads input on every iteration.
+Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is the primary interface. Resident execution keeps data on the GPU; round trip execution includes upload, allocation, execution, and readback.
 
-| Items | CPU Rayon | GPU upload + execute | GPU round trip |
-| ---: | ---: | ---: | ---: |
-| 100k | 0.52 ms | 6.0 ms | 7.2 ms |
-| 1M | 4.5 ms | 9.1 ms | 10.1 ms |
-| 10M | 44.1 ms | 31.3 ms | 40.9 ms |
-| 100M | 506 ms | 273 ms | 407 ms |
+| Primitive | Items | CPU | Best GPU resident | Resident speedup | Best GPU round trip |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Prefix scan | 1M | 0.220 ms | 0.170 ms (Vulkan) | 1.29x | 1.351 ms (DX12) |
+| Prefix scan | 10M | 2.232 ms | 0.717 ms (DX12) | 3.11x | 11.108 ms (DX12) |
+| Prefix scan | 100M | 27.949 ms | 5.568 ms (DX12) | 5.02x | 230.390 ms (DX12) |
+| Radix sort | 1M | 2.458 ms | 1.331 ms (Vulkan) | 1.85x | 2.453 ms (Vulkan) |
+| Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
+| Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
 
-At 100M items, the measured scan throughput was approximately 5.2 billion elements per second and sort throughput was approximately 365 million elements per second. Re-run the current Criterion suite before attributing these historical results to the buffer-to-buffer API.
+At 100M items, resident throughput reached 17.96 billion elements/s for scan and 2.287 billion elements/s for sort. See the [full methodology, confidence intervals, backend comparison, and memory accounting](benchmarks/2026-08-05-windows.md).
 
 ## Development
 
@@ -83,6 +85,8 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --lib --tests
 cargo check --examples --benches
 cargo package
+cargo bench --bench scan -- --noplot
+cargo bench --bench sort -- --noplot
 ```
 
 GPU integration tests skip when no compatible adapter is available. CI installs Mesa's Vulkan software adapter so the shader paths execute on Linux.
