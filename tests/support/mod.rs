@@ -2,7 +2,7 @@
 
 use futures::channel::oneshot;
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use wgpu_algorithms::{Context, Error};
+use wgpu_primitives::{Context, Error};
 
 pub async fn gpu_context() -> Option<Context> {
     match Context::init().await {

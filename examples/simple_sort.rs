@@ -1,4 +1,4 @@
-use wgpu_algorithms::{context::Context, sort::Sorter};
+use wgpu_primitives::{context::Context, sort::Sorter};
 
 fn main() {
     env_logger::init();

@@ -1,7 +1,7 @@
 mod support;
 
 use wgpu::util::DeviceExt;
-use wgpu_algorithms::{Error, Sorter};
+use wgpu_primitives::{Error, Sorter};
 
 fn cpu_sort(input: &[u32]) -> Vec<u32> {
     let mut expected = input.to_vec();

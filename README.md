@@ -1,11 +1,13 @@
-# wgpu-algorithms
+# wgpu-primitives
 
-[![CI](https://github.com/samjsui/wgpu-algorithms/actions/workflows/ci.yml/badge.svg)](https://github.com/samjsui/wgpu-algorithms/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/wgpu-algorithms.svg)](https://crates.io/crates/wgpu-algorithms)
-[![Docs.rs](https://docs.rs/wgpu-algorithms/badge.svg)](https://docs.rs/wgpu-algorithms)
+[![CI](https://github.com/samjsui/wgpu-primitives/actions/workflows/ci.yml/badge.svg)](https://github.com/samjsui/wgpu-primitives/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/wgpu-primitives.svg)](https://crates.io/crates/wgpu-primitives)
+[![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Safe, composable GPU prefix scan and unsigned integer radix sort for Rust applications using wgpu.
+
+`wgpu-primitives` continues the package previously published as `wgpu-algorithms` beginning with version 0.2.
 
 ## Features
 
@@ -21,10 +23,10 @@ Safe, composable GPU prefix scan and unsigned integer radix sort for Rust applic
 The convenience context is useful for standalone compute programs:
 
 ```rust
-use wgpu_algorithms::{Context, Sorter};
+use wgpu_primitives::{Context, Sorter};
 
 #[tokio::main]
-async fn main() -> Result<(), wgpu_algorithms::Error> {
+async fn main() -> Result<(), wgpu_primitives::Error> {
     let context = Context::init().await?;
     let mut sorter = Sorter::from_context(&context);
     let sorted = sorter.sort(&[10, 4, 7, 1]).await?;
@@ -51,7 +53,7 @@ queue.submit(Some(encoder.finish()));
 
 ```toml
 [dependencies]
-wgpu-algorithms = "0.2"
+wgpu-primitives = "0.2"
 ```
 
 ## Algorithms

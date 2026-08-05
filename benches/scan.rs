@@ -1,6 +1,6 @@
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use wgpu::util::DeviceExt;
-use wgpu_algorithms::{Context, Scanner};
+use wgpu_primitives::{Context, Scanner};
 
 fn benchmark_scan(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();

@@ -1,8 +1,8 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rayon::prelude::*;
 use wgpu::util::DeviceExt;
-use wgpu_algorithms::context::Context;
-use wgpu_algorithms::sort::Sorter;
+use wgpu_primitives::context::Context;
+use wgpu_primitives::sort::Sorter;
 
 fn benchmark_sorts(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();

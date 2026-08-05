@@ -1,7 +1,7 @@
 mod support;
 
 use wgpu::util::DeviceExt;
-use wgpu_algorithms::{Error, Scanner};
+use wgpu_primitives::{Error, Scanner};
 
 fn cpu_scan(input: &[u32]) -> Vec<u32> {
     input
