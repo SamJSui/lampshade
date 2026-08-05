@@ -1,5 +1,5 @@
-use crate::Error;
 use crate::context::Context;
+use crate::{Error, GpuProfile};
 
 use super::core::RadixSorter;
 use super::pipeline::SortItemKind;
@@ -31,9 +31,24 @@ impl KeyValueSorter {
         }
     }
 
+    /// Creates a sorter specialized for the supplied adapter when a measured
+    /// fast path is available.
+    ///
+    /// Discrete NVIDIA Vulkan adapters currently use the 4-bit radix kernel;
+    /// all other adapters use the portable 2-bit kernel.
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        Self {
+            core: RadixSorter::new_for_adapter(device, queue, SortItemKind::KeyValue, adapter_info),
+        }
+    }
+
     /// Creates a sorter from the crate's optional convenience context.
     pub fn from_context(ctx: &Context) -> Self {
-        Self::new(&ctx.device, &ctx.queue)
+        Self::new_for_adapter(&ctx.device, &ctx.queue, &ctx.adapter_info)
     }
 
     /// Uploads items, stably sorts them by key, and downloads the result.
@@ -49,6 +64,18 @@ impl KeyValueSorter {
         num_items: u32,
     ) -> Result<(), Error> {
         self.core.sort_gpu_to_gpu(input, output, num_items)
+    }
+
+    /// Profiles a stable GPU-buffer key-value radix sort using GPU timestamps.
+    pub async fn profile_sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        self.core
+            .profile_sort_gpu_to_gpu(input, output, num_items)
+            .await
     }
 
     /// Records a stable GPU key-value radix sort without submitting or waiting.

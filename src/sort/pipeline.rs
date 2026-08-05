@@ -1,6 +1,6 @@
 use crate::common;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SortItemKind {
     Key,
     KeyValue,
@@ -35,10 +35,65 @@ pub struct SortPipeline {
     pub scatter_pipeline: wgpu::ComputePipeline,
     pub vt: u32,
     pub block_size: u32,
+    pub bits_per_pass: u32,
+    pub bucket_count: u32,
+    pub pass_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RadixVariant {
+    Portable,
+    NvidiaVulkanKeyValue,
+}
+
+impl RadixVariant {
+    pub fn for_adapter(item_kind: SortItemKind, adapter_info: &wgpu::AdapterInfo) -> Self {
+        Self::for_hardware(
+            item_kind,
+            adapter_info.backend,
+            adapter_info.vendor,
+            adapter_info.device_type,
+        )
+    }
+
+    fn for_hardware(
+        item_kind: SortItemKind,
+        backend: wgpu::Backend,
+        vendor: u32,
+        device_type: wgpu::DeviceType,
+    ) -> Self {
+        if item_kind == SortItemKind::KeyValue
+            && backend == wgpu::Backend::Vulkan
+            && vendor == 0x10de
+            && device_type == wgpu::DeviceType::DiscreteGpu
+        {
+            Self::NvidiaVulkanKeyValue
+        } else {
+            Self::Portable
+        }
+    }
+
+    fn bits_per_pass(self) -> u32 {
+        match self {
+            Self::Portable => 2,
+            Self::NvidiaVulkanKeyValue => 4,
+        }
+    }
+
+    fn shader_source(self) -> &'static str {
+        match self {
+            Self::Portable => include_str!("sort.wgsl"),
+            Self::NvidiaVulkanKeyValue => include_str!("sort_wide.wgsl"),
+        }
+    }
 }
 
 impl SortPipeline {
-    pub fn new(device: &wgpu::Device, item_kind: SortItemKind) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        item_kind: SortItemKind,
+        radix_variant: RadixVariant,
+    ) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fused Sort Layout"),
             entries: &[
@@ -58,10 +113,22 @@ impl SortPipeline {
             (4, 128) // Mobile
         };
 
-        let raw_shader = include_str!("sort.wgsl");
+        let bits_per_pass = radix_variant.bits_per_pass();
+        let bucket_count = 1 << bits_per_pass;
+        let bucket_group_count = bucket_count / 4;
+        let pass_count = u32::BITS.div_ceil(bits_per_pass);
+        let raw_shader = radix_variant.shader_source();
+        let local_histogram_size = block_size * bucket_group_count;
         let final_source = raw_shader
             .replace("{{VT}}", &vt.to_string())
             .replace("{{BLOCK_SIZE}}", &block_size.to_string())
+            .replace("{{RADIX_BITS}}", &bits_per_pass.to_string())
+            .replace("{{RADIX_BUCKETS}}", &bucket_count.to_string())
+            .replace("{{RADIX_BUCKET_GROUPS}}", &bucket_group_count.to_string())
+            .replace(
+                "{{LOCAL_HISTOGRAM_SIZE}}",
+                &local_histogram_size.to_string(),
+            )
             .replace("{{ITEM_TYPE}}", item_kind.shader_item_type())
             .replace("{{KEY_ACCESS}}", item_kind.shader_key_access());
 
@@ -100,6 +167,54 @@ impl SortPipeline {
             scatter_pipeline,
             vt,
             block_size,
+            bits_per_pass,
+            bucket_count,
+            pass_count,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RadixVariant, SortItemKind};
+
+    #[test]
+    fn selects_wide_radix_only_for_vulkan_key_value_items() {
+        assert_eq!(
+            RadixVariant::for_hardware(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+            ),
+            RadixVariant::NvidiaVulkanKeyValue
+        );
+        assert_eq!(
+            RadixVariant::for_hardware(
+                SortItemKind::Key,
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+            ),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            RadixVariant::for_hardware(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Dx12,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+            ),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            RadixVariant::for_hardware(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Vulkan,
+                0x1002,
+                wgpu::DeviceType::DiscreteGpu,
+            ),
+            RadixVariant::Portable
+        );
     }
 }

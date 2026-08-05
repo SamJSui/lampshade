@@ -24,11 +24,12 @@ impl Context {
             })
             .await?;
         let adapter_info = adapter.get_info();
+        let required_features = adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Context Device"),
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits: adapter.limits(),
                 memory_hints: MemoryHints::Performance,
                 ..Default::default()
