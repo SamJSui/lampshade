@@ -8,4 +8,4 @@ pub mod sort;
 pub use context::Context;
 pub use error::Error;
 pub use scan::Scanner;
-pub use sort::Sorter;
+pub use sort::{KeyValue, KeyValueSorter, Sorter};

@@ -1,5 +1,34 @@
 use crate::common;
 
+#[derive(Clone, Copy)]
+pub enum SortItemKind {
+    Key,
+    KeyValue,
+}
+
+impl SortItemKind {
+    pub const fn size_bytes(self) -> u64 {
+        match self {
+            Self::Key => 4,
+            Self::KeyValue => 8,
+        }
+    }
+
+    fn shader_item_type(self) -> &'static str {
+        match self {
+            Self::Key => "u32",
+            Self::KeyValue => "KeyValue",
+        }
+    }
+
+    fn shader_key_access(self) -> &'static str {
+        match self {
+            Self::Key => "item",
+            Self::KeyValue => "item.key",
+        }
+    }
+}
+
 pub struct SortPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub reduce_pipeline: wgpu::ComputePipeline,
@@ -9,7 +38,7 @@ pub struct SortPipeline {
 }
 
 impl SortPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, item_kind: SortItemKind) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fused Sort Layout"),
             entries: &[
@@ -32,7 +61,9 @@ impl SortPipeline {
         let raw_shader = include_str!("sort.wgsl");
         let final_source = raw_shader
             .replace("{{VT}}", &vt.to_string())
-            .replace("{{BLOCK_SIZE}}", &block_size.to_string());
+            .replace("{{BLOCK_SIZE}}", &block_size.to_string())
+            .replace("{{ITEM_TYPE}}", item_kind.shader_item_type())
+            .replace("{{KEY_ACCESS}}", item_kind.shader_key_access());
 
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fused Sort Shader"),

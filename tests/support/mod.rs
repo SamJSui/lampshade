@@ -21,11 +21,19 @@ pub fn random_u32(len: usize, seed: u64) -> Vec<u32> {
 }
 
 pub async fn read_u32(context: &Context, buffer: &wgpu::Buffer, len: usize) -> Vec<u32> {
+    read_pod(context, buffer, len).await
+}
+
+pub async fn read_pod<T: bytemuck::Pod>(
+    context: &Context,
+    buffer: &wgpu::Buffer,
+    len: usize,
+) -> Vec<T> {
     if len == 0 {
         return Vec::new();
     }
 
-    let size = (len * size_of::<u32>()) as u64;
+    let size = (len * size_of::<T>()) as u64;
     let staging = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Test Readback"),
         size,

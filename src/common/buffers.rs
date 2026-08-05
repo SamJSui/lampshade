@@ -47,15 +47,18 @@ pub fn bind_entry(binding: u32, read_only: bool, uniform: bool) -> wgpu::BindGro
 
 // --- IO (Download/Read) ---
 
-pub async fn download_buffer(
+pub async fn download_buffer<T: bytemuck::Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     buffer: &wgpu::Buffer,
-    size_bytes: u64,
-) -> Result<Vec<u32>, Error> {
-    if size_bytes == 0 {
+    element_count: usize,
+) -> Result<Vec<T>, Error> {
+    if element_count == 0 {
         return Ok(Vec::new());
     }
+
+    let size_bytes =
+        crate::common::math::checked_byte_size(element_count as u64, size_of::<T>() as u64)?;
 
     validate_buffer(
         buffer,

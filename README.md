@@ -11,13 +11,14 @@ Safe, composable GPU prefix scan and unsigned integer radix sort for Rust applic
 
 ## Benchmark highlights
 
-With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs delivered the following results at 100 million `u32` values:
+With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs delivered the following results at 100 million items (`u32` values or `KeyValue` pairs):
 
 | Primitive | Best backend | GPU time | Resident throughput | CPU baseline | Speedup |
 | --- | --- | ---: | ---: | ---: | ---: |
 | Inclusive prefix scan | DX12 | 5.568 ms | 17.96 billion elements/s | Scalar CPU | 5.02x |
 | Exclusive prefix scan | DX12 | 6.238 ms | 16.03 billion elements/s | Scalar CPU | 4.58x |
 | Radix sort | Vulkan | 43.724 ms | 2.287 billion elements/s | Rayon | 6.35x |
+| Stable key-value radix sort | Vulkan | 110.270 ms | 906.83 million pairs/s | Stable Rayon | 6.23x |
 
 These figures measure the composable resident-buffer path: command encoding, submission, primitive execution, and reusable workspace management are included, while host upload and readback are excluded. See [Performance](#performance) for smaller inputs and round-trip results.
 
@@ -25,6 +26,7 @@ These figures measure the composable resident-buffer path: command encoding, sub
 
 - Inclusive and exclusive `u32` prefix scan.
 - Stable 2-bit LSD radix sort for `u32` values.
+- Stable 2-bit LSD radix sort for `(u32 key, u32 value)` pairs.
 - Convenience slice APIs that upload, execute, and read back.
 - GPU-buffer APIs that record into an existing command encoder.
 - Reusable internal scratch storage.
@@ -52,6 +54,35 @@ async fn main() -> Result<(), wgpu_primitives::Error> {
 }
 ```
 
+Stable key-value sorting keeps payloads in their original order when keys compare equal:
+
+```rust
+use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
+
+#[tokio::main]
+async fn main() -> Result<(), wgpu_primitives::Error> {
+    let context = Context::init().await?;
+    let mut sorter = KeyValueSorter::from_context(&context);
+    let sorted = sorter
+        .sort(&[
+            KeyValue::new(2, 10),
+            KeyValue::new(1, 20),
+            KeyValue::new(2, 30),
+        ])
+        .await?;
+
+    assert_eq!(
+        sorted,
+        [
+            KeyValue::new(1, 20),
+            KeyValue::new(2, 10),
+            KeyValue::new(2, 30),
+        ]
+    );
+    Ok(())
+}
+```
+
 Applications that already own a wgpu device should reuse it:
 
 ```rust,ignore
@@ -67,9 +98,18 @@ queue.submit(Some(encoder.finish()));
 
 ## Installation
 
+The crates.io `0.2` release contains inclusive scan and key-only radix sort:
+
 ```toml
 [dependencies]
 wgpu-primitives = "0.2"
+```
+
+Exclusive scan and stable key-value sort are currently available from `main` and are planned for version 0.3:
+
+```toml
+[dependencies]
+wgpu-primitives = { git = "https://github.com/samjsui/wgpu-primitives" }
 ```
 
 ## Algorithms
@@ -77,6 +117,8 @@ wgpu-primitives = "0.2"
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
 
 The radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
+
+`KeyValueSorter` runs the same stable passes over interleaved `KeyValue` items. Values move with their keys during every scatter, so equal keys retain their original value order.
 
 ## Performance
 
@@ -91,18 +133,19 @@ Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is 
 | Radix sort | 1M | 2.458 ms | 1.331 ms (Vulkan) | 1.85x | 2.453 ms (Vulkan) |
 | Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
 | Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
+| Stable key-value sort | 10M | 51.783 ms | 12.694 ms (Vulkan) | 4.08x | 34.142 ms (Vulkan) |
+| Stable key-value sort | 100M | 687.590 ms | 110.270 ms (Vulkan) | 6.23x | 576.340 ms (Vulkan) |
 
-At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, and 2.287 billion elements/s for sort. See the [full methodology, confidence intervals, backend comparison, and memory accounting](benchmarks/2026-08-05-windows.md).
+At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, 2.287 billion elements/s for key-only sort, and 906.83 million pairs/s for stable key-value sort. See the [full methodology, confidence intervals, backend comparison, and memory accounting](benchmarks/2026-08-05-windows.md).
 
 ## Roadmap
 
-Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. The next work is ordered by how much it improves the crate as a reusable primitive library:
+Version 0.2 established the public GPU-buffer APIs, deterministic GPU tests, reusable workspace, cross-backend benchmarks, and the `wgpu-primitives` package name. The current main branch adds exclusive scan and stable key-value sort for the planned 0.3 release. The next work is ordered by how much it improves the crate as a reusable primitive library:
 
-1. **Complete the core APIs:** add stable key-value radix sort without forcing data through host memory.
-2. **Measure kernels directly:** add GPU timestamp-query benchmarks and per-pass profiling so optimization decisions are separated from command submission and synchronization cost.
-3. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer allocation and tune workgroup/radix configurations from measurements across DX12, Vulkan, and Metal.
-4. **Build derived primitives:** implement stream compaction and selection on top of scan after the lower-level APIs and performance contracts are stable.
-5. **Broaden hardware evidence:** publish reproducible benchmark reports from integrated and discrete GPUs, including crossover sizes, memory use, and resident versus round-trip behavior.
+1. **Measure kernels directly:** add GPU timestamp-query benchmarks and per-pass profiling so optimization decisions are separated from command submission and synchronization cost.
+2. **Reduce runtime overhead:** remove the radix sort's per-invocation uniform-buffer allocation and tune workgroup/radix configurations from measurements across DX12, Vulkan, and Metal.
+3. **Build derived primitives:** implement stream compaction and selection on top of scan after the lower-level APIs and performance contracts are stable.
+4. **Broaden hardware evidence:** publish reproducible benchmark reports from integrated and discrete GPUs, including crossover sizes, memory use, and resident versus round-trip behavior.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 
@@ -116,6 +159,7 @@ cargo check --examples --benches
 cargo package
 cargo bench --bench scan -- --noplot
 cargo bench --bench sort -- --noplot
+cargo bench --bench key_value_sort -- --noplot
 ```
 
 GPU integration tests skip when no compatible adapter is available. CI installs Mesa's Vulkan software adapter so the shader paths execute on Linux.
