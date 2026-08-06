@@ -24,7 +24,8 @@ impl Context {
             })
             .await?;
         let adapter_info = adapter.get_info();
-        let required_features = adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
+        let optional_features = wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::SUBGROUP;
+        let required_features = adapter.features() & optional_features;
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {

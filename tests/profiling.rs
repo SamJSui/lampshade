@@ -144,15 +144,30 @@ async fn profiles_key_and_key_value_radix_stages() {
         .iter()
         .filter(|span| span.label.ends_with(".reduce"))
         .count();
-    assert!(matches!(pair_reduce_passes, 8 | PORTABLE_RADIX_PASS_COUNT));
-    assert_eq!(
-        pair_profile
-            .spans
-            .iter()
-            .filter(|span| span.label.ends_with(".scatter"))
-            .count(),
-        pair_reduce_passes
-    );
+    let pair_scatter_passes = pair_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".scatter"))
+        .count();
+    let pair_histogram_passes = pair_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".histogram"))
+        .count();
+    let pair_prefix_passes = pair_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".prefix"))
+        .count();
+    if pair_histogram_passes == 1 {
+        assert_eq!(pair_prefix_passes, 1);
+        assert_eq!(pair_reduce_passes, 0);
+        assert_eq!(pair_scatter_passes, 4);
+    } else {
+        assert_eq!(pair_prefix_passes, 0);
+        assert!(matches!(pair_reduce_passes, 8 | PORTABLE_RADIX_PASS_COUNT));
+        assert_eq!(pair_scatter_passes, pair_reduce_passes);
+    }
 }
 
 #[tokio::test]

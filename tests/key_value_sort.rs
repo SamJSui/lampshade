@@ -73,6 +73,40 @@ async fn key_value_sort_preserves_value_order_for_equal_keys() {
 }
 
 #[tokio::test]
+async fn key_value_sort_handles_full_width_keys_across_many_tiles() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSorter::from_context(&context);
+    let input: Vec<_> = support::random_u32(262_147, 0x00F0_1132)
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| KeyValue::new(key, index as u32))
+        .collect();
+
+    let actual = sorter
+        .sort(&input)
+        .await
+        .expect("full-width GPU key-value sort failed");
+    assert_eq!(actual, cpu_stable_sort(&input));
+}
+
+#[tokio::test]
+async fn key_value_sort_is_stable_for_large_duplicate_heavy_input() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSorter::from_context(&context);
+    let input = duplicate_keys(1_000_003, 0xD001_1CA7);
+
+    let actual = sorter
+        .sort(&input)
+        .await
+        .expect("large duplicate-heavy GPU key-value sort failed");
+    assert_eq!(actual, cpu_stable_sort(&input));
+}
+
+#[tokio::test]
 async fn key_value_sort_gpu_to_gpu_writes_the_caller_output_buffer() {
     let Some(context) = support::gpu_context().await else {
         return;
@@ -94,7 +128,7 @@ async fn record_key_value_sort_composes_multiple_invocations_in_one_encoder() {
     let Some(context) = support::gpu_context().await else {
         return;
     };
-    let mut sorter = KeyValueSorter::new(&context.device, &context.queue);
+    let mut sorter = KeyValueSorter::from_context(&context);
     let first = [KeyValue::new(7, 11)];
     let second = duplicate_keys(4_097, 200);
     let first_input = create_sort_input(&context.device, &first);

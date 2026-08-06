@@ -1,4 +1,5 @@
 mod core;
+mod eight_bit;
 mod key_value_sorter;
 mod pipeline;
 mod sorter;

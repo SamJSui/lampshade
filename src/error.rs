@@ -12,6 +12,10 @@ pub enum Error {
     ElementCountTooLarge {
         count: u64,
     },
+    RadixElementCountLimitExceeded {
+        count: u32,
+        limit: u32,
+    },
     SizeOverflow,
     BufferLimitExceeded {
         requested: u64,
@@ -45,6 +49,10 @@ impl fmt::Display for Error {
             Self::ElementCountTooLarge { count } => {
                 write!(f, "element count {count} exceeds the supported u32 range")
             }
+            Self::RadixElementCountLimitExceeded { count, limit } => write!(
+                f,
+                "element count {count} exceeds the optimized radix-sort limit of {limit}"
+            ),
             Self::SizeOverflow => f.write_str("buffer size calculation overflowed"),
             Self::BufferLimitExceeded { requested, limit } => write!(
                 f,
