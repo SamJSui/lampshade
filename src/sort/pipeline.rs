@@ -43,16 +43,24 @@ pub struct SortPipeline {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RadixVariant {
     Portable,
-    NvidiaVulkanKeyValue,
+    NvidiaVulkanWide,
+    NvidiaVulkanSubgroup,
 }
 
 impl RadixVariant {
-    pub fn for_adapter(item_kind: SortItemKind, adapter_info: &wgpu::AdapterInfo) -> Self {
+    pub fn for_adapter(
+        item_kind: SortItemKind,
+        adapter_info: &wgpu::AdapterInfo,
+        enabled_features: wgpu::Features,
+    ) -> Self {
         Self::for_hardware(
             item_kind,
             adapter_info.backend,
             adapter_info.vendor,
             adapter_info.device_type,
+            adapter_info.subgroup_min_size,
+            adapter_info.subgroup_max_size,
+            enabled_features.contains(wgpu::Features::SUBGROUP),
         )
     }
 
@@ -61,29 +69,46 @@ impl RadixVariant {
         backend: wgpu::Backend,
         vendor: u32,
         device_type: wgpu::DeviceType,
+        subgroup_min_size: u32,
+        subgroup_max_size: u32,
+        subgroups_enabled: bool,
     ) -> Self {
         if item_kind == SortItemKind::KeyValue
             && backend == wgpu::Backend::Vulkan
             && vendor == 0x10de
             && device_type == wgpu::DeviceType::DiscreteGpu
         {
-            Self::NvidiaVulkanKeyValue
+            if subgroups_enabled && subgroup_min_size == 32 && subgroup_max_size == 32 {
+                Self::NvidiaVulkanSubgroup
+            } else {
+                Self::NvidiaVulkanWide
+            }
         } else {
             Self::Portable
         }
     }
 
+    pub const fn uses_eight_bit_pipeline(self) -> bool {
+        matches!(self, Self::NvidiaVulkanSubgroup)
+    }
+
     fn bits_per_pass(self) -> u32 {
         match self {
             Self::Portable => 2,
-            Self::NvidiaVulkanKeyValue => 4,
+            Self::NvidiaVulkanWide => 4,
+            Self::NvidiaVulkanSubgroup => {
+                unreachable!("8-bit radix uses its dedicated pipeline")
+            }
         }
     }
 
     fn shader_source(self) -> &'static str {
         match self {
             Self::Portable => include_str!("sort.wgsl"),
-            Self::NvidiaVulkanKeyValue => include_str!("sort_wide.wgsl"),
+            Self::NvidiaVulkanWide => include_str!("sort_wide.wgsl"),
+            Self::NvidiaVulkanSubgroup => {
+                unreachable!("8-bit radix uses its dedicated shader")
+            }
         }
     }
 }
@@ -179,15 +204,30 @@ mod tests {
     use super::{RadixVariant, SortItemKind};
 
     #[test]
-    fn selects_wide_radix_only_for_vulkan_key_value_items() {
+    fn selects_subgroup_radix_only_for_compatible_nvidia_vulkan_key_value_items() {
         assert_eq!(
             RadixVariant::for_hardware(
                 SortItemKind::KeyValue,
                 wgpu::Backend::Vulkan,
                 0x10de,
                 wgpu::DeviceType::DiscreteGpu,
+                32,
+                32,
+                true,
             ),
-            RadixVariant::NvidiaVulkanKeyValue
+            RadixVariant::NvidiaVulkanSubgroup
+        );
+        assert_eq!(
+            RadixVariant::for_hardware(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+                32,
+                32,
+                false,
+            ),
+            RadixVariant::NvidiaVulkanWide
         );
         assert_eq!(
             RadixVariant::for_hardware(
@@ -195,6 +235,9 @@ mod tests {
                 wgpu::Backend::Vulkan,
                 0x10de,
                 wgpu::DeviceType::DiscreteGpu,
+                32,
+                32,
+                true,
             ),
             RadixVariant::Portable
         );
@@ -204,6 +247,9 @@ mod tests {
                 wgpu::Backend::Dx12,
                 0x10de,
                 wgpu::DeviceType::DiscreteGpu,
+                32,
+                32,
+                true,
             ),
             RadixVariant::Portable
         );
@@ -213,6 +259,9 @@ mod tests {
                 wgpu::Backend::Vulkan,
                 0x1002,
                 wgpu::DeviceType::DiscreteGpu,
+                32,
+                64,
+                true,
             ),
             RadixVariant::Portable
         );

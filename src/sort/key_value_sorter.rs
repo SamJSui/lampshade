@@ -34,8 +34,9 @@ impl KeyValueSorter {
     /// Creates a sorter specialized for the supplied adapter when a measured
     /// fast path is available.
     ///
-    /// Discrete NVIDIA Vulkan adapters currently use the 4-bit radix kernel;
-    /// all other adapters use the portable 2-bit kernel.
+    /// Discrete NVIDIA Vulkan adapters with 32-wide subgroups use the 8-bit
+    /// radix kernel. Other NVIDIA Vulkan devices use the 4-bit kernel, and all
+    /// remaining adapters use the portable 2-bit kernel.
     pub fn new_for_adapter(
         device: &wgpu::Device,
         queue: &wgpu::Queue,

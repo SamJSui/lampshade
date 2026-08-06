@@ -5,10 +5,108 @@ use crate::common;
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 use crate::scan::Scanner;
 
+use super::eight_bit::EightBitSorter;
 use super::pipeline::{RadixVariant, SortItemKind, SortPipeline};
 
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
 const UNIFORM_SIZE_BYTES: u64 = 16;
+
+pub struct RadixSorter {
+    implementation: SortImplementation,
+}
+
+enum SortImplementation {
+    ReduceScan(ReduceScanSorter),
+    EightBit(EightBitSorter),
+}
+
+impl RadixSorter {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
+        Self {
+            implementation: SortImplementation::ReduceScan(ReduceScanSorter::new(
+                device,
+                queue,
+                item_kind,
+                RadixVariant::Portable,
+            )),
+        }
+    }
+
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        let variant = RadixVariant::for_adapter(item_kind, adapter_info, device.features());
+        let implementation = if variant.uses_eight_bit_pipeline() {
+            SortImplementation::EightBit(EightBitSorter::new(device, queue))
+        } else {
+            SortImplementation::ReduceScan(ReduceScanSorter::new(device, queue, item_kind, variant))
+        };
+        Self { implementation }
+    }
+
+    pub async fn sort_slice<T: bytemuck::Pod>(&mut self, input: &[T]) -> Result<Vec<T>, Error> {
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => sorter.sort_slice(input).await,
+            SortImplementation::EightBit(sorter) => sorter.sort_slice(input).await,
+        }
+    }
+
+    pub fn sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => {
+                sorter.sort_gpu_to_gpu(input, output, num_items)
+            }
+            SortImplementation::EightBit(sorter) => {
+                sorter.sort_gpu_to_gpu(input, output, num_items)
+            }
+        }
+    }
+
+    pub async fn profile_sort_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<GpuProfile, Error> {
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => {
+                sorter
+                    .profile_sort_gpu_to_gpu(input, output, num_items)
+                    .await
+            }
+            SortImplementation::EightBit(sorter) => {
+                sorter
+                    .profile_sort_gpu_to_gpu(input, output, num_items)
+                    .await
+            }
+        }
+    }
+
+    pub fn record_sort(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => {
+                sorter.record_sort(encoder, input, output, num_items)
+            }
+            SortImplementation::EightBit(sorter) => {
+                sorter.record_sort(encoder, input, output, num_items)
+            }
+        }
+    }
+}
 
 struct SortWorkspace {
     capacity_bytes: u64,
@@ -24,7 +122,7 @@ struct PreparedSort {
     size_bytes: u64,
 }
 
-pub struct RadixSorter {
+struct ReduceScanSorter {
     device: wgpu::Device,
     queue: wgpu::Queue,
     scanner: Scanner,
@@ -33,26 +131,8 @@ pub struct RadixSorter {
     item_size: u64,
 }
 
-impl RadixSorter {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
-        Self::new_with_variant(device, queue, item_kind, RadixVariant::Portable)
-    }
-
-    pub fn new_for_adapter(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        item_kind: SortItemKind,
-        adapter_info: &wgpu::AdapterInfo,
-    ) -> Self {
-        Self::new_with_variant(
-            device,
-            queue,
-            item_kind,
-            RadixVariant::for_adapter(item_kind, adapter_info),
-        )
-    }
-
-    fn new_with_variant(
+impl ReduceScanSorter {
+    fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         item_kind: SortItemKind,

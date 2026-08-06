@@ -236,7 +236,11 @@ fn report(primitive: &str, item_count: usize, wall: Duration, profiles: &[GpuPro
 }
 
 fn stage(label: &str) -> &'static str {
-    if label.ends_with(".reduce") {
+    if label.ends_with(".histogram") {
+        "histogram"
+    } else if label.ends_with(".prefix") {
+        "prefix"
+    } else if label.ends_with(".reduce") {
         "reduce"
     } else if label.ends_with(".scatter") {
         "scatter"
