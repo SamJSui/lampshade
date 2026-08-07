@@ -29,6 +29,12 @@ From the repository root on PowerShell:
 & .\benchmarks\wgpu-sort-comparison\run.ps1
 ```
 
+On Linux or another POSIX host with Python 3:
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh
+```
+
 The full run measures 1M, 10M, and 100M pairs; bounded 16-bit and full-width
 keys; resident and round-trip modes; and three independent processes. Inputs
 below 100M use four warmups and 11 samples. The 100M cases use two warmups and
@@ -40,6 +46,22 @@ For a quick correctness and harness smoke test:
 
 ```powershell
 & .\benchmarks\wgpu-sort-comparison\run.ps1 -Quick
+```
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh --quick
+```
+
+The POSIX runner accepts comma-separated `--items`, `--workloads`, and
+`--modes`, plus `--processes`, `--backend`, and `--output`. For example, the
+physical Jetson comparison uses:
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh \
+  --items 1000000,10000000 \
+  --workloads bounded16,full_width \
+  --modes resident \
+  --processes 3
 ```
 
 Generated JSON defaults to `results/latest.json`, which is ignored by Git.
