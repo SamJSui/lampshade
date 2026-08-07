@@ -16,6 +16,13 @@ pub enum Error {
         count: u32,
         limit: u32,
     },
+    InvalidKeyBits {
+        bits: u32,
+    },
+    KeyExceedsBitRange {
+        key: u32,
+        bits: u32,
+    },
     SizeOverflow,
     BufferLimitExceeded {
         requested: u64,
@@ -30,6 +37,10 @@ pub enum Error {
         name: &'static str,
         required: wgpu::BufferUsages,
         actual: wgpu::BufferUsages,
+    },
+    BufferAlias {
+        first: &'static str,
+        second: &'static str,
     },
 }
 
@@ -53,6 +64,16 @@ impl fmt::Display for Error {
                 f,
                 "element count {count} exceeds the optimized radix-sort limit of {limit}"
             ),
+            Self::InvalidKeyBits { bits } => {
+                write!(
+                    f,
+                    "radix-sort key width must be at most 32 bits, got {bits}"
+                )
+            }
+            Self::KeyExceedsBitRange { key, bits } => write!(
+                f,
+                "key {key} does not fit in the declared {bits}-bit radix-sort range"
+            ),
             Self::SizeOverflow => f.write_str("buffer size calculation overflowed"),
             Self::BufferLimitExceeded { requested, limit } => write!(
                 f,
@@ -74,6 +95,9 @@ impl fmt::Display for Error {
                 f,
                 "{name} buffer is missing usage {required:?}; actual usage is {actual:?}"
             ),
+            Self::BufferAlias { first, second } => {
+                write!(f, "{first} and {second} must be distinct buffers")
+            }
         }
     }
 }

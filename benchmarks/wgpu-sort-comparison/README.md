@@ -17,6 +17,12 @@ its input from immutable GPU-resident backup buffers before starting each
 resident sample. That untimed device-to-device copy avoids repeated host upload
 allocations affecting later processes. `wgpu-primitives` preserves its input.
 
+The `bounded16` workload calls the explicit 16-bit-bound API in
+`wgpu-primitives`; `full_width` declares 32 bits. This measures the crate's
+public application-supplied-bound path rather than claiming automatic key-range
+detection. The generated keys are validated against the shared stable CPU
+reference before timing.
+
 Round-trip timing exercises each public API's practical upload-to-readback path.
 It is useful application context, but it is not a kernel-only comparison: the
 crates expose different layouts and convenience APIs.
@@ -27,6 +33,12 @@ From the repository root on PowerShell:
 
 ```powershell
 & .\benchmarks\wgpu-sort-comparison\run.ps1
+```
+
+On Linux or another POSIX host with Python 3:
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh
 ```
 
 The full run measures 1M, 10M, and 100M pairs; bounded 16-bit and full-width
@@ -40,6 +52,22 @@ For a quick correctness and harness smoke test:
 
 ```powershell
 & .\benchmarks\wgpu-sort-comparison\run.ps1 -Quick
+```
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh --quick
+```
+
+The POSIX runner accepts comma-separated `--items`, `--workloads`, and
+`--modes`, plus `--processes`, `--backend`, and `--output`. For example, the
+physical Jetson comparison uses:
+
+```sh
+sh benchmarks/wgpu-sort-comparison/run.sh \
+  --items 1000000,10000000 \
+  --workloads bounded16,full_width \
+  --modes resident \
+  --processes 3
 ```
 
 Generated JSON defaults to `results/latest.json`, which is ignored by Git.

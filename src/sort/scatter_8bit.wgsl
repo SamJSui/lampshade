@@ -8,6 +8,10 @@ struct Uniforms {
     num_tiles: u32,
     generation: u32,
     bit_index: u32,
+    pass_count: u32,
+    _padding_0: u32,
+    _padding_1: u32,
+    _padding_2: u32,
 }
 
 @group(0) @binding(0) var<storage, read> input: array<KeyValue>;

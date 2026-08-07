@@ -7,6 +7,8 @@ benchmarks/wgpu-sort-comparison/results/*.json
 # OS Junk
 .DS_Store
 *.swp
+__pycache__/
+*.pyc
 
 # VSCode Junk
 .vscode

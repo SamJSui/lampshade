@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "source": {
+    "branch_base_revision": "be74b7fdf9262f22aa5704240bfe415054d46da3",
+    "benchmark_snapshot_revision": "d11e0c7b574867b515a5d624caeab6bbd3800f64",
+    "archive_sha256": "3ABDC65AD9B634C5F50602EAD0F165BE345591AA469E71F72A5BD44B508B5EC6",
+    "change": "Schedule one to four NVIDIA Vulkan 8-bit radix scatter passes directly from the declared key width, with audited cache, routing, alias, device-limit, and dispatch-limit handling."
+  },
+  "comparison": {
+    "name": "wgpu_sort",
+    "revision": "4cb640e8cae28eba0149d470c5168cc2853466dd"
+  },
+  "environment": {
+    "architecture": "aarch64",
+    "rust": "1.97.1",
+    "adapter": "NVIDIA Tegra Orin (nvgpu)",
+    "device_type": "IntegratedGpu",
+    "backend": "Vulkan",
+    "driver": "NVIDIA 595.78",
+    "subgroup_min_size": 32,
+    "subgroup_max_size": 32,
+    "cpu_clock_hz": 1728000000,
+    "gpu_clock_hz": 1020000000,
+    "emc_clock_hz": 3199000000
+  },
+  "method": {
+    "mode": "resident",
+    "warmups": 4,
+    "minimum_warmup_ms": 2000,
+    "samples_per_process": 11,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "correctness_checked": true
+  },
+  "audit": {
+    "independent_read_only_review": true,
+    "issues_fixed": [
+      "pass-count-aware cache identity and odd-even output routing",
+      "input-output buffer alias rejection",
+      "device workgroup invocation and storage limit gating",
+      "device-derived one-dimensional dispatch element limit"
+    ],
+    "key_bit_boundaries_tested": [0, 1, 8, 9, 16, 17, 24, 25, 32],
+    "tests_passed_per_jetson": 38
+  },
+  "hosts": [
+    {
+      "name": "dopey",
+      "active_gpu_tpcs": 8,
+      "controlled_result_sha256": "3742B5CCC36A6AAE68D1C20B7801E23E94DD6545E74B1D2539AB9F74F3DABA25",
+      "stress_bounded16_sha256": "73802274EC50FC8B2618A21CE94E06EE614F7C8EECC178EA36CD775D63DFE9E9",
+      "stress_full_width_sha256": "220F229F4B0963B8020B5206EFE00580D14BBCCA229E2188653D3B4DED71825D"
+    },
+    {
+      "name": "grumpy",
+      "active_gpu_tpcs": 4,
+      "controlled_result_sha256": "3D4E06B1AD3FDB424136CD153DE0D2006BB5E1AFD93D86961F53D5426B66D985",
+      "stress_bounded16_sha256": "2BD957E70BD0B120896AB8DC0E97E3AA329D44C76EB19AC7CD981B87A72A0C3B",
+      "stress_full_width_sha256": "C9B7290D2FC595F7E1C62850D04C8EA8BAD8870DCD13B6D69FEFA62972140B9B"
+    }
+  ],
+  "results": [
+    {"host":"dopey","workload":"bounded16","items":1000000,"previous_ms":1.449991,"wgpu_primitives_ms":1.373020,"change_percent":-5.308,"wgpu_sort_ms":2.800663,"speedup_over_wgpu_sort":2.040},
+    {"host":"dopey","workload":"full_width","items":1000000,"previous_ms":2.575141,"wgpu_primitives_ms":2.596728,"change_percent":0.838,"wgpu_sort_ms":2.904407,"speedup_over_wgpu_sort":1.118},
+    {"host":"dopey","workload":"bounded16","items":10000000,"previous_ms":11.398001,"wgpu_primitives_ms":11.242282,"change_percent":-1.366,"wgpu_sort_ms":25.077132,"speedup_over_wgpu_sort":2.231},
+    {"host":"dopey","workload":"full_width","items":10000000,"previous_ms":21.504576,"wgpu_primitives_ms":21.773914,"change_percent":1.252,"wgpu_sort_ms":26.391587,"speedup_over_wgpu_sort":1.212},
+    {"host":"grumpy","workload":"bounded16","items":1000000,"previous_ms":1.478088,"wgpu_primitives_ms":1.401284,"change_percent":-5.196,"wgpu_sort_ms":2.832521,"speedup_over_wgpu_sort":2.021},
+    {"host":"grumpy","workload":"full_width","items":1000000,"previous_ms":2.616902,"wgpu_primitives_ms":2.648644,"change_percent":1.213,"wgpu_sort_ms":2.972429,"speedup_over_wgpu_sort":1.122},
+    {"host":"grumpy","workload":"bounded16","items":10000000,"previous_ms":11.524020,"wgpu_primitives_ms":11.426599,"change_percent":-0.845,"wgpu_sort_ms":25.019941,"speedup_over_wgpu_sort":2.190},
+    {"host":"grumpy","workload":"full_width","items":10000000,"previous_ms":21.832359,"wgpu_primitives_ms":22.042138,"change_percent":0.961,"wgpu_sort_ms":26.301511,"speedup_over_wgpu_sort":1.193}
+  ],
+  "stress_results": [
+    {"host":"dopey","active_gpu_tpcs":8,"workload":"bounded16","items":100000000,"median_ms":112.649992,"throughput_pairs_per_second":887705344.8880848,"correctness_checked":true},
+    {"host":"dopey","active_gpu_tpcs":8,"workload":"full_width","items":100000000,"median_ms":215.106550,"throughput_pairs_per_second":464885890.2715886,"correctness_checked":true},
+    {"host":"grumpy","active_gpu_tpcs":4,"workload":"bounded16","items":100000000,"median_ms":113.956770,"throughput_pairs_per_second":877525749.4574476,"correctness_checked":true},
+    {"host":"grumpy","active_gpu_tpcs":4,"workload":"full_width","items":100000000,"median_ms":217.349493,"throughput_pairs_per_second":460088489.83144397,"correctness_checked":true}
+  ],
+  "comparison_capacity_failure": {
+    "host": "dopey",
+    "items": 100000000,
+    "implementation": "wgpu_sort",
+    "exit_code": 101,
+    "buffer_label": "wgpu_sort Resident Value Backup",
+    "error": "Not enough memory left",
+    "stderr_sha256": "573FEA468537624C7CE3B5368F7BFA9AC3B34378C4B5ED75C4187691EF49C007"
+  },
+  "tuning": {
+    "kept": {
+      "workgroup_threads": 256,
+      "items_per_thread": 7,
+      "items_per_tile": 1792,
+      "maximum_histogram_workgroups": 2048
+    },
+    "items_per_thread_screening_10m_ms": [
+      {"items_per_thread":6,"bounded16":0.9493,"full_width":1.7159},
+      {"items_per_thread":7,"bounded16":0.9135,"full_width":1.6472},
+      {"items_per_thread":8,"bounded16":0.9617,"full_width":1.7285}
+    ],
+    "histogram_cap_screening_range_10m_ms": {
+      "caps_tested": [256, 512, 1024],
+      "bounded16_min": 0.9107,
+      "bounded16_max": 0.9208,
+      "full_width_min": 1.6065,
+      "full_width_max": 1.6149
+    }
+  }
+}

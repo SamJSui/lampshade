@@ -55,6 +55,50 @@ async fn sorter_reuses_workspace_for_growing_and_shrinking_inputs() {
 }
 
 #[tokio::test]
+async fn bounded_sort_handles_odd_and_even_portable_pass_counts() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = Sorter::new(&context.device, &context.queue);
+    let cases = [
+        (0, vec![0, 0, 0]),
+        (1, vec![1, 0, 1, 0]),
+        (3, vec![7, 0, 4, 1, 7]),
+        (5, vec![31, 0, 17, 3, 16, 3]),
+        (16, vec![u16::MAX as u32, 0, 42, 42, 1]),
+        (32, vec![u32::MAX, 0, 0x8000_0000, 7]),
+    ];
+
+    for (key_bits, input) in cases {
+        let actual = sorter
+            .sort_with_key_bits(&input, key_bits)
+            .await
+            .expect("bounded GPU radix sort failed");
+        assert_eq!(actual, cpu_sort(&input), "mismatch for {key_bits} key bits");
+    }
+}
+
+#[tokio::test]
+async fn bounded_sort_validates_host_keys_and_key_width() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = Sorter::new(&context.device, &context.queue);
+
+    let error = sorter
+        .sort_with_key_bits(&[4], 2)
+        .await
+        .expect_err("a three-bit key must not satisfy a two-bit bound");
+    assert!(matches!(error, Error::KeyExceedsBitRange { .. }));
+
+    let error = sorter
+        .sort_with_key_bits(&[], 33)
+        .await
+        .expect_err("key widths above 32 must be rejected");
+    assert!(matches!(error, Error::InvalidKeyBits { bits: 33 }));
+}
+
+#[tokio::test]
 async fn sort_gpu_to_gpu_writes_the_caller_output_buffer() {
     let Some(context) = support::gpu_context().await else {
         return;
@@ -78,6 +122,23 @@ async fn sort_gpu_to_gpu_writes_the_caller_output_buffer() {
     sorter
         .sort_gpu_to_gpu(&input_buffer, &output, input.len() as u32)
         .expect("GPU radix sort failed");
+    let actual = support::read_u32(&context, &output, input.len()).await;
+    assert_eq!(actual, cpu_sort(&input));
+}
+
+#[tokio::test]
+async fn bounded_sort_gpu_to_gpu_writes_output_after_an_odd_pass_count() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = Sorter::new(&context.device, &context.queue);
+    let input = [31, 0, 17, 3, 16, 3];
+    let input_buffer = create_sort_input(&context.device, &input);
+    let output = create_sort_output(&context.device, input.len());
+
+    sorter
+        .sort_gpu_to_gpu_with_key_bits(&input_buffer, &output, input.len() as u32, 5)
+        .expect("bounded GPU radix sort failed");
     let actual = support::read_u32(&context, &output, input.len()).await;
     assert_eq!(actual, cpu_sort(&input));
 }
@@ -152,6 +213,11 @@ async fn record_sort_rejects_invalid_buffer_contracts() {
         .record_sort(&mut encoder, &input, &output, 4)
         .expect_err("short input must be rejected");
     assert!(matches!(error, Error::BufferTooSmall { .. }));
+
+    let error = sorter
+        .record_sort(&mut encoder, &output, &output, 4)
+        .expect_err("in-place radix scatter must be rejected");
+    assert!(matches!(error, Error::BufferAlias { .. }));
 }
 
 fn create_sort_input(device: &wgpu::Device, input: &[u32]) -> wgpu::Buffer {

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "source": {
+    "base_revision": "be74b7fdf9262f22aa5704240bfe415054d46da3",
+    "archive_sha256": "55889069DD19687772B3D1036E168CDCCE74BFA1B8667819AEB643E1FD65CCBE",
+    "change": "Select the existing NVIDIA Vulkan 8-bit key-value radix path by enabled fixed-width 32-lane subgroup capabilities on integrated and discrete adapters."
+  },
+  "comparison": {
+    "name": "wgpu_sort",
+    "revision": "4cb640e8cae28eba0149d470c5168cc2853466dd"
+  },
+  "environment": {
+    "architecture": "aarch64",
+    "rust": "1.97.1",
+    "adapter": "NVIDIA Tegra Orin (nvgpu)",
+    "device_type": "IntegratedGpu",
+    "backend": "Vulkan",
+    "driver": "NVIDIA 595.78",
+    "subgroup_min_size": 32,
+    "subgroup_max_size": 32,
+    "cpu_clock_hz": 1728000000,
+    "gpu_clock_hz": 1020000000,
+    "emc_clock_hz": 3199000000
+  },
+  "method": {
+    "mode": "resident",
+    "warmups": 4,
+    "minimum_warmup_ms": 2000,
+    "samples_per_process": 11,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "correctness_checked": true
+  },
+  "hosts": [
+    {
+      "name": "dopey",
+      "active_gpu_tpcs": 8,
+      "raw_result_sha256": "BBFF4AA5DBD8E7B49EF15787C3A5760B84A868779EBA05D534A57A7B205A3C93"
+    },
+    {
+      "name": "grumpy",
+      "active_gpu_tpcs": 4,
+      "raw_result_sha256": "60612B94037D93F07CE414DB6F559CA37245EFD80CD7F58A895CE0CE28B2C436"
+    }
+  ],
+  "results": [
+    {"host":"dopey","workload":"bounded16","items":1000000,"previous_ms":5.296746,"wgpu_primitives_ms":1.449991,"change_percent":-72.625,"wgpu_sort_ms":2.800235,"speedup_over_wgpu_sort":1.931},
+    {"host":"dopey","workload":"full_width","items":1000000,"previous_ms":10.510032,"wgpu_primitives_ms":2.575141,"change_percent":-75.498,"wgpu_sort_ms":2.904782,"speedup_over_wgpu_sort":1.128},
+    {"host":"dopey","workload":"bounded16","items":10000000,"previous_ms":41.851164,"wgpu_primitives_ms":11.398001,"change_percent":-72.765,"wgpu_sort_ms":25.111266,"speedup_over_wgpu_sort":2.203},
+    {"host":"dopey","workload":"full_width","items":10000000,"previous_ms":83.671542,"wgpu_primitives_ms":21.504576,"change_percent":-74.299,"wgpu_sort_ms":26.422884,"speedup_over_wgpu_sort":1.229},
+    {"host":"grumpy","workload":"bounded16","items":1000000,"previous_ms":7.453001,"wgpu_primitives_ms":1.478088,"change_percent":-80.168,"wgpu_sort_ms":2.830796,"speedup_over_wgpu_sort":1.915},
+    {"host":"grumpy","workload":"full_width","items":1000000,"previous_ms":14.824753,"wgpu_primitives_ms":2.616902,"change_percent":-82.348,"wgpu_sort_ms":2.973808,"speedup_over_wgpu_sort":1.136},
+    {"host":"grumpy","workload":"bounded16","items":10000000,"previous_ms":64.998108,"wgpu_primitives_ms":11.524020,"change_percent":-82.270,"wgpu_sort_ms":25.045341,"speedup_over_wgpu_sort":2.173},
+    {"host":"grumpy","workload":"full_width","items":10000000,"previous_ms":129.913777,"wgpu_primitives_ms":21.832359,"change_percent":-83.195,"wgpu_sort_ms":26.253053,"speedup_over_wgpu_sort":1.202}
+  ]
+}

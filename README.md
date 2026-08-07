@@ -34,6 +34,7 @@ speedup). The remaining headline rows are from version 0.3.
 - Inclusive and exclusive `u32` prefix scan.
 - Stable 2-bit LSD radix sort for `u32` values.
 - Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
+- Opt-in significant-key-bit bounds that eliminate unnecessary portable and wide radix passes.
 - Convenience slice APIs that upload, execute, and read back.
 - GPU-buffer APIs that record into an existing command encoder.
 - Reusable internal scratch storage.
@@ -101,10 +102,29 @@ sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
 queue.submit(Some(encoder.finish()));
 ```
 
+When an application knows that keys fit in a narrower range, it can explicitly
+reduce radix work. For example, 16-bit keys need 8 passes instead of 16 on the
+portable 2-bit path and 2 passes instead of 4 on the NVIDIA 8-bit path:
+
+```rust,ignore
+sorter.record_sort_with_key_bits(
+    &mut encoder,
+    &sort_input,
+    &sort_output,
+    item_count,
+    16,
+)?;
+```
+
+Slice methods validate every host key before upload. GPU-buffer methods trust
+the declared bound to avoid a validation reduction or readback; a key outside
+the bound can produce only partially sorted output. The existing methods remain
+full-width by default.
+
 `KeyValueSorter::new_for_adapter` enables measured adapter-specific kernels when
 adapter metadata is available. `KeyValueSorter::new` retains the portable path.
 
-`record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_sort` requires `STORAGE` on both buffers.
+`record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_sort` requires `STORAGE` on both buffers, and its input and output must be distinct allocations.
 
 ## Installation
 
@@ -121,9 +141,13 @@ wgpu-primitives = "0.4"
 
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
 
-The portable radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
+The portable radix sort processes two bits per pass. A full-width sort uses 16
+passes; `*_with_key_bits` calls use only the passes required by the declared
+width. Each pass builds four per-workgroup histograms, scans them into global
+offsets, and stably scatters values between ping-pong buffers. Odd and even pass
+counts both route the final scatter to the caller's output buffer.
 
-`KeyValueSorter` moves values with their keys during every scatter, so equal keys retain their original value order. On discrete NVIDIA Vulkan adapters with 32-wide subgroups, adapter-aware construction selects a dedicated 8-bit path. It builds all four byte histograms in one read, computes their prefixes together, and uses subgroup-assisted stable scatter with partition lookback. When both upper bytes are constant, indirect dispatch skips their identity scatters. Other hardware and backends retain the 4-bit NVIDIA Vulkan or portable 2-bit path.
+`KeyValueSorter` moves values with their keys during every scatter, so equal keys retain their original value order. On NVIDIA Vulkan adapters with enabled, fixed 32-wide subgroups, 256-thread workgroups, and at least 16,388 bytes of workgroup storage, adapter-aware construction selects a dedicated 8-bit path, including compatible integrated devices. It builds the active byte histograms in one read, computes their prefixes together, and uses subgroup-assisted stable scatter with partition lookback. Explicit bounds schedule one to four byte passes; on a full-width call, indirect dispatch can still skip the upper pair when both bytes are constant. Discrete NVIDIA Vulkan devices without compatible subgroups retain the 4-bit path; other hardware and backends use the portable 2-bit path.
 
 ## Performance
 
@@ -158,6 +182,20 @@ The [version 0.4 full-width profile](benchmarks/2026-08-07-full-width-profile.md
 records a clean-revision confirmation and the measured scatter optimization
 budget. The [Jetson Orin Nano validation](benchmarks/2026-08-07-jetson-orin-nano.md)
 adds physical portable-Vulkan correctness and 4-TPC/8-TPC performance results.
+The follow-up [Jetson `wgpu_sort` comparison](benchmarks/2026-08-07-jetson-wgpu-sort-comparison.md)
+shows that an explicit 16-bit bound halves portable-path latency on both
+systems while leaving full-width performance unchanged within 0.2%.
+The [integrated NVIDIA subgroup follow-up](benchmarks/2026-08-07-jetson-integrated-subgroup.md)
+qualifies the existing 8-bit path on both Jetsons. At 10 million pairs it
+reduced bounded-key latency to 11.398-11.524 ms versus 25.045-25.111 ms for
+`wgpu_sort`, and full-width latency to 21.505-21.832 ms versus 26.253-26.423 ms.
+The [explicit byte-pass follow-up](benchmarks/2026-08-07-jetson-explicit-byte-passes.md)
+adds audited one-to-four-pass scheduling and a 100-million-pair stress result.
+At 10 million pairs, bounded 16-bit latency is 11.242-11.427 ms versus
+25.020-25.077 ms for `wgpu_sort`; full-width latency is 21.774-22.042 ms versus
+26.302-26.392 ms. Both 8 GB Jetsons completed and validated 100 million pairs,
+while the pinned `wgpu_sort` runner could not allocate its resident backup
+buffer at that size.
 
 ## GPU profiling
 
@@ -179,13 +217,16 @@ At 100M items, the baseline profile attributed 74.8% of key-value dispatch time 
 ## Roadmap
 
 Version 0.4 adds per-dispatch GPU timestamp profiling, a measured NVIDIA Vulkan
-subgroup fast path, a reproducible pinned `wgpu_sort` comparison, and physical
-portable-Vulkan validation on Jetson Orin Nano. The next work is ordered by
-measured impact:
+subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
+`wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano. The
+next work is ordered by measured impact:
 
-1. **Validate more hardware:** measure the specialized path on additional discrete NVIDIA Vulkan devices and driver versions.
-2. **Improve portability:** implement and measure adaptive identity-pass elimination on non-subgroup paths without regressing other backends.
-3. **Build derived primitives:** implement stream compaction and selection on top of scan.
+1. **Optimize full-width scatter:** profile partition lookback and value movement; bounded 16-bit work is already about 2.2x faster than `wgpu_sort` on the qualified Jetsons, while full width is about 1.2x faster.
+2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
+3. **Improve portability:** build on the explicit non-subgroup key-width path
+   with GPU-side identity-pass detection for resident inputs whose bounds are
+   not already known by the application.
+4. **Build derived primitives:** implement stream compaction and selection on top of scan.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 

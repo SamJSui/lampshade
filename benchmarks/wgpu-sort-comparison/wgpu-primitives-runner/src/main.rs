@@ -6,7 +6,7 @@ use wgpu::util::DeviceExt;
 use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
 use wgpu_sort_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkMode, BenchmarkRun, GeneratorMetadata, LogicalInput,
-    MemoryEstimate, SCHEMA_VERSION, median, wgpu_primitives_eight_bit_memory,
+    MemoryEstimate, SCHEMA_VERSION, Workload, median, wgpu_primitives_eight_bit_memory,
 };
 
 fn main() {
@@ -32,6 +32,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .into_iter()
         .map(|(key, value)| KeyValue::new(key, value))
         .collect();
+    let key_bits = workload_key_bits(config.workload);
 
     let mut sorter = KeyValueSorter::from_context(&context);
     let resident_buffers = match config.mode {
@@ -49,7 +50,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
-            sorter.sort_gpu_to_gpu(&gpu_input, &gpu_output, config.items)?;
+            sorter.sort_gpu_to_gpu_with_key_bits(
+                &gpu_input,
+                &gpu_output,
+                config.items,
+                key_bits,
+            )?;
             wait_for_gpu(&context.device)?;
             let actual = read_buffer::<KeyValue>(
                 &context.device,
@@ -63,7 +69,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Some((gpu_input, gpu_output))
         }
         BenchmarkMode::RoundTrip => {
-            let actual = sorter.sort(&input).await?;
+            let actual = sorter.sort_with_key_bits(&input, key_bits).await?;
             if actual != expected {
                 return Err("round-trip sort did not match the stable CPU reference".into());
             }
@@ -83,6 +89,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             &mut sorter,
             &input,
             resident_buffers.as_ref(),
+            key_bits,
         )
         .await?;
         warmups_completed += 1;
@@ -97,6 +104,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             &mut sorter,
             &input,
             resident_buffers.as_ref(),
+            key_bits,
         )
         .await?;
         samples_ms.push(start.elapsed().as_secs_f64() * 1_000.0);
@@ -135,20 +143,33 @@ async fn run_once(
     sorter: &mut KeyValueSorter,
     input: &[KeyValue],
     resident_buffers: Option<&(wgpu::Buffer, wgpu::Buffer)>,
+    key_bits: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match mode {
         BenchmarkMode::Resident => {
             let (gpu_input, gpu_output) =
                 resident_buffers.expect("resident mode retains its input and output buffers");
-            sorter.sort_gpu_to_gpu(gpu_input, gpu_output, input.len() as u32)?;
+            sorter.sort_gpu_to_gpu_with_key_bits(
+                gpu_input,
+                gpu_output,
+                input.len() as u32,
+                key_bits,
+            )?;
             wait_for_gpu(&context.device)?;
         }
         BenchmarkMode::RoundTrip => {
-            let output = sorter.sort(input).await?;
+            let output = sorter.sort_with_key_bits(input, key_bits).await?;
             black_box(output);
         }
     }
     Ok(())
+}
+
+const fn workload_key_bits(workload: Workload) -> u32 {
+    match workload {
+        Workload::Bounded16 => 16,
+        Workload::FullWidth => 32,
+    }
 }
 
 fn read_buffer<T: bytemuck::Pod>(
