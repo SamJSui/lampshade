@@ -79,8 +79,31 @@ correctness, and no regression above 5% on portable backends.
 
 ## Hardware Validation Status
 
-This report validates one discrete NVIDIA Vulkan system. The configured Jetson
-Orin Nano hosts `dopey` and `grumpy` were unreachable over SSH during this run,
-so no Jetson result is claimed. When available, they should run 1M and 10M
-bounded/full-width cases first; their integrated GPUs exercise the portable
-fallback rather than the discrete-NVIDIA fast path.
+The complete 26-test GPU/unit suite also passes through DX12, which exercises
+the portable 2-bit key-value path on the same RTX adapter. Its targeted profile
+measured:
+
+| Pairs | Bounded 16-bit wall | Full-width wall | Bounded dispatch | Full-width dispatch |
+| ---: | ---: | ---: | ---: | ---: |
+| 1M | 1.699 ms | 1.655 ms | 0.831 ms | 0.808 ms |
+| 10M | 8.451 ms | 8.250 ms | 7.114 ms | 6.777 ms |
+
+Unlike the Vulkan 8-bit path, the portable path executes all 16 two-bit passes
+for both inputs. Bounded keys therefore receive no adaptive-pass benefit. This
+supports the roadmap experiment to skip identity passes portably, but it is
+backend evidence on one GPU rather than independent hardware validation.
+
+The configured Jetson Orin Nano hosts `dopey` and `grumpy` were unreachable
+over SSH during this run, so no Jetson result is claimed. When available, they
+should run 1M and 10M bounded/full-width cases first; their integrated GPUs
+exercise the portable fallback rather than the discrete-NVIDIA fast path.
+
+From a clean checkout of this revision on either Jetson:
+
+```sh
+sh benchmarks/run-jetson-validation.sh
+```
+
+The script is non-destructive: it builds the checkout, runs the GPU/unit suite,
+and prints the targeted Vulkan profile without installing packages or changing
+system configuration.
