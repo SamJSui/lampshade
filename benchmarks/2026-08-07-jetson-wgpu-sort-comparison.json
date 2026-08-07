@@ -33,7 +33,28 @@
     "dopey_baseline": "4c7438e3e07ace844dc9bebb1ef3a35d1c0add65aa4a438d64ef8432221096a5",
     "dopey_optimized": "b64efdadfd16ab0ca49a4c7b7d68db562d3a410f0c974549ac4ee2afbe8a6074",
     "grumpy_baseline": "f169b814e153112f3822f3b7ab620ecdb2f4c56147426e50bd48c3319aa503c5",
-    "grumpy_optimized": "5511484b28923c75278198d8b701c3d9cd89031dfb890a8a7a7d2d6ccca50d51"
+    "grumpy_optimized": "5511484b28923c75278198d8b701c3d9cd89031dfb890a8a7a7d2d6ccca50d51",
+    "rtx_dx12_clean": "c9bdf54c9f40847fe5d78b371d0e5bf8a6a9b0197733b20b2b4b6e1342e95695",
+    "rtx_vulkan_clean": "e00c88ba45c629e15beda950cb54c2055dc18e9540f44bd6839aba7e67044f0d"
+  },
+  "desktop_controls": {
+    "revision": "0413966bc1a2a141314aa28dbb73bd081a73bb6a",
+    "adapter": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "items": 10000000,
+    "mode": "resident",
+    "processes": 3,
+    "dx12": {
+      "wgpu_primitives_bounded16_ms": 4.6212,
+      "wgpu_primitives_full_width_ms": 9.1399,
+      "wgpu_sort_bounded16_ms": 1.5937,
+      "wgpu_sort_full_width_ms": 1.6051
+    },
+    "vulkan": {
+      "wgpu_primitives_bounded16_ms": 0.9464,
+      "wgpu_primitives_full_width_ms": 1.6191,
+      "wgpu_sort_bounded16_ms": 1.5887,
+      "wgpu_sort_full_width_ms": 1.6121
+    }
   },
   "results": [
     {"host":"dopey","workload":"bounded16","items":1000000,"baseline_ms":10.935235,"optimized_ms":5.296746,"change_percent":-51.563,"wgpu_sort_ms":2.796488,"optimized_over_wgpu_sort":1.894},

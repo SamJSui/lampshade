@@ -72,6 +72,24 @@ about 25 ms at 10M on both configurations. The remaining portable scatter path
 is therefore both the main performance gap and more sensitive to available GPU
 parallelism.
 
+## Desktop backend controls
+
+Clean revision `0413966bc1a2a141314aa28dbb73bd081a73bb6a` was also measured on
+the RTX 4070 Ti SUPER with the same 10M resident, three-process comparison:
+
+| Backend | Workload | `wgpu-primitives` | `wgpu_sort` |
+| --- | --- | ---: | ---: |
+| DX12 | bounded 16-bit | 4.621 ms | 1.594 ms |
+| DX12 | full-width | 9.140 ms | 1.605 ms |
+| Vulkan | bounded 16-bit | 0.946 ms | 1.589 ms |
+| Vulkan | full-width | 1.619 ms | 1.612 ms |
+
+The explicit bound cuts the DX12 portable path by 49.4%. The DX12 full-width
+control is lower than the documented version 0.4 10M resident profile of
+10.082 ms. The Vulkan subgroup path remains healthy: its bounded and full-width
+times are 4.3% and 5.9% lower than the committed 0.4 direct-comparison values
+of 0.989 and 1.720 ms.
+
 ## Artifact provenance
 
 The committed aggregate snapshot is
@@ -85,6 +103,8 @@ on-host SHA-256 values:
 | `dopey` | optimized | `b64efdadfd16ab0ca49a4c7b7d68db562d3a410f0c974549ac4ee2afbe8a6074` |
 | `grumpy` | baseline | `f169b814e153112f3822f3b7ab620ecdb2f4c56147426e50bd48c3319aa503c5` |
 | `grumpy` | optimized | `5511484b28923c75278198d8b701c3d9cd89031dfb890a8a7a7d2d6ccca50d51` |
+| RTX DX12 | clean control | `c9bdf54c9f40847fe5d78b371d0e5bf8a6a9b0197733b20b2b4b6e1342e95695` |
+| RTX Vulkan | clean control | `e00c88ba45c629e15beda950cb54c2055dc18e9540f44bd6839aba7e67044f0d` |
 
 ## Reproduction
 
