@@ -107,6 +107,51 @@ async fn key_value_sort_is_stable_for_large_duplicate_heavy_input() {
 }
 
 #[tokio::test]
+async fn bounded_key_value_sort_is_stable_across_pass_parities() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSorter::new(&context.device, &context.queue);
+
+    for key_bits in [0, 1, 3, 5, 16, 32] {
+        let mask = if key_bits == 32 {
+            u32::MAX
+        } else if key_bits == 0 {
+            0
+        } else {
+            (1_u32 << key_bits) - 1
+        };
+        let input: Vec<_> = support::random_u32(4_097, u64::from(key_bits) + 900)
+            .into_iter()
+            .enumerate()
+            .map(|(index, key)| KeyValue::new(key & mask, index as u32))
+            .collect();
+        let actual = sorter
+            .sort_with_key_bits(&input, key_bits)
+            .await
+            .expect("bounded key-value sort failed");
+        assert_eq!(
+            actual,
+            cpu_stable_sort(&input),
+            "mismatch for {key_bits} key bits"
+        );
+    }
+}
+
+#[tokio::test]
+async fn bounded_key_value_sort_validates_host_keys() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSorter::new(&context.device, &context.queue);
+    let error = sorter
+        .sort_with_key_bits(&[KeyValue::new(256, 0)], 8)
+        .await
+        .expect_err("a nine-bit key must not satisfy an eight-bit bound");
+    assert!(matches!(error, Error::KeyExceedsBitRange { .. }));
+}
+
+#[tokio::test]
 async fn key_value_sort_gpu_to_gpu_writes_the_caller_output_buffer() {
     let Some(context) = support::gpu_context().await else {
         return;
@@ -119,6 +164,29 @@ async fn key_value_sort_gpu_to_gpu_writes_the_caller_output_buffer() {
     sorter
         .sort_gpu_to_gpu(&input_buffer, &output, input.len() as u32)
         .expect("GPU key-value sort failed");
+    let actual = support::read_pod::<KeyValue>(&context, &output, input.len()).await;
+    assert_eq!(actual, cpu_stable_sort(&input));
+}
+
+#[tokio::test]
+async fn bounded_key_value_gpu_sort_writes_output_after_an_odd_pass_count() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSorter::new(&context.device, &context.queue);
+    let input = [
+        KeyValue::new(31, 0),
+        KeyValue::new(0, 1),
+        KeyValue::new(17, 2),
+        KeyValue::new(3, 3),
+        KeyValue::new(17, 4),
+    ];
+    let input_buffer = create_sort_input(&context.device, &input);
+    let output = create_sort_output(&context.device, input.len());
+
+    sorter
+        .sort_gpu_to_gpu_with_key_bits(&input_buffer, &output, input.len() as u32, 5)
+        .expect("bounded key-value GPU sort failed");
     let actual = support::read_pod::<KeyValue>(&context, &output, input.len()).await;
     assert_eq!(actual, cpu_stable_sort(&input));
 }

@@ -16,6 +16,13 @@ pub enum Error {
         count: u32,
         limit: u32,
     },
+    InvalidKeyBits {
+        bits: u32,
+    },
+    KeyExceedsBitRange {
+        key: u32,
+        bits: u32,
+    },
     SizeOverflow,
     BufferLimitExceeded {
         requested: u64,
@@ -52,6 +59,16 @@ impl fmt::Display for Error {
             Self::RadixElementCountLimitExceeded { count, limit } => write!(
                 f,
                 "element count {count} exceeds the optimized radix-sort limit of {limit}"
+            ),
+            Self::InvalidKeyBits { bits } => {
+                write!(
+                    f,
+                    "radix-sort key width must be at most 32 bits, got {bits}"
+                )
+            }
+            Self::KeyExceedsBitRange { key, bits } => write!(
+                f,
+                "key {key} does not fit in the declared {bits}-bit radix-sort range"
             ),
             Self::SizeOverflow => f.write_str("buffer size calculation overflowed"),
             Self::BufferLimitExceeded { requested, limit } => write!(

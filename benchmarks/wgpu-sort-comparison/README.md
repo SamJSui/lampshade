@@ -17,6 +17,12 @@ its input from immutable GPU-resident backup buffers before starting each
 resident sample. That untimed device-to-device copy avoids repeated host upload
 allocations affecting later processes. `wgpu-primitives` preserves its input.
 
+The `bounded16` workload calls the explicit 16-bit-bound API in
+`wgpu-primitives`; `full_width` declares 32 bits. This measures the crate's
+public application-supplied-bound path rather than claiming automatic key-range
+detection. The generated keys are validated against the shared stable CPU
+reference before timing.
+
 Round-trip timing exercises each public API's practical upload-to-readback path.
 It is useful application context, but it is not a kernel-only comparison: the
 crates expose different layouts and convenience APIs.

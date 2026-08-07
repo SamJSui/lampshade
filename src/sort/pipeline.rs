@@ -37,7 +37,6 @@ pub struct SortPipeline {
     pub block_size: u32,
     pub bits_per_pass: u32,
     pub bucket_count: u32,
-    pub pass_count: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,7 +140,6 @@ impl SortPipeline {
         let bits_per_pass = radix_variant.bits_per_pass();
         let bucket_count = 1 << bits_per_pass;
         let bucket_group_count = bucket_count / 4;
-        let pass_count = u32::BITS.div_ceil(bits_per_pass);
         let raw_shader = radix_variant.shader_source();
         let local_histogram_size = block_size * bucket_group_count;
         let final_source = raw_shader
@@ -194,7 +192,6 @@ impl SortPipeline {
             block_size,
             bits_per_pass,
             bucket_count,
-            pass_count,
         }
     }
 }

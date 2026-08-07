@@ -10,6 +10,7 @@ use super::pipeline::{RadixVariant, SortItemKind, SortPipeline};
 
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
 const UNIFORM_SIZE_BYTES: u64 = 16;
+const FULL_KEY_BITS: u32 = u32::BITS;
 
 pub struct RadixSorter {
     implementation: SortImplementation,
@@ -48,8 +49,19 @@ impl RadixSorter {
     }
 
     pub async fn sort_slice<T: bytemuck::Pod>(&mut self, input: &[T]) -> Result<Vec<T>, Error> {
+        self.sort_slice_with_key_bits(input, FULL_KEY_BITS).await
+    }
+
+    pub async fn sort_slice_with_key_bits<T: bytemuck::Pod>(
+        &mut self,
+        input: &[T],
+        key_bits: u32,
+    ) -> Result<Vec<T>, Error> {
+        validate_key_bits(key_bits)?;
         match &mut self.implementation {
-            SortImplementation::ReduceScan(sorter) => sorter.sort_slice(input).await,
+            SortImplementation::ReduceScan(sorter) => {
+                sorter.sort_slice_with_key_bits(input, key_bits).await
+            }
             SortImplementation::EightBit(sorter) => sorter.sort_slice(input).await,
         }
     }
@@ -60,9 +72,20 @@ impl RadixSorter {
         output: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
+        self.sort_gpu_to_gpu_with_key_bits(input, output, num_items, FULL_KEY_BITS)
+    }
+
+    pub fn sort_gpu_to_gpu_with_key_bits(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        validate_key_bits(key_bits)?;
         match &mut self.implementation {
             SortImplementation::ReduceScan(sorter) => {
-                sorter.sort_gpu_to_gpu(input, output, num_items)
+                sorter.sort_gpu_to_gpu_with_key_bits(input, output, num_items, key_bits)
             }
             SortImplementation::EightBit(sorter) => {
                 sorter.sort_gpu_to_gpu(input, output, num_items)
@@ -76,10 +99,22 @@ impl RadixSorter {
         output: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<GpuProfile, Error> {
+        self.profile_sort_gpu_to_gpu_with_key_bits(input, output, num_items, FULL_KEY_BITS)
+            .await
+    }
+
+    pub async fn profile_sort_gpu_to_gpu_with_key_bits(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<GpuProfile, Error> {
+        validate_key_bits(key_bits)?;
         match &mut self.implementation {
             SortImplementation::ReduceScan(sorter) => {
                 sorter
-                    .profile_sort_gpu_to_gpu(input, output, num_items)
+                    .profile_sort_gpu_to_gpu_with_key_bits(input, output, num_items, key_bits)
                     .await
             }
             SortImplementation::EightBit(sorter) => {
@@ -97,9 +132,21 @@ impl RadixSorter {
         output: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
+        self.record_sort_with_key_bits(encoder, input, output, num_items, FULL_KEY_BITS)
+    }
+
+    pub fn record_sort_with_key_bits(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        validate_key_bits(key_bits)?;
         match &mut self.implementation {
             SortImplementation::ReduceScan(sorter) => {
-                sorter.record_sort(encoder, input, output, num_items)
+                sorter.record_sort_with_key_bits(encoder, input, output, num_items, key_bits)
             }
             SortImplementation::EightBit(sorter) => {
                 sorter.record_sort(encoder, input, output, num_items)
@@ -148,7 +195,11 @@ impl ReduceScanSorter {
         }
     }
 
-    pub async fn sort_slice<T: bytemuck::Pod>(&mut self, input: &[T]) -> Result<Vec<T>, Error> {
+    pub async fn sort_slice_with_key_bits<T: bytemuck::Pod>(
+        &mut self,
+        input: &[T],
+        key_bits: u32,
+    ) -> Result<Vec<T>, Error> {
         if input.is_empty() {
             return Ok(Vec::new());
         }
@@ -159,49 +210,54 @@ impl ReduceScanSorter {
         let input_buffer = common::buffers::create_storage_buffer(&self.device, input);
         let output_buffer = common::buffers::create_empty_storage_buffer(&self.device, size_bytes);
 
-        self.sort_gpu_to_gpu(&input_buffer, &output_buffer, num_items)?;
+        self.sort_gpu_to_gpu_with_key_bits(&input_buffer, &output_buffer, num_items, key_bits)?;
         common::buffers::download_buffer(&self.device, &self.queue, &output_buffer, input.len())
             .await
     }
 
-    pub fn sort_gpu_to_gpu(
+    pub fn sort_gpu_to_gpu_with_key_bits(
         &mut self,
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<(), Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Radix Sort"),
             });
-        self.record_sort(&mut encoder, input, output, num_items)?;
+        self.record_sort_with_key_bits(&mut encoder, input, output, num_items, key_bits)?;
         self.queue.submit(Some(encoder.finish()));
         Ok(())
     }
 
-    pub fn record_sort(
+    pub fn record_sort_with_key_bits(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<(), Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(());
         };
-        self.record_radix_passes(encoder, input, output, problem, None)
+        let pass_count = self.pass_count_for_key_bits(key_bits);
+        self.record_radix_passes(encoder, input, output, problem, pass_count, None)
     }
 
-    pub async fn profile_sort_gpu_to_gpu(
+    pub async fn profile_sort_gpu_to_gpu_with_key_bits(
         &mut self,
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<GpuProfile, Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(GpuProfile::empty());
         };
+        let pass_count = self.pass_count_for_key_bits(key_bits);
         let histogram_items = problem
             .num_blocks
             .checked_mul(self.pipeline.bucket_count)
@@ -211,9 +267,7 @@ impl ReduceScanSorter {
             .compute_pass_count(histogram_items)
             .checked_add(2)
             .ok_or(Error::SizeOverflow)?;
-        let span_count = self
-            .pipeline
-            .pass_count
+        let span_count = pass_count
             .checked_mul(spans_per_radix_pass)
             .ok_or(Error::SizeOverflow)?;
 
@@ -223,7 +277,14 @@ impl ReduceScanSorter {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Profiled Radix Sort"),
             });
-        self.record_radix_passes(&mut encoder, input, output, problem, Some(&mut profiler))?;
+        self.record_radix_passes(
+            &mut encoder,
+            input,
+            output,
+            problem,
+            pass_count,
+            Some(&mut profiler),
+        )?;
         profiler.resolve(&mut encoder);
         let submission = self.queue.submit(Some(encoder.finish()));
         profiler.read(&self.device, submission).await
@@ -280,12 +341,17 @@ impl ReduceScanSorter {
         Ok(())
     }
 
+    fn pass_count_for_key_bits(&self, key_bits: u32) -> u32 {
+        key_bits.max(1).div_ceil(self.pipeline.bits_per_pass)
+    }
+
     fn record_radix_passes(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         problem: PreparedSort,
+        pass_count: u32,
         mut profiler: Option<&mut TimestampRecorder>,
     ) -> Result<(), Error> {
         let max_dispatch = 65_535;
@@ -301,11 +367,12 @@ impl ReduceScanSorter {
             &self.device,
             problem,
             self.pipeline.bits_per_pass,
-            self.pipeline.pass_count,
+            pass_count,
         );
 
-        for radix_pass in 0..self.pipeline.pass_count {
-            let (source, destination) = pass_buffers(radix_pass, input, output, &workspace.scratch);
+        for radix_pass in 0..pass_count {
+            let (source, destination) =
+                pass_buffers(radix_pass, pass_count, input, output, &workspace.scratch);
             let uniform_offset = u64::from(radix_pass) * uniform_stride;
             let reduce_bind_group = create_sort_bind_group(
                 &self.device,
@@ -425,16 +492,46 @@ fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
 
 fn pass_buffers<'a>(
     radix_pass: u32,
+    pass_count: u32,
     input: &'a wgpu::Buffer,
     output: &'a wgpu::Buffer,
     scratch: &'a wgpu::Buffer,
 ) -> (&'a wgpu::Buffer, &'a wgpu::Buffer) {
-    if radix_pass == 0 {
-        (input, scratch)
-    } else if radix_pass.is_multiple_of(2) {
-        (output, scratch)
+    debug_assert!(radix_pass < pass_count);
+    let source = if radix_pass == 0 {
+        input
+    } else if (pass_count - radix_pass).is_multiple_of(2) {
+        output
     } else {
-        (scratch, output)
+        scratch
+    };
+    let passes_after = pass_count - radix_pass - 1;
+    let destination = if passes_after.is_multiple_of(2) {
+        output
+    } else {
+        scratch
+    };
+    (source, destination)
+}
+
+fn validate_key_bits(key_bits: u32) -> Result<(), Error> {
+    if key_bits <= FULL_KEY_BITS {
+        Ok(())
+    } else {
+        Err(Error::InvalidKeyBits { bits: key_bits })
+    }
+}
+
+pub(super) fn validate_key_for_bits(key: u32, key_bits: u32) -> Result<(), Error> {
+    validate_key_bits(key_bits)?;
+    let required_bits = u32::BITS - key.leading_zeros();
+    if required_bits <= key_bits {
+        Ok(())
+    } else {
+        Err(Error::KeyExceedsBitRange {
+            key,
+            bits: key_bits,
+        })
     }
 }
 

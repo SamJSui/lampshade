@@ -2,6 +2,21 @@
 
 All notable changes to `wgpu-primitives` are documented here.
 
+## Unreleased
+
+### Added
+
+- Opt-in `*_with_key_bits` sort APIs for host slices, immediate GPU submission,
+  command recording, and GPU timestamp profiling.
+- Host-slice validation for declared key widths, including explicit errors for
+  invalid widths and keys outside the declared range.
+
+### Changed
+
+- Portable and wide radix paths now record only the passes required by a
+  declared key width and route both odd and even pass counts to the caller's
+  output buffer. Existing APIs remain full-width by default.
+
 ## 0.4.0 - 2026-08-07
 
 ### Added

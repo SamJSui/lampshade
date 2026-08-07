@@ -34,6 +34,7 @@ speedup). The remaining headline rows are from version 0.3.
 - Inclusive and exclusive `u32` prefix scan.
 - Stable 2-bit LSD radix sort for `u32` values.
 - Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
+- Opt-in significant-key-bit bounds that eliminate unnecessary portable and wide radix passes.
 - Convenience slice APIs that upload, execute, and read back.
 - GPU-buffer APIs that record into an existing command encoder.
 - Reusable internal scratch storage.
@@ -101,6 +102,25 @@ sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
 queue.submit(Some(encoder.finish()));
 ```
 
+When an application knows that keys fit in a narrower range, it can explicitly
+reduce radix work. For example, 16-bit keys need 8 passes instead of 16 on the
+portable 2-bit path:
+
+```rust,ignore
+sorter.record_sort_with_key_bits(
+    &mut encoder,
+    &sort_input,
+    &sort_output,
+    item_count,
+    16,
+)?;
+```
+
+Slice methods validate every host key before upload. GPU-buffer methods trust
+the declared bound to avoid a validation reduction or readback; a key outside
+the bound can produce only partially sorted output. The existing methods remain
+full-width by default.
+
 `KeyValueSorter::new_for_adapter` enables measured adapter-specific kernels when
 adapter metadata is available. `KeyValueSorter::new` retains the portable path.
 
@@ -121,7 +141,11 @@ wgpu-primitives = "0.4"
 
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
 
-The portable radix sort processes two bits per pass. Each of its 16 passes builds four per-workgroup histograms, scans them into global offsets, and stably scatters values between ping-pong buffers.
+The portable radix sort processes two bits per pass. A full-width sort uses 16
+passes; `*_with_key_bits` calls use only the passes required by the declared
+width. Each pass builds four per-workgroup histograms, scans them into global
+offsets, and stably scatters values between ping-pong buffers. Odd and even pass
+counts both route the final scatter to the caller's output buffer.
 
 `KeyValueSorter` moves values with their keys during every scatter, so equal keys retain their original value order. On discrete NVIDIA Vulkan adapters with 32-wide subgroups, adapter-aware construction selects a dedicated 8-bit path. It builds all four byte histograms in one read, computes their prefixes together, and uses subgroup-assisted stable scatter with partition lookback. When both upper bytes are constant, indirect dispatch skips their identity scatters. Other hardware and backends retain the 4-bit NVIDIA Vulkan or portable 2-bit path.
 
@@ -184,7 +208,9 @@ portable-Vulkan validation on Jetson Orin Nano. The next work is ordered by
 measured impact:
 
 1. **Validate more hardware:** measure the specialized path on additional discrete NVIDIA Vulkan devices and driver versions.
-2. **Improve portability:** implement and measure adaptive identity-pass elimination on non-subgroup paths without regressing other backends.
+2. **Improve portability:** build on the explicit non-subgroup key-width path
+   with GPU-side identity-pass detection for resident inputs whose bounds are
+   not already known by the application.
 3. **Build derived primitives:** implement stream compaction and selection on top of scan.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.

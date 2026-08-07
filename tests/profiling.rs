@@ -122,6 +122,50 @@ async fn profiles_key_and_key_value_radix_stages() {
             .any(|span| span.label == "radix.00.scan.level.0")
     );
 
+    let bounded_input: Vec<_> = input.iter().map(|key| key & 0x1f).collect();
+    let bounded_gpu_input = storage_buffer(
+        &context.device,
+        "Bounded Profile Sort Input",
+        &bounded_input,
+    );
+    let bounded_gpu_output = output_buffer(
+        &context.device,
+        "Bounded Profile Sort Output",
+        bounded_gpu_input.size(),
+    );
+    let bounded_profile = sorter
+        .profile_sort_gpu_to_gpu_with_key_bits(
+            &bounded_gpu_input,
+            &bounded_gpu_output,
+            bounded_input.len() as u32,
+            5,
+        )
+        .await
+        .expect("profiled bounded key sort failed");
+    let mut bounded_expected = bounded_input.clone();
+    bounded_expected.sort_unstable();
+
+    assert_eq!(
+        support::read_u32(&context, &bounded_gpu_output, bounded_input.len()).await,
+        bounded_expected
+    );
+    assert_eq!(
+        bounded_profile
+            .spans
+            .iter()
+            .filter(|span| span.label.ends_with(".reduce"))
+            .count(),
+        3
+    );
+    assert_eq!(
+        bounded_profile
+            .spans
+            .iter()
+            .filter(|span| span.label.ends_with(".scatter"))
+            .count(),
+        3
+    );
+
     let pairs: Vec<_> = input
         .iter()
         .enumerate()
