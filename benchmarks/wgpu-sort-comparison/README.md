@@ -13,8 +13,9 @@ Both runners validate stable ordering against the same CPU reference before
 timing. Resident timing includes command encoding, submission, GPU execution,
 and waiting. It excludes initial allocation, upload, and readback. Because
 `wgpu_sort` mutates its primary buffers, the orchestrator restores and waits for
-its input before starting each resident sample. `wgpu-primitives` preserves its
-input.
+its input from immutable GPU-resident backup buffers before starting each
+resident sample. That untimed device-to-device copy avoids repeated host upload
+allocations affecting later processes. `wgpu-primitives` preserves its input.
 
 Round-trip timing exercises each public API's practical upload-to-readback path.
 It is useful application context, but it is not a kernel-only comparison: the

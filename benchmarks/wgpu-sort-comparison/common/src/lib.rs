@@ -290,6 +290,7 @@ pub fn wgpu_sort_pinned_memory(items: u32) -> MemoryEstimate {
         total_known_buffer_bytes: Some(primary + workspace),
         exclusions: vec![
             "bind groups and pipelines".into(),
+            "benchmark-only resident input restoration buffers".into(),
             "upload and readback staging buffers".into(),
             "driver-managed allocations".into(),
         ],

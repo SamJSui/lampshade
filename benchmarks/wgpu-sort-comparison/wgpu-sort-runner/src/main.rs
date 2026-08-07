@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use wgpu::util::DeviceExt;
 use wgpu_sort::{GPUSorter, SortBuffers};
 use wgpu_sort_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkMode, BenchmarkRun, GeneratorMetadata, LogicalInput,
@@ -43,10 +44,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         &device,
         NonZeroU32::new(config.items).expect("config rejects zero items"),
     );
+    let resident_input = matches!(config.mode, BenchmarkMode::Resident)
+        .then(|| ResidentInput::new(&device, &logical));
 
     let (keys, values) = match config.mode {
         BenchmarkMode::Resident => {
-            restore_input(&device, &queue, &sort_buffers, &logical)?;
+            restore_input(
+                &device,
+                &queue,
+                &sort_buffers,
+                resident_input
+                    .as_ref()
+                    .expect("resident mode retains its input backup"),
+            )?;
             submit_sort(&device, &queue, &sorter, &sort_buffers)?;
             read_results(&device, &queue, &sort_buffers, config.items)?
         }
@@ -80,7 +90,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 resident_buffers
                     .as_ref()
                     .expect("resident mode retains its buffers"),
-                &logical,
+                resident_input
+                    .as_ref()
+                    .expect("resident mode retains its input backup"),
             )?;
         }
         run_once(
@@ -103,7 +115,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 resident_buffers
                     .as_ref()
                     .expect("resident mode retains its buffers"),
-                &logical,
+                resident_input
+                    .as_ref()
+                    .expect("resident mode retains its input backup"),
             )?;
         }
         let start = Instant::now();
@@ -182,13 +196,42 @@ fn restore_input(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     buffers: &SortBuffers,
-    input: &LogicalInput,
+    input: &ResidentInput,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    queue.write_buffer(buffers.keys(), 0, bytemuck::cast_slice(&input.keys));
-    queue.write_buffer(buffers.values(), 0, bytemuck::cast_slice(&input.values));
-    let submission = queue.submit([]);
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("wgpu_sort Input Restore Encoder"),
+    });
+    encoder.copy_buffer_to_buffer(&input.keys, 0, buffers.keys(), 0, input.size);
+    encoder.copy_buffer_to_buffer(&input.values, 0, buffers.values(), 0, input.size);
+    let submission = queue.submit([encoder.finish()]);
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(submission));
     Ok(())
+}
+
+struct ResidentInput {
+    keys: wgpu::Buffer,
+    values: wgpu::Buffer,
+    size: u64,
+}
+
+impl ResidentInput {
+    fn new(device: &wgpu::Device, input: &LogicalInput) -> Self {
+        let keys = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wgpu_sort Resident Key Backup"),
+            contents: bytemuck::cast_slice(&input.keys),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+        let values = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wgpu_sort Resident Value Backup"),
+            contents: bytemuck::cast_slice(&input.values),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+        Self {
+            size: input.keys.len() as u64 * size_of::<u32>() as u64,
+            keys,
+            values,
+        }
+    }
 }
 
 fn submit_sort(
