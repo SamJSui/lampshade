@@ -156,7 +156,8 @@ The comparison has a
 [machine-readable aggregate snapshot](benchmarks/2026-08-05-wgpu-sort-comparison.json).
 The [version 0.4 full-width profile](benchmarks/2026-08-07-full-width-profile.md)
 records a clean-revision confirmation and the measured scatter optimization
-budget.
+budget. The [Jetson Orin Nano validation](benchmarks/2026-08-07-jetson-orin-nano.md)
+adds physical portable-Vulkan correctness and 4-TPC/8-TPC performance results.
 
 ## GPU profiling
 
@@ -178,11 +179,12 @@ At 100M items, the baseline profile attributed 74.8% of key-value dispatch time 
 ## Roadmap
 
 Version 0.4 adds per-dispatch GPU timestamp profiling, a measured NVIDIA Vulkan
-subgroup fast path, and a reproducible pinned `wgpu_sort` comparison. The next
-work is ordered by measured impact:
+subgroup fast path, a reproducible pinned `wgpu_sort` comparison, and physical
+portable-Vulkan validation on Jetson Orin Nano. The next work is ordered by
+measured impact:
 
-1. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions.
-2. **Improve portability:** test whether adaptive pass selection benefits the non-subgroup paths without regressing other backends.
+1. **Validate more hardware:** measure the specialized path on additional discrete NVIDIA Vulkan devices and driver versions.
+2. **Improve portability:** implement and measure adaptive identity-pass elimination on non-subgroup paths without regressing other backends.
 3. **Build derived primitives:** implement stream compaction and selection on top of scan.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.

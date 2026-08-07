@@ -93,10 +93,12 @@ for both inputs. Bounded keys therefore receive no adaptive-pass benefit. This
 supports the roadmap experiment to skip identity passes portably, but it is
 backend evidence on one GPU rather than independent hardware validation.
 
-The configured Jetson Orin Nano hosts `dopey` and `grumpy` were unreachable
-over SSH during this run, so no Jetson result is claimed. When available, they
-should run 1M and 10M bounded/full-width cases first; their integrated GPUs
-exercise the portable fallback rather than the discrete-NVIDIA fast path.
+The configured Jetson Orin Nano hosts `dopey` and `grumpy` subsequently passed
+all 26 tests and completed the 1M and 10M bounded/full-width profile. Their
+integrated GPUs exercise the portable fallback rather than the
+discrete-NVIDIA fast path. The hosts exposed different active GPU
+configurations (8 TPCs and 4 TPCs), so the results are reported separately in
+the [Jetson Orin Nano validation](2026-08-07-jetson-orin-nano.md).
 
 From a clean checkout of this revision on either Jetson:
 
@@ -106,4 +108,5 @@ sh benchmarks/run-jetson-validation.sh
 
 The script is non-destructive: it builds the checkout, runs the GPU/unit suite,
 and prints the targeted Vulkan profile without installing packages or changing
-system configuration.
+system configuration. On an integrated GPU, stop memory-resident workloads
+first or the shared system-memory pressure can invalidate the run.
