@@ -25,6 +25,11 @@ Each process performs four warmups and 11 measured samples at 1M and 10M. At
 100M it performs two warmups and seven samples. Each result below is the median
 of three independent process medians.
 
+The table values are preserved from the original controlled run. That run
+predated the committed harness, so its individual process samples are not
+available in the repository; the published aggregates are also preserved as a
+[machine-readable snapshot](2026-08-05-wgpu-sort-comparison.json).
+
 ## Results
 
 ### Duplicate-Heavy 16-Bit Keys
@@ -45,9 +50,45 @@ of three independent process medians.
 
 The 1M and 10M full-width differences are small relative to observed process
 variance and should be treated as parity. The 100M full-width result shows a
-modest repeatable advantage. The much larger bounded-key result comes from detecting
-that both upper bytes are constant and skipping two stable scatters that would
-be identity transformations.
+modest repeatable advantage. The much larger bounded-key result comes from
+detecting that both upper bytes are constant and skipping two stable scatters
+that would be identity transformations.
+
+## Reproduction
+
+The [committed comparison harness](wgpu-sort-comparison/README.md) builds the
+current checkout and the pinned `wgpu_sort` revision as independent processes,
+validates both against the same stable CPU reference, and records raw samples,
+adapter metadata, exact revisions, and aggregate medians in JSON.
+
+From the repository root on Windows PowerShell:
+
+```powershell
+& .\benchmarks\wgpu-sort-comparison\run.ps1
+```
+
+Use `-Quick` for a 1M-pair correctness and resident-path smoke test. A new full
+run is a new measurement; it should not silently replace this historical
+snapshot because driver, hardware, thermal state, or source revision may have
+changed.
+
+## Source-Derived Memory Model
+
+The committed harness also reports known GPU buffer allocations calculated
+from each pinned implementation's source. On this adapter, the formulas give:
+
+| Pairs | `wgpu-primitives` known buffers | `wgpu_sort` known buffers | Reduction |
+| ---: | ---: | ---: | ---: |
+| 1M | 23.84 MiB | 38.47 MiB | 38.0% |
+| 10M | 238.31 MiB | 384.12 MiB | 38.0% |
+| 100M | 2,348.75 MiB | 3,840.17 MiB | 38.8% |
+
+These figures are an allocation model, not measured peak VRAM. They include
+the public input/output buffers and reusable algorithm workspace. They exclude
+pipelines, bind groups, transient upload/readback staging, and driver-managed
+allocations. The implementations also expose different physical layouts, so
+the totals describe their current public paths rather than a forced common
+layout.
 
 ## Implementation
 
