@@ -182,6 +182,9 @@ The [version 0.4 full-width profile](benchmarks/2026-08-07-full-width-profile.md
 records a clean-revision confirmation and the measured scatter optimization
 budget. The [Jetson Orin Nano validation](benchmarks/2026-08-07-jetson-orin-nano.md)
 adds physical portable-Vulkan correctness and 4-TPC/8-TPC performance results.
+The follow-up [Jetson `wgpu_sort` comparison](benchmarks/2026-08-07-jetson-wgpu-sort-comparison.md)
+shows that an explicit 16-bit bound halves portable-path latency on both
+systems while leaving full-width performance unchanged within 0.2%.
 
 ## GPU profiling
 

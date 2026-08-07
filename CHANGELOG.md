@@ -17,6 +17,12 @@ All notable changes to `wgpu-primitives` are documented here.
   declared key width and route both odd and even pass counts to the caller's
   output buffer. Existing APIs remain full-width by default.
 
+### Performance
+
+- On physical 8-TPC and 4-TPC Jetson Orin Nano configurations, the explicit
+  16-bit path reduced 10-million-pair portable Vulkan latency by 52.2% and
+  51.3% respectively. Full-width changes were +0.01% and +0.004%.
+
 ## 0.4.0 - 2026-08-07
 
 ### Added
