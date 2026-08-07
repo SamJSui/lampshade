@@ -166,25 +166,45 @@ async fn profile_key_value_sort(
     let gpu_input = create_input(context, "Profile Key-Value Input", &input);
     let gpu_output = create_output(context, "Profile Key-Value Output", gpu_input.size());
     let mut sorter = KeyValueSorter::from_context(context);
+    let key_bits = if full_width { u32::BITS } else { 16 };
 
     warm_up(
         config.warmup,
-        || sorter.sort_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32),
+        || {
+            sorter.sort_gpu_to_gpu_with_key_bits(
+                &gpu_input,
+                &gpu_output,
+                item_count as u32,
+                key_bits,
+            )
+        },
         context,
     )?;
     let wall = measure_wall(
         config.samples,
-        || sorter.sort_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32),
+        || {
+            sorter.sort_gpu_to_gpu_with_key_bits(
+                &gpu_input,
+                &gpu_output,
+                item_count as u32,
+                key_bits,
+            )
+        },
         context,
     )?;
     let _ = sorter
-        .profile_sort_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
+        .profile_sort_gpu_to_gpu_with_key_bits(&gpu_input, &gpu_output, item_count as u32, key_bits)
         .await?;
     let mut profiles = Vec::with_capacity(config.samples);
     for _ in 0..config.samples {
         profiles.push(
             sorter
-                .profile_sort_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
+                .profile_sort_gpu_to_gpu_with_key_bits(
+                    &gpu_input,
+                    &gpu_output,
+                    item_count as u32,
+                    key_bits,
+                )
                 .await?,
         );
     }

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "source": {
+    "merged_revision": "5a655f035f50da6cb39b7de5f493d71d7867505f",
+    "baseline_archive_sha256": "15B62A80DD240219807FBE55BD138F5D0F43575FD01A8EA1694115E32DB787F7",
+    "production_scatter_sha256": "7767C223A558755DFFE83FEB8AC012E3C896950D67BC65C46BA7E5B878DA2C9D",
+    "retained_change": "Use the explicit 16-bit API in the bounded profiling case.",
+    "kernel_change_retained": false
+  },
+  "method": {
+    "items": 10000000,
+    "mode": "resident",
+    "backend": "vulkan",
+    "warmup_ms": 2000,
+    "samples_per_process": 11,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "acceptance": {
+      "minimum_full_width_improvement_percent": 5,
+      "maximum_bounded_regression_percent": 2,
+      "correctness_required": true
+    }
+  },
+  "baseline": [
+    {
+      "host": "rtx4070ti-super",
+      "driver": "NVIDIA 591.86",
+      "active_gpu_tpcs": null,
+      "bounded16": {
+        "wall_process_medians_ms": [0.929, 0.923, 0.936],
+        "wall_median_ms": 0.929,
+        "scatter_process_medians_ms": [0.659, 0.659, 0.661],
+        "scatter_median_ms": 0.659
+      },
+      "full_width": {
+        "wall_process_medians_ms": [1.626, 1.627, 1.617],
+        "wall_median_ms": 1.626,
+        "scatter_process_medians_ms": [1.324, 1.325, 1.323],
+        "scatter_median_ms": 1.324
+      }
+    },
+    {
+      "host": "dopey",
+      "driver": "NVIDIA 595.78",
+      "active_gpu_tpcs": 8,
+      "bounded16": {
+        "wall_process_medians_ms": [11.248, 11.237, 11.253],
+        "wall_median_ms": 11.248,
+        "scatter_process_medians_ms": [10.066, 10.074, 10.067],
+        "scatter_median_ms": 10.067
+      },
+      "full_width": {
+        "wall_process_medians_ms": [21.752, 21.767, 21.737],
+        "wall_median_ms": 21.752,
+        "scatter_process_medians_ms": [20.184, 20.173, 20.195],
+        "scatter_median_ms": 20.184
+      }
+    },
+    {
+      "host": "grumpy",
+      "driver": "NVIDIA 595.78",
+      "active_gpu_tpcs": 4,
+      "bounded16": {
+        "wall_process_medians_ms": [11.323, 11.332, 11.330],
+        "wall_median_ms": 11.330,
+        "scatter_process_medians_ms": [10.137, 10.124, 10.139],
+        "scatter_median_ms": 10.137
+      },
+      "full_width": {
+        "wall_process_medians_ms": [21.960, 21.923, 21.925],
+        "wall_median_ms": 21.925,
+        "scatter_process_medians_ms": [20.336, 20.343, 20.397],
+        "scatter_median_ms": 20.343
+      }
+    }
+  ],
+  "no_lookback_diagnostic": [
+    {"host":"rtx4070ti-super","correct":false,"wall_median_ms":1.459,"wall_change_percent":-10.27,"scatter_median_ms":1.163,"scatter_change_percent":-12.16},
+    {"host":"dopey","correct":false,"wall_median_ms":21.863,"wall_change_percent":0.51,"scatter_median_ms":20.302,"scatter_change_percent":0.58},
+    {"host":"grumpy","correct":false,"wall_median_ms":21.808,"wall_change_percent":-0.53,"scatter_median_ms":20.239,"scatter_change_percent":-0.51}
+  ],
+  "experiments": [
+    {"name":"direct_global_writes","correct":true,"bounded_wall_ms":2.622,"bounded_change_percent":182.24,"full_width_wall_ms":4.909,"full_width_change_percent":201.91,"accepted":false},
+    {"name":"parallel_subgroup_bucket_tables","correct":true,"bounded_wall_ms":0.992,"bounded_change_percent":6.78,"full_width_wall_ms":1.758,"full_width_change_percent":8.12,"accepted":false},
+    {"name":"fold_bucket_start_extra_barrier","correct":true,"bounded_wall_ms":0.924,"bounded_change_percent":-0.54,"full_width_wall_ms":1.627,"full_width_change_percent":0.06,"accepted":false},
+    {"name":"fold_bucket_start_existing_barrier","correct":true,"bounded_wall_ms":0.920,"bounded_change_percent":-0.97,"full_width_wall_ms":1.636,"full_width_change_percent":0.62,"accepted":false},
+    {"name":"ordered_ticket_prefix","correct":true,"bounded_wall_ms":5.709,"bounded_change_percent":514.53,"full_width_wall_ms":10.958,"full_width_change_percent":573.92,"accepted":false},
+    {"name":"packed_digit_rank","correct":true,"bounded_wall_ms":0.925,"bounded_change_percent":-0.43,"full_width_wall_ms":1.630,"full_width_change_percent":0.25,"accepted":false}
+  ],
+  "decision": {
+    "keep_items_per_thread": 7,
+    "keep_existing_bounded16_path": true,
+    "keep_existing_scatter": true,
+    "next_primitive": "stable stream compaction"
+  }
+}

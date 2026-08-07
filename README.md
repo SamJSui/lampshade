@@ -196,6 +196,10 @@ At 10 million pairs, bounded 16-bit latency is 11.242-11.427 ms versus
 26.302-26.392 ms. Both 8 GB Jetsons completed and validated 100 million pairs,
 while the pinned `wgpu_sort` runner could not allocate its resident backup
 buffer at that size.
+The bounded [full-width scatter experiment](benchmarks/2026-08-07-full-width-scatter-experiments.md)
+profiles the merged kernel on RTX and both Jetsons and rejects five isolated
+variants that missed the 5% improvement gate. It retains the production kernel
+and records why shared reorder and decoupled lookback remain necessary.
 
 ## GPU profiling
 
@@ -221,12 +225,12 @@ subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 `wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano. The
 next work is ordered by measured impact:
 
-1. **Optimize full-width scatter:** profile partition lookback and value movement; bounded 16-bit work is already about 2.2x faster than `wgpu_sort` on the qualified Jetsons, while full width is about 1.2x faster.
+1. **Build derived primitives:** implement stable stream compaction and selection on top of scan, with a GPU-buffer API and resident output count.
 2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
 3. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
    not already known by the application.
-4. **Build derived primitives:** implement stream compaction and selection on top of scan.
+4. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 
