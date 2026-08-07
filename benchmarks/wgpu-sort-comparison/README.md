@@ -13,8 +13,9 @@ Both runners validate stable ordering against the same CPU reference before
 timing. Resident timing includes command encoding, submission, GPU execution,
 and waiting. It excludes initial allocation, upload, and readback. Because
 `wgpu_sort` mutates its primary buffers, the orchestrator restores and waits for
-its input before starting each resident sample. `wgpu-primitives` preserves its
-input.
+its input from immutable GPU-resident backup buffers before starting each
+resident sample. That untimed device-to-device copy avoids repeated host upload
+allocations affecting later processes. `wgpu-primitives` preserves its input.
 
 Round-trip timing exercises each public API's practical upload-to-readback path.
 It is useful application context, but it is not a kernel-only comparison: the
@@ -31,7 +32,9 @@ From the repository root on PowerShell:
 The full run measures 1M, 10M, and 100M pairs; bounded 16-bit and full-width
 keys; resident and round-trip modes; and three independent processes. Inputs
 below 100M use four warmups and 11 samples. The 100M cases use two warmups and
-seven samples. The aggregate is the median of the independent process medians.
+seven samples. Normal runs also warm each implementation for at least two
+seconds before sampling, preventing cold GPU clocks from dominating a new
+process. The aggregate is the median of the independent process medians.
 
 For a quick correctness and harness smoke test:
 
