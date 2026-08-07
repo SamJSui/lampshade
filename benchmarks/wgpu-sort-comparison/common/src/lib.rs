@@ -75,6 +75,7 @@ pub struct BenchmarkConfig {
     pub workload: Workload,
     pub mode: BenchmarkMode,
     pub warmups: u32,
+    pub warmup_ms: u64,
     pub samples: u32,
     pub process_index: u32,
 }
@@ -83,6 +84,7 @@ impl BenchmarkConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let items = parse_required("WGPU_SORT_BENCH_ITEMS")?;
         let warmups = parse_required("WGPU_SORT_BENCH_WARMUPS")?;
+        let warmup_ms = parse_required("WGPU_SORT_BENCH_WARMUP_MS")?;
         let samples = parse_required("WGPU_SORT_BENCH_SAMPLES")?;
         let process_index = parse_required("WGPU_SORT_BENCH_PROCESS_INDEX")?;
         let workload = required("WGPU_SORT_BENCH_WORKLOAD")?.parse()?;
@@ -100,6 +102,7 @@ impl BenchmarkConfig {
             workload,
             mode,
             warmups,
+            warmup_ms,
             samples,
             process_index,
         })

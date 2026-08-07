@@ -7,6 +7,20 @@ use wgpu_primitives::{Context, GpuProfile, KeyValue, KeyValueSorter, Scanner, So
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
+const DEFAULT_CASES: [ProfileCase; 4] = [
+    ProfileCase::Scan,
+    ProfileCase::KeySort,
+    ProfileCase::KeyValueBounded16,
+    ProfileCase::KeyValueFullWidth,
+];
+
+#[derive(Clone, Copy)]
+enum ProfileCase {
+    Scan,
+    KeySort,
+    KeyValueBounded16,
+    KeyValueFullWidth,
+}
 
 struct ProfileConfig {
     samples: usize,
@@ -25,12 +39,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let sizes = input_sizes()?;
+    let cases = profile_cases()?;
     let config = profile_config()?;
     println!(
-        "adapter={:?} backend={:?} driver={:?} samples={} warmup_ms={}",
+        "adapter={:?} vendor={} device={} device_type={:?} backend={:?} driver={:?} driver_info={:?} subgroup_min={} subgroup_max={} samples={} warmup_ms={}",
         context.adapter_info.name,
+        context.adapter_info.vendor,
+        context.adapter_info.device,
+        context.adapter_info.device_type,
         context.adapter_info.backend,
         context.adapter_info.driver,
+        context.adapter_info.driver_info,
+        context.adapter_info.subgroup_min_size,
+        context.adapter_info.subgroup_max_size,
         config.samples,
         config.warmup.as_millis(),
     );
@@ -39,9 +60,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     for item_count in sizes {
-        profile_scan(&context, item_count, &config).await?;
-        profile_key_sort(&context, item_count, &config).await?;
-        profile_key_value_sort(&context, item_count, &config).await?;
+        for case in &cases {
+            match case {
+                ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
+                ProfileCase::KeySort => profile_key_sort(&context, item_count, &config).await?,
+                ProfileCase::KeyValueBounded16 => {
+                    profile_key_value_sort(&context, item_count, &config, false).await?
+                }
+                ProfileCase::KeyValueFullWidth => {
+                    profile_key_value_sort(&context, item_count, &config, true).await?
+                }
+            }
+        }
     }
 
     Ok(())
@@ -123,11 +153,15 @@ async fn profile_key_value_sort(
     context: &Context,
     item_count: usize,
     config: &ProfileConfig,
+    full_width: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let input: Vec<_> = deterministic_keys(item_count)
         .into_iter()
         .enumerate()
-        .map(|(index, key)| KeyValue::new(key & 0xffff, index as u32))
+        .map(|(index, key)| {
+            let key = if full_width { key } else { key & 0xffff };
+            KeyValue::new(key, index as u32)
+        })
         .collect();
     let gpu_input = create_input(context, "Profile Key-Value Input", &input);
     let gpu_output = create_output(context, "Profile Key-Value Output", gpu_input.size());
@@ -154,7 +188,12 @@ async fn profile_key_value_sort(
                 .await?,
         );
     }
-    report("key_value_sort", item_count, wall, &profiles);
+    let primitive = if full_width {
+        "key_value_sort_full_width"
+    } else {
+        "key_value_sort_bounded16"
+    };
+    report(primitive, item_count, wall, &profiles);
     Ok(())
 }
 
@@ -209,10 +248,15 @@ fn report(primitive: &str, item_count: usize, wall: Duration, profiles: &[GpuPro
     );
 
     let mut stages: BTreeMap<&str, Vec<Duration>> = BTreeMap::new();
+    let mut spans: BTreeMap<String, Vec<Duration>> = BTreeMap::new();
     for profile in profiles {
         let mut sample_stages: BTreeMap<&str, Duration> = BTreeMap::new();
         for span in &profile.spans {
             *sample_stages.entry(stage(&span.label)).or_default() += span.duration;
+            spans
+                .entry(span.label.clone())
+                .or_default()
+                .push(span.duration);
         }
         for (stage, duration) in sample_stages {
             stages.entry(stage).or_default().push(duration);
@@ -231,6 +275,12 @@ fn report(primitive: &str, item_count: usize, wall: Duration, profiles: &[GpuPro
         println!(
             "stage,{primitive},{item_count},{stage},{:.3},{percent:.1}%",
             milliseconds(median_duration)
+        );
+    }
+    for (label, durations) in spans {
+        println!(
+            "span,{primitive},{item_count},{label},{:.3}",
+            milliseconds(median(durations))
         );
     }
 }
@@ -316,6 +366,29 @@ fn input_sizes() -> Result<Vec<usize>, Box<dyn std::error::Error>> {
         .split(',')
         .map(|value| Ok(value.trim().replace('_', "").parse()?))
         .collect()
+}
+
+fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
+    let Some(raw) = std::env::var_os("WGPU_PRIMITIVES_PROFILE_CASES") else {
+        return Ok(DEFAULT_CASES.to_vec());
+    };
+    let cases: Vec<_> = raw
+        .to_string_lossy()
+        .split(',')
+        .map(|value| match value.trim() {
+            "scan" => Ok(ProfileCase::Scan),
+            "key_sort" => Ok(ProfileCase::KeySort),
+            "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),
+            "key_value_full_width" => Ok(ProfileCase::KeyValueFullWidth),
+            value => Err(format!(
+                "unknown WGPU_PRIMITIVES_PROFILE_CASES value {value:?}"
+            )),
+        })
+        .collect::<Result<_, _>>()?;
+    if cases.is_empty() {
+        return Err("WGPU_PRIMITIVES_PROFILE_CASES must not be empty".into());
+    }
+    Ok(cases)
 }
 
 fn profile_config() -> Result<ProfileConfig, Box<dyn std::error::Error>> {

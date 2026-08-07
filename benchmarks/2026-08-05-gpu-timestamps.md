@@ -3,7 +3,7 @@
 This report is the pre-optimization baseline. Its scatter finding led to the
 [Vulkan key-value radix optimization](2026-08-05-vulkan-key-value-radix.md).
 
-This report separates steady-state resident wall time from hardware GPU timestamps for the scan and radix-sort dispatches. It profiles the current development branch after version 0.3.0; the profiling APIs are not part of the crates.io 0.3.0 release.
+This report separates steady-state resident wall time from hardware GPU timestamps for the scan and radix-sort dispatches. It profiles the development branch after version 0.3.0; the profiling APIs subsequently ship in version 0.4.0.
 
 ## System
 
@@ -35,7 +35,11 @@ $env:WGPU_PRIMITIVES_PROFILE_SAMPLES = '5'
 cargo run --release --example profile_primitives
 ```
 
-The warmup defaults to 1,000 ms and can be changed with `WGPU_PRIMITIVES_PROFILE_WARMUP_MS`.
+The warmup defaults to 1,000 ms and can be changed with
+`WGPU_PRIMITIVES_PROFILE_WARMUP_MS`. Current versions profile bounded 16-bit
+and full-width key-value workloads separately. A targeted full-width run can
+set `WGPU_PRIMITIVES_PROFILE_CASES=key_value_full_width`; the other accepted
+values are `scan`, `key_sort`, and `key_value_bounded16`.
 
 ## Timing Matrix
 

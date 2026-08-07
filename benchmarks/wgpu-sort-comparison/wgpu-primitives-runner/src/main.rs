@@ -1,6 +1,6 @@
 use std::hint::black_box;
 use std::sync::mpsc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
@@ -72,7 +72,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     drop(expected);
 
-    for _ in 0..config.warmups {
+    let warmup_started = Instant::now();
+    let mut warmups_completed = 0;
+    while warmups_completed < config.warmups
+        || warmup_started.elapsed() < Duration::from_millis(config.warmup_ms)
+    {
         run_once(
             config.mode,
             &context,
@@ -81,6 +85,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             resident_buffers.as_ref(),
         )
         .await?;
+        warmups_completed += 1;
     }
 
     let mut samples_ms = Vec::with_capacity(config.samples as usize);

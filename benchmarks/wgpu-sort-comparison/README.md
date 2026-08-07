@@ -31,7 +31,9 @@ From the repository root on PowerShell:
 The full run measures 1M, 10M, and 100M pairs; bounded 16-bit and full-width
 keys; resident and round-trip modes; and three independent processes. Inputs
 below 100M use four warmups and 11 samples. The 100M cases use two warmups and
-seven samples. The aggregate is the median of the independent process medians.
+seven samples. Normal runs also warm each implementation for at least two
+seconds before sampling, preventing cold GPU clocks from dominating a new
+process. The aggregate is the median of the independent process medians.
 
 For a quick correctness and harness smoke test:
 

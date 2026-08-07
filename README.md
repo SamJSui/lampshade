@@ -22,8 +22,8 @@ With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs d
 
 These figures measure the composable resident-buffer path: command encoding, submission, primitive execution, and reusable workspace management are included, while host upload and readback are excluded. See [Performance](#performance) for smaller inputs and round-trip results.
 
-The stable key-value row uses the current unreleased NVIDIA Vulkan fast path and
-the median of three benchmark-process medians. It has 42.2% lower latency
+The stable key-value row uses the NVIDIA Vulkan fast path added in version 0.4
+and the median of three benchmark-process medians. It has 42.2% lower latency
 (1.73x speedup) than `wgpu_sort` at 100 million pairs for this bounded-key
 workload on the tested NVIDIA Vulkan system. With random full-width `u32` keys,
 the same path measured 15.457 ms, a modest 2.8% latency reduction (1.03x
@@ -108,11 +108,13 @@ adapter metadata is available. `KeyValueSorter::new` retains the portable path.
 
 ## Installation
 
-Version `0.3` contains inclusive and exclusive scan, key-only radix sort, and stable key-value radix sort:
+Version `0.4` contains inclusive and exclusive scan, key-only radix sort,
+stable key-value radix sort, GPU timestamp profiling, and the adapter-selected
+NVIDIA Vulkan fast path:
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.3"
+wgpu-primitives = "0.4"
 ```
 
 ## Algorithms
@@ -137,7 +139,7 @@ Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is 
 | Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
 | Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
 
-At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, and 2.287 billion elements/s for key-only sort. The current unreleased key-value path compares as follows:
+At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, and 2.287 billion elements/s for key-only sort. The version 0.4 key-value path compares as follows:
 
 | Key width | Pairs | `wgpu-primitives` | `wgpu_sort` | Time change |
 | ---: | ---: | ---: | ---: | ---: |
@@ -153,9 +155,13 @@ The comparison has a
 [committed reproduction harness](benchmarks/wgpu-sort-comparison/README.md) and
 [machine-readable aggregate snapshot](benchmarks/2026-08-05-wgpu-sort-comparison.json).
 
-## GPU profiling (unreleased)
+## GPU profiling
 
-The current development branch adds capability-gated hardware timestamp queries to `Scanner`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve queries. Profiled calls return labeled dispatch spans, total dispatch time, and elapsed GPU time; the same compute passes carry stable labels for external tools such as NVIDIA Nsight Graphics.
+Version 0.4 adds capability-gated hardware timestamp queries to `Scanner`,
+`Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
+queries. Profiled calls return labeled dispatch spans, total dispatch time, and
+elapsed GPU time; the same compute passes carry stable labels for external tools
+such as NVIDIA Nsight Graphics.
 
 Run the steady-state profile from a source checkout:
 
@@ -168,7 +174,9 @@ At 100M items, the baseline profile attributed 74.8% of key-value dispatch time 
 
 ## Roadmap
 
-Version 0.3 added exclusive scan and stable key-value radix sort. Current development adds per-dispatch GPU timestamp profiling and a measured NVIDIA Vulkan subgroup fast path. The next work is ordered by measured impact:
+Version 0.4 adds per-dispatch GPU timestamp profiling, a measured NVIDIA Vulkan
+subgroup fast path, and a reproducible pinned `wgpu_sort` comparison. The next
+work is ordered by measured impact:
 
 1. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions.
 2. **Improve portability:** test whether adaptive pass selection benefits the non-subgroup paths without regressing other backends.

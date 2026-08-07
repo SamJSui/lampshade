@@ -49,12 +49,12 @@ function Get-Median {
 function Get-SamplingConfig {
     param([long]$ItemCount)
     if ($Quick) {
-        return @{ Warmups = 1; Samples = 3 }
+        return @{ Warmups = 1; WarmupMs = 0; Samples = 3 }
     }
     if ($ItemCount -ge 100000000) {
-        return @{ Warmups = 2; Samples = 7 }
+        return @{ Warmups = 2; WarmupMs = 2000; Samples = 7 }
     }
-    return @{ Warmups = 4; Samples = 11 }
+    return @{ Warmups = 4; WarmupMs = 2000; Samples = 11 }
 }
 
 function Build-Runner {
@@ -86,6 +86,7 @@ function Invoke-Runner {
         [string]$Workload,
         [string]$Mode,
         [int]$Warmups,
+        [long]$WarmupMs,
         [int]$Samples,
         [int]$ProcessIndex
     )
@@ -95,6 +96,7 @@ function Invoke-Runner {
         'WGPU_SORT_BENCH_WORKLOAD',
         'WGPU_SORT_BENCH_MODE',
         'WGPU_SORT_BENCH_WARMUPS',
+        'WGPU_SORT_BENCH_WARMUP_MS',
         'WGPU_SORT_BENCH_SAMPLES',
         'WGPU_SORT_BENCH_PROCESS_INDEX',
         'WGPU_SORT_BENCH_IMPLEMENTATION_VERSION',
@@ -111,6 +113,7 @@ function Invoke-Runner {
         $env:WGPU_SORT_BENCH_WORKLOAD = $Workload
         $env:WGPU_SORT_BENCH_MODE = $Mode
         $env:WGPU_SORT_BENCH_WARMUPS = [string]$Warmups
+        $env:WGPU_SORT_BENCH_WARMUP_MS = [string]$WarmupMs
         $env:WGPU_SORT_BENCH_SAMPLES = [string]$Samples
         $env:WGPU_SORT_BENCH_PROCESS_INDEX = [string]$ProcessIndex
         $env:WGPU_SORT_BENCH_IMPLEMENTATION_VERSION = $ImplementationVersion
@@ -165,6 +168,7 @@ foreach ($itemCount in $Items) {
                     $workload `
                     $mode `
                     $sampling.Warmups `
+                    $sampling.WarmupMs `
                     $sampling.Samples `
                     $processIndex))
                 $runs.Add((Invoke-Runner `
@@ -175,6 +179,7 @@ foreach ($itemCount in $Items) {
                     $workload `
                     $mode `
                     $sampling.Warmups `
+                    $sampling.WarmupMs `
                     $sampling.Samples `
                     $processIndex))
             }

@@ -1,8 +1,9 @@
 # Stable Key-Value Sort Comparison
 
-This experiment compares the unreleased `wgpu-primitives` NVIDIA Vulkan
-key-value path with [`wgpu_sort`](https://github.com/KeKsBoTer/wgpu_sort) at
-commit `4cb640e8cae28eba0149d470c5168cc2853466dd`.
+This experiment compares the then-unreleased `wgpu-primitives` NVIDIA Vulkan
+key-value path, subsequently included in version 0.4.0, with
+[`wgpu_sort`](https://github.com/KeKsBoTer/wgpu_sort) at commit
+`4cb640e8cae28eba0149d470c5168cc2853466dd`.
 
 ## System and Method
 

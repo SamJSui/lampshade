@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-primitives"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "Composable GPU primitives for Rust applications using wgpu."
 authors = ["samjsui"]
@@ -17,6 +17,7 @@ include = [
     "examples/**/*.rs",
     "Cargo.toml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
 ]
 
