@@ -154,6 +154,9 @@ See the [base benchmark methodology](benchmarks/2026-08-05-windows.md),
 The comparison has a
 [committed reproduction harness](benchmarks/wgpu-sort-comparison/README.md) and
 [machine-readable aggregate snapshot](benchmarks/2026-08-05-wgpu-sort-comparison.json).
+The [version 0.4 full-width profile](benchmarks/2026-08-07-full-width-profile.md)
+records a clean-revision confirmation and the measured scatter optimization
+budget.
 
 ## GPU profiling
 

@@ -1,0 +1,784 @@
+﻿{
+    "schema_version":  1,
+    "generated_at_utc":  "2026-08-07T05:37:45.3448355Z",
+    "repository":  {
+                       "revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                       "dirty":  false,
+                       "package_version":  "0.4.0"
+                   },
+    "comparison":  {
+                       "name":  "wgpu_sort",
+                       "revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd"
+                   },
+    "config":  {
+                   "backend":  "vulkan",
+                   "items":  [
+                                 100000000
+                             ],
+                   "workloads":  [
+                                     "bounded16",
+                                     "full_width"
+                                 ],
+                   "modes":  [
+                                 "resident"
+                             ],
+                   "processes":  3,
+                   "quick":  false
+               },
+    "runs":  [
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  1
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        7.9839,
+                                        8.1456,
+                                        7.9477,
+                                        9.196299999999999,
+                                        7.9369000000000005,
+                                        7.9813,
+                                        7.9857000000000005
+                                    ],
+                     "median_ms":  7.9839,
+                     "throughput_pairs_per_second":  12525206979.045328,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  1
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        13.977599999999999,
+                                        13.931600000000001,
+                                        13.7326,
+                                        14.1055,
+                                        13.727400000000001,
+                                        13.9241,
+                                        13.913699999999999
+                                    ],
+                     "median_ms":  13.9241,
+                     "throughput_pairs_per_second":  7181792719.098541,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  2
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        7.9888,
+                                        7.964799999999999,
+                                        7.949700000000001,
+                                        8.5228,
+                                        7.9553,
+                                        8.1691,
+                                        7.972099999999999
+                                    ],
+                     "median_ms":  7.972099999999999,
+                     "throughput_pairs_per_second":  12543746315.27452,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  2
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        13.8309,
+                                        13.7657,
+                                        14.1811,
+                                        14.3772,
+                                        14.0571,
+                                        13.8256,
+                                        14.0863
+                                    ],
+                     "median_ms":  14.0571,
+                     "throughput_pairs_per_second":  7113842826.756586,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  3
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        7.9552000000000005,
+                                        7.969499999999999,
+                                        8.0336,
+                                        7.9547,
+                                        7.941999999999999,
+                                        7.9586,
+                                        7.9693000000000005
+                                    ],
+                     "median_ms":  7.9586,
+                     "throughput_pairs_per_second":  12565023999.195839,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "bounded16",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  3
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        13.8381,
+                                        13.8972,
+                                        13.8826,
+                                        13.7972,
+                                        13.8849,
+                                        13.83,
+                                        13.8247
+                                    ],
+                     "median_ms":  13.8381,
+                     "throughput_pairs_per_second":  7226425593.10888,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  1
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.4797,
+                                        14.5073,
+                                        14.4832,
+                                        14.509400000000001,
+                                        14.4869,
+                                        14.4835,
+                                        14.456
+                                    ],
+                     "median_ms":  14.4835,
+                     "throughput_pairs_per_second":  6904408464.804778,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  1
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.752899999999999,
+                                        14.6791,
+                                        14.744800000000001,
+                                        14.9041,
+                                        14.9346,
+                                        14.8705,
+                                        14.9363
+                                    ],
+                     "median_ms":  14.8705,
+                     "throughput_pairs_per_second":  6724723445.748294,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  2
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.4975,
+                                        14.5084,
+                                        14.6982,
+                                        14.525599999999999,
+                                        14.663,
+                                        14.435500000000001,
+                                        14.712100000000001
+                                    ],
+                     "median_ms":  14.525599999999999,
+                     "throughput_pairs_per_second":  6884397202.180977,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  2
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.7812,
+                                        15.0975,
+                                        14.6269,
+                                        15.0466,
+                                        14.9325,
+                                        14.91,
+                                        14.7785
+                                    ],
+                     "median_ms":  14.91,
+                     "throughput_pairs_per_second":  6706908115.35882,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu-primitives",
+                     "implementation_version":  "wgpu-primitives-0.4.0",
+                     "implementation_revision":  "7fa08b7bfbc7cf844a3dfd3cdd70d31976b6f123",
+                     "wgpu_version":  "28.0.0",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  3
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.6687,
+                                        14.435699999999999,
+                                        14.6985,
+                                        14.4422,
+                                        14.424199999999999,
+                                        14.5563,
+                                        14.4536
+                                    ],
+                     "median_ms":  14.4536,
+                     "throughput_pairs_per_second":  6918691537.056512,
+                     "memory":  {
+                                    "model":  "wgpu-primitives 8-bit source allocation formula",
+                                    "primary_input_output_bytes":  1600000000,
+                                    "workspace_bytes":  862837296,
+                                    "total_known_buffer_bytes":  2462837296,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 },
+                 {
+                     "schema_version":  1,
+                     "implementation":  "wgpu_sort",
+                     "implementation_version":  "wgpu_sort-git",
+                     "implementation_revision":  "4cb640e8cae28eba0149d470c5168cc2853466dd",
+                     "wgpu_version":  "0.20.1",
+                     "adapter":  {
+                                     "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                     "vendor":  4318,
+                                     "device":  9989,
+                                     "device_type":  "DiscreteGpu",
+                                     "backend":  "Vulkan",
+                                     "driver":  "NVIDIA",
+                                     "driver_info":  "591.86",
+                                     "subgroup_min_size":  32,
+                                     "subgroup_max_size":  32
+                                 },
+                     "config":  {
+                                    "items":  100000000,
+                                    "workload":  "full_width",
+                                    "mode":  "resident",
+                                    "warmups":  2,
+                                    "warmup_ms":  2000,
+                                    "samples":  7,
+                                    "process_index":  3
+                                },
+                     "generator":  {
+                                       "name":  "xorshift32-v1",
+                                       "base_seed":  2654435769
+                                   },
+                     "correctness_checked":  true,
+                     "samples_ms":  [
+                                        14.802100000000001,
+                                        14.9438,
+                                        14.9665,
+                                        14.7787,
+                                        15.078,
+                                        14.8042,
+                                        15.070500000000001
+                                    ],
+                     "median_ms":  14.9438,
+                     "throughput_pairs_per_second":  6691738379.796304,
+                     "memory":  {
+                                    "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                    "primary_input_output_bytes":  2000020480,
+                                    "workspace_bytes":  2026691600,
+                                    "total_known_buffer_bytes":  4026712080,
+                                    "exclusions":  [
+                                                       "bind groups and pipelines",
+                                                       "benchmark-only resident input restoration buffers",
+                                                       "upload and readback staging buffers",
+                                                       "driver-managed allocations"
+                                                   ]
+                                }
+                 }
+             ],
+    "aggregates":  [
+                       {
+                           "implementation":  "wgpu-primitives",
+                           "mode":  "resident",
+                           "workload":  "bounded16",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      7.9839,
+                                                      7.9720999999999993,
+                                                      7.9586
+                                                  ],
+                           "median_of_process_medians_ms":  7.9720999999999993,
+                           "throughput_pairs_per_second":  12543746315.274521,
+                           "memory":  {
+                                          "model":  "wgpu-primitives 8-bit source allocation formula",
+                                          "primary_input_output_bytes":  1600000000,
+                                          "workspace_bytes":  862837296,
+                                          "total_known_buffer_bytes":  2462837296,
+                                          "exclusions":  [
+                                                             "bind groups and pipelines",
+                                                             "upload and readback staging buffers",
+                                                             "driver-managed allocations"
+                                                         ]
+                                      }
+                       },
+                       {
+                           "implementation":  "wgpu_sort",
+                           "mode":  "resident",
+                           "workload":  "bounded16",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      13.9241,
+                                                      14.0571,
+                                                      13.8381
+                                                  ],
+                           "median_of_process_medians_ms":  13.9241,
+                           "throughput_pairs_per_second":  7181792719.0985413,
+                           "memory":  {
+                                          "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                          "primary_input_output_bytes":  2000020480,
+                                          "workspace_bytes":  2026691600,
+                                          "total_known_buffer_bytes":  4026712080,
+                                          "exclusions":  [
+                                                             "bind groups and pipelines",
+                                                             "benchmark-only resident input restoration buffers",
+                                                             "upload and readback staging buffers",
+                                                             "driver-managed allocations"
+                                                         ]
+                                      }
+                       },
+                       {
+                           "implementation":  "wgpu-primitives",
+                           "mode":  "resident",
+                           "workload":  "full_width",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      14.4835,
+                                                      14.5256,
+                                                      14.4536
+                                                  ],
+                           "median_of_process_medians_ms":  14.4835,
+                           "throughput_pairs_per_second":  6904408464.8047781,
+                           "memory":  {
+                                          "model":  "wgpu-primitives 8-bit source allocation formula",
+                                          "primary_input_output_bytes":  1600000000,
+                                          "workspace_bytes":  862837296,
+                                          "total_known_buffer_bytes":  2462837296,
+                                          "exclusions":  [
+                                                             "bind groups and pipelines",
+                                                             "upload and readback staging buffers",
+                                                             "driver-managed allocations"
+                                                         ]
+                                      }
+                       },
+                       {
+                           "implementation":  "wgpu_sort",
+                           "mode":  "resident",
+                           "workload":  "full_width",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      14.8705,
+                                                      14.91,
+                                                      14.9438
+                                                  ],
+                           "median_of_process_medians_ms":  14.91,
+                           "throughput_pairs_per_second":  6706908115.35882,
+                           "memory":  {
+                                          "model":  "wgpu_sort source allocation formula at 4cb640e8cae28eba0149d470c5168cc2853466dd",
+                                          "primary_input_output_bytes":  2000020480,
+                                          "workspace_bytes":  2026691600,
+                                          "total_known_buffer_bytes":  4026712080,
+                                          "exclusions":  [
+                                                             "bind groups and pipelines",
+                                                             "benchmark-only resident input restoration buffers",
+                                                             "upload and readback staging buffers",
+                                                             "driver-managed allocations"
+                                                         ]
+                                      }
+                       }
+                   ]
+}
