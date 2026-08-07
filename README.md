@@ -23,10 +23,11 @@ With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs d
 These figures measure the composable resident-buffer path: command encoding, submission, primitive execution, and reusable workspace management are included, while host upload and readback are excluded. See [Performance](#performance) for smaller inputs and round-trip results.
 
 The stable key-value row uses the current unreleased NVIDIA Vulkan fast path and
-the median of three benchmark-process medians. It is 42.2% faster than
-`wgpu_sort` at 100 million pairs for this bounded-key workload. With random
-full-width `u32` keys, the same path measured 15.457 ms, 2.8% faster than the
-comparison implementation. The remaining headline rows are from version 0.3.
+the median of three benchmark-process medians. It has 42.2% lower latency
+(1.73x speedup) than `wgpu_sort` at 100 million pairs for this bounded-key
+workload on the tested NVIDIA Vulkan system. With random full-width `u32` keys,
+the same path measured 15.457 ms, a modest 2.8% latency reduction (1.03x
+speedup). The remaining headline rows are from version 0.3.
 
 ## Features
 
@@ -145,7 +146,12 @@ At 100M items, resident throughput reached 17.96 billion elements/s for inclusiv
 | 32 bits | 10M | 1.720 ms | 1.735 ms | -0.9% |
 | 32 bits | 100M | 15.457 ms | 15.907 ms | -2.8% |
 
-See the [base benchmark methodology](benchmarks/2026-08-05-windows.md), [timestamp baseline](benchmarks/2026-08-05-gpu-timestamps.md), and [direct `wgpu_sort` comparison](benchmarks/2026-08-05-wgpu-sort-comparison.md).
+See the [base benchmark methodology](benchmarks/2026-08-05-windows.md),
+[timestamp baseline](benchmarks/2026-08-05-gpu-timestamps.md), and
+[direct `wgpu_sort` comparison](benchmarks/2026-08-05-wgpu-sort-comparison.md).
+The comparison has a
+[committed reproduction harness](benchmarks/wgpu-sort-comparison/README.md) and
+[machine-readable aggregate snapshot](benchmarks/2026-08-05-wgpu-sort-comparison.json).
 
 ## GPU profiling (unreleased)
 
@@ -181,6 +187,12 @@ cargo package
 cargo bench --bench scan -- --noplot
 cargo bench --bench sort -- --noplot
 cargo bench --bench key_value_sort -- --noplot
+```
+
+Run the independent, pinned `wgpu_sort` comparison on Windows with:
+
+```powershell
+& .\benchmarks\wgpu-sort-comparison\run.ps1
 ```
 
 GPU integration tests skip when no compatible adapter is available. CI installs Mesa's Vulkan software adapter so the shader paths execute on Linux.

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "status": "published_aggregate_snapshot",
+  "source_report": "benchmarks/2026-08-05-wgpu-sort-comparison.md",
+  "benchmark_date": "2026-08-05",
+  "raw_process_samples_available": false,
+  "repository": {
+    "revision": "78865fd20e92787a9a3d9d7747bc67cc628636f0",
+    "wgpu_version": "28.0.0",
+    "layout": "interleaved KeyValue records"
+  },
+  "comparison": {
+    "name": "wgpu_sort",
+    "revision": "4cb640e8cae28eba0149d470c5168cc2853466dd",
+    "wgpu_version": "0.20.1",
+    "layout": "separate key and value buffers"
+  },
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "os": "Windows 11 Education 10.0.26200, 64-bit",
+    "backend": "Vulkan",
+    "driver": "591.86"
+  },
+  "method": {
+    "generator": "xorshift32-v1",
+    "base_seed": 2654435769,
+    "correctness": "stable output checked with original positions as values",
+    "timing_scope": [
+      "command encoding",
+      "queue submission",
+      "GPU execution",
+      "GPU wait"
+    ],
+    "timing_exclusions": [
+      "initial allocation",
+      "input upload",
+      "output readback",
+      "wgpu_sort input restoration"
+    ],
+    "processes": 3,
+    "sampling_below_100m": {
+      "warmups": 4,
+      "samples": 11
+    },
+    "sampling_at_100m": {
+      "warmups": 2,
+      "samples": 7
+    },
+    "aggregate": "median of independent process medians"
+  },
+  "results": [
+    {
+      "workload": "bounded16",
+      "items": 1000000,
+      "wgpu_primitives_ms": 0.224,
+      "wgpu_sort_ms": 0.318,
+      "latency_change_percent": -29.6,
+      "wgpu_primitives_pairs_per_second": 4464000000
+    },
+    {
+      "workload": "bounded16",
+      "items": 10000000,
+      "wgpu_primitives_ms": 0.989,
+      "wgpu_sort_ms": 1.718,
+      "latency_change_percent": -42.4,
+      "wgpu_primitives_pairs_per_second": 10112000000
+    },
+    {
+      "workload": "bounded16",
+      "items": 100000000,
+      "wgpu_primitives_ms": 8.605,
+      "wgpu_sort_ms": 14.884,
+      "latency_change_percent": -42.2,
+      "wgpu_primitives_pairs_per_second": 11621000000
+    },
+    {
+      "workload": "full_width",
+      "items": 1000000,
+      "wgpu_primitives_ms": 0.296,
+      "wgpu_sort_ms": 0.326,
+      "latency_change_percent": -9.2,
+      "wgpu_primitives_pairs_per_second": 3384000000
+    },
+    {
+      "workload": "full_width",
+      "items": 10000000,
+      "wgpu_primitives_ms": 1.720,
+      "wgpu_sort_ms": 1.735,
+      "latency_change_percent": -0.9,
+      "wgpu_primitives_pairs_per_second": 5812000000
+    },
+    {
+      "workload": "full_width",
+      "items": 100000000,
+      "wgpu_primitives_ms": 15.457,
+      "wgpu_sort_ms": 15.907,
+      "latency_change_percent": -2.8,
+      "wgpu_primitives_pairs_per_second": 6470000000
+    }
+  ],
+  "source_derived_memory": {
+    "status": "allocation_model_not_driver_telemetry",
+    "wgpu_primitives_uniform_alignment_bytes": 64,
+    "exclusions": [
+      "bind groups and pipelines",
+      "upload and readback staging buffers",
+      "driver-managed allocations"
+    ],
+    "results": [
+      {
+        "items": 1000000,
+        "wgpu_primitives_total_known_buffer_bytes": 24997424,
+        "wgpu_sort_total_known_buffer_bytes": 40343056
+      },
+      {
+        "items": 10000000,
+        "wgpu_primitives_total_known_buffer_bytes": 249887280,
+        "wgpu_sort_total_known_buffer_bytes": 402774032
+      },
+      {
+        "items": 100000000,
+        "wgpu_primitives_total_known_buffer_bytes": 2462837296,
+        "wgpu_sort_total_known_buffer_bytes": 4026712080
+      }
+    ]
+  }
+}

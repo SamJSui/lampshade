@@ -33,6 +33,15 @@ jobs:
         run: cargo test --lib --tests
       - name: Check examples and benchmarks
         run: cargo check --examples --benches
+      - name: Check pinned wgpu_sort comparison harness
+        run: |
+          cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml -- --check
+          cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.toml -- --check
+          cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.toml -- --check
+          cargo test --locked --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml
+          cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml -- -D warnings
+          cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.toml -- -D warnings
+          cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.toml -- -D warnings
       - name: Check documentation
         run: cargo test --doc
       - name: Verify package contents

@@ -1,0 +1,13 @@
+[package]
+name = "wgpu-sort-comparison-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bytemuck = "1.24"
+pollster = "0.3"
+serde_json = "1"
+wgpu = "0.20.1"
+wgpu_sort = { git = "https://github.com/KeKsBoTer/wgpu_sort", rev = "4cb640e8cae28eba0149d470c5168cc2853466dd" }
+wgpu-sort-benchmark-common = { path = "../common" }
