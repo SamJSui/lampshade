@@ -38,6 +38,10 @@ pub enum Error {
         required: wgpu::BufferUsages,
         actual: wgpu::BufferUsages,
     },
+    BufferAlias {
+        first: &'static str,
+        second: &'static str,
+    },
 }
 
 impl fmt::Display for Error {
@@ -91,6 +95,9 @@ impl fmt::Display for Error {
                 f,
                 "{name} buffer is missing usage {required:?}; actual usage is {actual:?}"
             ),
+            Self::BufferAlias { first, second } => {
+                write!(f, "{first} and {second} must be distinct buffers")
+            }
         }
     }
 }

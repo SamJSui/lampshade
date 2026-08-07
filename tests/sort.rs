@@ -213,6 +213,11 @@ async fn record_sort_rejects_invalid_buffer_contracts() {
         .record_sort(&mut encoder, &input, &output, 4)
         .expect_err("short input must be rejected");
     assert!(matches!(error, Error::BufferTooSmall { .. }));
+
+    let error = sorter
+        .record_sort(&mut encoder, &output, &output, 4)
+        .expect_err("in-place radix scatter must be rejected");
+    assert!(matches!(error, Error::BufferAlias { .. }));
 }
 
 fn create_sort_input(device: &wgpu::Device, input: &[u32]) -> wgpu::Buffer {

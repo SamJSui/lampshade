@@ -7,14 +7,15 @@ use crate::profiling::{self, GpuProfile, TimestampRecorder};
 const BLOCK_SIZE: u32 = 256;
 const ITEMS_PER_THREAD: u32 = 7;
 const ITEMS_PER_TILE: u32 = BLOCK_SIZE * ITEMS_PER_THREAD;
+const RADIX_BITS: u32 = 8;
 const BUCKET_COUNT: u32 = 256;
-const PASS_COUNT: u32 = 4;
-const TILE_COUNTER_COUNT: u64 = PASS_COUNT as u64;
+const MAX_PASS_COUNT: u32 = u32::BITS / RADIX_BITS;
+const TILE_COUNTER_COUNT: u64 = MAX_PASS_COUNT as u64;
 const MAX_HISTOGRAM_GROUPS: u32 = 2048;
 const MAX_PACKED_COUNT: u32 = 0x0fff_ffff;
 const ITEM_SIZE_BYTES: u64 = 8;
-const UNIFORM_SIZE_BYTES: u64 = 16;
-const DISPATCH_ARGS_SIZE_BYTES: u64 = PASS_COUNT as u64 * 3 * 4;
+const UNIFORM_SIZE_BYTES: u64 = 32;
+const DISPATCH_ARGS_SIZE_BYTES: u64 = MAX_PASS_COUNT as u64 * 3 * 4;
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
 
 struct EightBitWorkspace {
@@ -36,6 +37,7 @@ struct CachedBindings {
     input: wgpu::Buffer,
     output: wgpu::Buffer,
     num_items: u32,
+    pass_count: u32,
     workspace_capacity: u64,
     _uniform: wgpu::Buffer,
     histogram: wgpu::BindGroup,
@@ -63,7 +65,11 @@ impl EightBitSorter {
         }
     }
 
-    pub async fn sort_slice<T: bytemuck::Pod>(&mut self, input: &[T]) -> Result<Vec<T>, Error> {
+    pub async fn sort_slice<T: bytemuck::Pod>(
+        &mut self,
+        input: &[T],
+        key_bits: u32,
+    ) -> Result<Vec<T>, Error> {
         if input.is_empty() {
             return Ok(Vec::new());
         }
@@ -74,7 +80,7 @@ impl EightBitSorter {
         let input_buffer = common::buffers::create_storage_buffer(&self.device, input);
         let output_buffer = common::buffers::create_empty_storage_buffer(&self.device, size_bytes);
 
-        self.sort_gpu_to_gpu(&input_buffer, &output_buffer, num_items)?;
+        self.sort_gpu_to_gpu(&input_buffer, &output_buffer, num_items, key_bits)?;
         common::buffers::download_buffer(&self.device, &self.queue, &output_buffer, input.len())
             .await
     }
@@ -84,13 +90,14 @@ impl EightBitSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<(), Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("8-bit Radix Sort"),
             });
-        self.record_sort(&mut encoder, input, output, num_items)?;
+        self.record_sort(&mut encoder, input, output, num_items, key_bits)?;
         self.queue.submit(Some(encoder.finish()));
         Ok(())
     }
@@ -101,11 +108,13 @@ impl EightBitSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<(), Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(());
         };
-        self.record_commands(encoder, input, output, problem, None)
+        let pass_count = pass_count_for_key_bits(key_bits);
+        self.record_commands(encoder, input, output, problem, pass_count, None)
     }
 
     pub async fn profile_sort_gpu_to_gpu(
@@ -113,18 +122,27 @@ impl EightBitSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         num_items: u32,
+        key_bits: u32,
     ) -> Result<GpuProfile, Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(GpuProfile::empty());
         };
 
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, PASS_COUNT + 2)?;
+        let pass_count = pass_count_for_key_bits(key_bits);
+        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, pass_count + 2)?;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Profiled 8-bit Radix Sort"),
             });
-        self.record_commands(&mut encoder, input, output, problem, Some(&mut profiler))?;
+        self.record_commands(
+            &mut encoder,
+            input,
+            output,
+            problem,
+            pass_count,
+            Some(&mut profiler),
+        )?;
         profiler.resolve(&mut encoder);
         let submission = self.queue.submit(Some(encoder.finish()));
         profiler.read(&self.device, submission).await
@@ -139,10 +157,18 @@ impl EightBitSorter {
         if num_items == 0 {
             return Ok(None);
         }
-        if num_items > MAX_PACKED_COUNT {
+        if input == output {
+            return Err(Error::BufferAlias {
+                first: "sort input",
+                second: "sort output",
+            });
+        }
+        let max_items =
+            element_count_limit(self.device.limits().max_compute_workgroups_per_dimension);
+        if num_items > max_items {
             return Err(Error::RadixElementCountLimitExceeded {
                 count: num_items,
-                limit: MAX_PACKED_COUNT,
+                limit: max_items,
             });
         }
 
@@ -173,9 +199,10 @@ impl EightBitSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         problem: PreparedSort,
+        pass_count: u32,
         mut profiler: Option<&mut TimestampRecorder>,
     ) -> Result<(), Error> {
-        self.ensure_bindings(input, output, problem);
+        self.ensure_bindings(input, output, problem, pass_count);
         let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
         let bindings = self
             .cached_bindings
@@ -235,19 +262,21 @@ impl EightBitSorter {
         input: &wgpu::Buffer,
         output: &wgpu::Buffer,
         problem: PreparedSort,
+        pass_count: u32,
     ) {
         let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
         let matches = self.cached_bindings.as_ref().is_some_and(|bindings| {
             bindings.input == *input
                 && bindings.output == *output
                 && bindings.num_items == problem.num_items
+                && bindings.pass_count == pass_count
                 && bindings.workspace_capacity == workspace.capacity_bytes
         });
         if matches {
             return;
         }
 
-        let (uniform, uniform_stride) = create_uniform_buffer(&self.device, problem);
+        let (uniform, uniform_stride) = create_uniform_buffer(&self.device, problem, pass_count);
         let histogram = self.pipelines.create_histogram_bind_group(
             &self.device,
             input,
@@ -261,9 +290,10 @@ impl EightBitSorter {
             &workspace.dispatch_args,
             &uniform,
         );
-        let scatter = (0..PASS_COUNT)
+        let scatter = (0..pass_count)
             .map(|pass| {
-                let (source, destination) = pass_buffers(pass, input, output, &workspace.scratch);
+                let (source, destination) =
+                    pass_buffers(pass, pass_count, input, output, &workspace.scratch);
                 self.pipelines.create_scatter_bind_group(
                     &self.device,
                     source,
@@ -278,6 +308,7 @@ impl EightBitSorter {
             input: input.clone(),
             output: output.clone(),
             num_items: problem.num_items,
+            pass_count,
             workspace_capacity: workspace.capacity_bytes,
             _uniform: uniform,
             histogram,
@@ -319,7 +350,7 @@ impl EightBitSorter {
             }
         }
 
-        let digit_table_bytes = u64::from(PASS_COUNT * BUCKET_COUNT) * 4;
+        let digit_table_bytes = u64::from(MAX_PASS_COUNT * BUCKET_COUNT) * 4;
         self.workspace = Some(EightBitWorkspace {
             capacity_bytes: capacity,
             scratch: common::buffers::create_empty_storage_buffer(&self.device, capacity),
@@ -511,18 +542,23 @@ fn create_pipeline(
     })
 }
 
-fn create_uniform_buffer(device: &wgpu::Device, problem: PreparedSort) -> (wgpu::Buffer, u64) {
+fn create_uniform_buffer(
+    device: &wgpu::Device,
+    problem: PreparedSort,
+    pass_count: u32,
+) -> (wgpu::Buffer, u64) {
     let stride =
         u64::from(device.limits().min_uniform_buffer_offset_alignment).max(UNIFORM_SIZE_BYTES);
     let words_per_record = (stride / size_of::<u32>() as u64) as usize;
-    let mut data = vec![0_u32; words_per_record * PASS_COUNT as usize];
-    for radix_pass in 0..PASS_COUNT as usize {
+    let mut data = vec![0_u32; words_per_record * pass_count as usize];
+    for radix_pass in 0..pass_count as usize {
         let offset = radix_pass * words_per_record;
-        data[offset..offset + 4].copy_from_slice(&[
+        data[offset..offset + 5].copy_from_slice(&[
             problem.num_items,
             problem.num_tiles,
             radix_pass as u32 + 1,
-            radix_pass as u32 * 8,
+            radix_pass as u32 * RADIX_BITS,
+            pass_count,
         ]);
     }
     let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -566,17 +602,59 @@ fn uniform_binding(binding: u32, buffer: &wgpu::Buffer, offset: u64) -> wgpu::Bi
 
 fn pass_buffers<'a>(
     radix_pass: u32,
+    pass_count: u32,
     input: &'a wgpu::Buffer,
     output: &'a wgpu::Buffer,
     scratch: &'a wgpu::Buffer,
 ) -> (&'a wgpu::Buffer, &'a wgpu::Buffer) {
-    if radix_pass == 0 {
-        (input, scratch)
-    } else if radix_pass.is_multiple_of(2) {
-        (output, scratch)
+    let (source_slot, destination_slot) = pass_buffer_slots(radix_pass, pass_count);
+    let source = match source_slot {
+        BufferSlot::Input => input,
+        BufferSlot::Output => output,
+        BufferSlot::Scratch => scratch,
+    };
+    let destination = match destination_slot {
+        BufferSlot::Input => unreachable!("sort input is never a pass destination"),
+        BufferSlot::Output => output,
+        BufferSlot::Scratch => scratch,
+    };
+    (source, destination)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BufferSlot {
+    Input,
+    Output,
+    Scratch,
+}
+
+fn pass_buffer_slots(radix_pass: u32, pass_count: u32) -> (BufferSlot, BufferSlot) {
+    debug_assert!(radix_pass < pass_count);
+    let source = if radix_pass == 0 {
+        BufferSlot::Input
+    } else if (pass_count - radix_pass).is_multiple_of(2) {
+        BufferSlot::Output
     } else {
-        (scratch, output)
-    }
+        BufferSlot::Scratch
+    };
+    let passes_after = pass_count - radix_pass - 1;
+    let destination = if passes_after.is_multiple_of(2) {
+        BufferSlot::Output
+    } else {
+        BufferSlot::Scratch
+    };
+    (source, destination)
+}
+
+fn pass_count_for_key_bits(key_bits: u32) -> u32 {
+    debug_assert!(key_bits <= u32::BITS);
+    key_bits.max(1).div_ceil(RADIX_BITS)
+}
+
+fn element_count_limit(max_compute_workgroups_per_dimension: u32) -> u32 {
+    max_compute_workgroups_per_dimension
+        .saturating_mul(ITEMS_PER_TILE)
+        .min(MAX_PACKED_COUNT)
 }
 
 fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
@@ -587,5 +665,57 @@ fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
             .ok_or(Error::SizeOverflow)
     } else {
         common::math::checked_align_to(requested_size, WORKSPACE_GROWTH_BYTES)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BufferSlot, element_count_limit, pass_buffer_slots, pass_count_for_key_bits};
+
+    #[test]
+    fn maps_key_widths_to_active_byte_passes() {
+        for (key_bits, expected) in [
+            (0, 1),
+            (1, 1),
+            (8, 1),
+            (9, 2),
+            (16, 2),
+            (17, 3),
+            (24, 3),
+            (25, 4),
+            (32, 4),
+        ] {
+            assert_eq!(pass_count_for_key_bits(key_bits), expected);
+        }
+    }
+
+    #[test]
+    fn routes_every_pass_count_to_the_caller_output() {
+        use BufferSlot::{Input, Output, Scratch};
+
+        let expected = [
+            vec![(Input, Output)],
+            vec![(Input, Scratch), (Scratch, Output)],
+            vec![(Input, Output), (Output, Scratch), (Scratch, Output)],
+            vec![
+                (Input, Scratch),
+                (Scratch, Output),
+                (Output, Scratch),
+                (Scratch, Output),
+            ],
+        ];
+        for (pass_count, expected_routes) in (1..=4).zip(expected) {
+            let actual: Vec<_> = (0..pass_count)
+                .map(|radix_pass| pass_buffer_slots(radix_pass, pass_count))
+                .collect();
+            assert_eq!(actual, expected_routes);
+        }
+    }
+
+    #[test]
+    fn caps_elements_at_the_one_dimensional_dispatch_limit() {
+        assert_eq!(element_count_limit(1), 1_792);
+        assert_eq!(element_count_limit(65_535), 117_438_720);
+        assert_eq!(element_count_limit(u32::MAX), 0x0fff_ffff);
     }
 }

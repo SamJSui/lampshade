@@ -3,6 +3,10 @@ struct Uniforms {
     num_tiles: u32,
     generation: u32,
     bit_index: u32,
+    pass_count: u32,
+    _padding_0: u32,
+    _padding_1: u32,
+    _padding_2: u32,
 }
 
 @group(0) @binding(0) var<storage, read_write> histogram: array<atomic<u32>>;
@@ -23,11 +27,11 @@ fn main_prefix(@builtin(local_invocation_id) local_id: vec3<u32>) {
     }
     workgroupBarrier();
 
-    for (var radix_pass = 0u; radix_pass < PASS_COUNT; radix_pass++) {
+    for (var radix_pass = 0u; radix_pass < uniforms.pass_count; radix_pass++) {
         let base = radix_pass * BUCKET_COUNT;
         let value = atomicLoad(&histogram[base + tid]);
         scan_values[tid] = value;
-        if (radix_pass >= 2u && value != 0u) {
+        if (uniforms.pass_count == PASS_COUNT && radix_pass >= 2u && value != 0u) {
             atomicAdd(&upper_nonempty[radix_pass - 2u], 1u);
         }
         workgroupBarrier();
@@ -60,9 +64,10 @@ fn main_prefix(@builtin(local_invocation_id) local_id: vec3<u32>) {
         workgroupBarrier();
     }
 
-    if (tid < PASS_COUNT) {
+    if (tid < uniforms.pass_count) {
         var groups = uniforms.num_tiles;
-        if (tid >= 2u
+        if (uniforms.pass_count == PASS_COUNT
+            && tid >= 2u
             && atomicLoad(&upper_nonempty[0]) == 1u
             && atomicLoad(&upper_nonempty[1]) == 1u) {
             groups = 0u;

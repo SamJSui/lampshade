@@ -207,6 +207,42 @@ async fn profiles_key_and_key_value_radix_stages() {
         assert_eq!(pair_prefix_passes, 1);
         assert_eq!(pair_reduce_passes, 0);
         assert_eq!(pair_scatter_passes, 4);
+
+        for (key_bits, expected_scatter_passes) in [(8, 1), (16, 2), (24, 3), (32, 4)] {
+            let bounded_pair_profile = pair_sorter
+                .profile_sort_gpu_to_gpu_with_key_bits(
+                    &pair_input,
+                    &pair_output,
+                    pairs.len() as u32,
+                    key_bits,
+                )
+                .await
+                .expect("profiled bounded key-value sort failed");
+            assert_eq!(
+                bounded_pair_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".histogram"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                bounded_pair_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".prefix"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                bounded_pair_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".scatter"))
+                    .count(),
+                expected_scatter_passes
+            );
+        }
     } else {
         assert_eq!(pair_prefix_passes, 0);
         assert!(matches!(pair_reduce_passes, 8 | PORTABLE_RADIX_PASS_COUNT));

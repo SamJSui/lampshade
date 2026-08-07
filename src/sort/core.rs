@@ -39,7 +39,8 @@ impl RadixSorter {
         item_kind: SortItemKind,
         adapter_info: &wgpu::AdapterInfo,
     ) -> Self {
-        let variant = RadixVariant::for_adapter(item_kind, adapter_info, device.features());
+        let variant =
+            RadixVariant::for_adapter(item_kind, adapter_info, device.features(), &device.limits());
         let implementation = if variant.uses_eight_bit_pipeline() {
             SortImplementation::EightBit(EightBitSorter::new(device, queue))
         } else {
@@ -62,7 +63,7 @@ impl RadixSorter {
             SortImplementation::ReduceScan(sorter) => {
                 sorter.sort_slice_with_key_bits(input, key_bits).await
             }
-            SortImplementation::EightBit(sorter) => sorter.sort_slice(input).await,
+            SortImplementation::EightBit(sorter) => sorter.sort_slice(input, key_bits).await,
         }
     }
 
@@ -88,7 +89,7 @@ impl RadixSorter {
                 sorter.sort_gpu_to_gpu_with_key_bits(input, output, num_items, key_bits)
             }
             SortImplementation::EightBit(sorter) => {
-                sorter.sort_gpu_to_gpu(input, output, num_items)
+                sorter.sort_gpu_to_gpu(input, output, num_items, key_bits)
             }
         }
     }
@@ -119,7 +120,7 @@ impl RadixSorter {
             }
             SortImplementation::EightBit(sorter) => {
                 sorter
-                    .profile_sort_gpu_to_gpu(input, output, num_items)
+                    .profile_sort_gpu_to_gpu(input, output, num_items, key_bits)
                     .await
             }
         }
@@ -149,7 +150,7 @@ impl RadixSorter {
                 sorter.record_sort_with_key_bits(encoder, input, output, num_items, key_bits)
             }
             SortImplementation::EightBit(sorter) => {
-                sorter.record_sort(encoder, input, output, num_items)
+                sorter.record_sort(encoder, input, output, num_items, key_bits)
             }
         }
     }
@@ -298,6 +299,12 @@ impl ReduceScanSorter {
     ) -> Result<Option<PreparedSort>, Error> {
         if num_items == 0 {
             return Ok(None);
+        }
+        if input == output {
+            return Err(Error::BufferAlias {
+                first: "sort input",
+                second: "sort output",
+            });
         }
 
         let problem = self.describe_sort(num_items)?;

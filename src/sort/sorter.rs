@@ -5,6 +5,8 @@ use super::core::{RadixSorter, validate_key_for_bits};
 use super::pipeline::SortItemKind;
 
 /// Performs an unsigned 32-bit LSD radix sort on a wgpu device.
+///
+/// GPU-buffer entry points require distinct input and output buffers.
 pub struct Sorter {
     core: RadixSorter,
 }
@@ -29,9 +31,9 @@ impl Sorter {
 
     /// Uploads and sorts values known to fit within `key_bits` significant bits.
     ///
-    /// Fewer bits reduce the number of passes on portable and wide radix paths.
-    /// Every input value is checked before upload. `key_bits` must be at most 32;
-    /// zero is valid only when every input value is zero.
+    /// Fewer bits reduce the number of passes. Every input value is checked
+    /// before upload. `key_bits` must be at most 32; zero is valid only when
+    /// every input value is zero.
     pub async fn sort_with_key_bits(
         &mut self,
         input: &[u32],

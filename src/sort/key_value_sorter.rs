@@ -19,6 +19,8 @@ impl KeyValue {
 }
 
 /// Performs a stable LSD radix sort of `KeyValue` items by key on a wgpu device.
+///
+/// GPU-buffer entry points require distinct input and output buffers.
 pub struct KeyValueSorter {
     core: RadixSorter,
 }
@@ -34,9 +36,10 @@ impl KeyValueSorter {
     /// Creates a sorter specialized for the supplied adapter when a measured
     /// fast path is available.
     ///
-    /// Discrete NVIDIA Vulkan adapters with 32-wide subgroups use the 8-bit
-    /// radix kernel. Other NVIDIA Vulkan devices use the 4-bit kernel, and all
-    /// remaining adapters use the portable 2-bit kernel.
+    /// NVIDIA Vulkan adapters with enabled, fixed 32-wide subgroups use the
+    /// 8-bit radix kernel. Discrete NVIDIA Vulkan devices without compatible
+    /// subgroups use the 4-bit kernel, and all remaining adapters use the
+    /// portable 2-bit kernel.
     pub fn new_for_adapter(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -59,9 +62,9 @@ impl KeyValueSorter {
 
     /// Uploads and stably sorts items whose keys fit within `key_bits` bits.
     ///
-    /// Fewer bits reduce the number of passes on portable and wide radix paths.
-    /// Every key is checked before upload. `key_bits` must be at most 32; zero is
-    /// valid only when every key is zero.
+    /// Fewer bits reduce the number of passes on every radix path. Every key is
+    /// checked before upload. `key_bits` must be at most 32; zero is valid only
+    /// when every key is zero.
     pub async fn sort_with_key_bits(
         &mut self,
         input: &[KeyValue],
