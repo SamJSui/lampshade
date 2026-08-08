@@ -1,0 +1,12 @@
+[package]
+name = "massively-comparison-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cubecl = { version = "=0.11.0-pre.1", default-features = false, features = ["std", "stdlib", "wgpu"] }
+massively = "=0.96.0"
+massively-benchmark-common = { path = "../common" }
+serde_json = "1"
+wgpu = "30.0.0"

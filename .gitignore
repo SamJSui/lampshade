@@ -3,6 +3,7 @@
 debug
 target
 benchmarks/wgpu-sort-comparison/results/*.json
+benchmarks/massively-comparison/results/*.json
 
 # OS Junk
 .DS_Store
@@ -19,3 +20,6 @@ Cargo.lock
 !benchmarks/wgpu-sort-comparison/common/Cargo.lock
 !benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.lock
 !benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.lock
+!benchmarks/massively-comparison/common/Cargo.lock
+!benchmarks/massively-comparison/wgpu-primitives-runner/Cargo.lock
+!benchmarks/massively-comparison/massively-runner/Cargo.lock

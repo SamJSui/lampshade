@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "source": {
+    "wgpu_primitives_revision": "2ada503c600ce064c0995d507284a7bdaa4d0dc9",
+    "massively_version": "0.96.0",
+    "massively_revision": "ef9de55190529be98203aca207edab9d560d312e",
+    "production_source_modified_after_measurement": false,
+    "working_tree_note": "Dirty only because the uncommitted comparison harness was present."
+  },
+  "method": {
+    "timing": "resident public API call through GPU completion",
+    "excluded": ["host upload", "readback", "correctness validation"],
+    "normal_warmups_minimum": 4,
+    "normal_warmup_ms_minimum": 2000,
+    "normal_samples": 11,
+    "large_warmups": 2,
+    "large_samples": 7,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "allocation_difference": "wgpu-primitives reuses caller-owned output and workspace; Massively returns a newly allocated owned output and CubeCL may recycle storage",
+    "sort_output_difference": "Massively radix_sort_by_key returns permuted values; wgpu-primitives KeyValueSorter writes both sorted keys and values. Both are validated for stable order, permutation, and key association."
+  },
+  "systems": [
+    {"id":"rtx","gpu":"NVIDIA GeForce RTX 4070 Ti SUPER","backend":"Vulkan","driver":"NVIDIA 591.86"},
+    {"id":"dopey","gpu":"NVIDIA Tegra Orin (nvgpu)","active_gpu_tpcs":8,"backend":"Vulkan","driver":"NVIDIA 595.78","power_mode":"MAXN_SUPER","clocks":"pinned during measurement, dynamic settings verified afterward"},
+    {"id":"grumpy","gpu":"NVIDIA Tegra Orin (nvgpu)","active_gpu_tpcs":4,"backend":"Vulkan","driver":"NVIDIA 595.78","power_mode":"MAXN_SUPER","clocks":"pinned during measurement, dynamic settings verified afterward"}
+  ],
+  "results": [
+    {"system":"rtx","workload":"sort_bounded16","items":1000000,"wgpu_primitives_process_medians_ms":[0.1763,0.1765,0.1862],"wgpu_primitives_ms":0.1765,"massively_process_medians_ms":[1.1131,1.1043,1.1112],"massively_ms":1.1112,"wgpu_primitives_speedup":6.295751},
+    {"system":"rtx","workload":"sort_full_width","items":1000000,"wgpu_primitives_process_medians_ms":[0.2794,0.2812,0.2907],"wgpu_primitives_ms":0.2812,"massively_process_medians_ms":[1.1081,1.1034,1.1097],"massively_ms":1.1081,"wgpu_primitives_speedup":3.940612},
+    {"system":"rtx","workload":"exclusive_scan","items":1000000,"wgpu_primitives_process_medians_ms":[0.1494,0.1499,0.1514],"wgpu_primitives_ms":0.1499,"massively_process_medians_ms":[0.3729,0.3587,0.3759],"massively_ms":0.3729,"wgpu_primitives_speedup":2.487658},
+    {"system":"rtx","workload":"compact_50","items":1000000,"wgpu_primitives_process_medians_ms":[0.1797,0.1795,0.1788],"wgpu_primitives_ms":0.1795,"massively_process_medians_ms":[0.3715,0.3977,0.3692],"massively_ms":0.3715,"wgpu_primitives_speedup":2.069638},
+    {"system":"rtx","workload":"sort_bounded16","items":10000000,"wgpu_primitives_process_medians_ms":[0.9140,0.9152,0.9134],"wgpu_primitives_ms":0.9140,"massively_process_medians_ms":[7.2343,7.2309,7.2293],"massively_ms":7.2309,"wgpu_primitives_speedup":7.911269},
+    {"system":"rtx","workload":"sort_full_width","items":10000000,"wgpu_primitives_process_medians_ms":[1.6233,1.6252,1.6121],"wgpu_primitives_ms":1.6233,"massively_process_medians_ms":[7.2244,7.2219,7.2156],"massively_ms":7.2219,"wgpu_primitives_speedup":4.448900},
+    {"system":"rtx","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[0.7170,0.7196,0.7282],"wgpu_primitives_ms":0.7196,"massively_process_medians_ms":[0.9576,0.9396,0.9333],"massively_ms":0.9396,"wgpu_primitives_speedup":1.305725},
+    {"system":"rtx","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[0.9476,0.9418,0.9434],"wgpu_primitives_ms":0.9434,"massively_process_medians_ms":[0.9929,0.9711,0.9890],"massively_ms":0.9890,"wgpu_primitives_speedup":1.048336},
+    {"system":"rtx","workload":"sort_bounded16","items":100000000,"wgpu_primitives_process_medians_ms":[8.1559,8.3717,8.3711],"wgpu_primitives_ms":8.3711,"massively_process_medians_ms":[165.3326,165.4484,165.3359],"massively_ms":165.3359,"wgpu_primitives_speedup":19.750797},
+    {"system":"rtx","workload":"sort_full_width","items":100000000,"wgpu_primitives_process_medians_ms":[15.0029,14.6772,14.9518],"wgpu_primitives_ms":14.9518,"massively_process_medians_ms":[165.7987,165.8076,165.7267],"massively_ms":165.7987,"wgpu_primitives_speedup":11.088879},
+
+    {"system":"dopey","workload":"sort_bounded16","items":1000000,"wgpu_primitives_process_medians_ms":[1.376165,1.375012,1.380133],"wgpu_primitives_ms":1.376165,"massively_process_medians_ms":[9.909093,9.890757,9.983015],"massively_ms":9.909093,"wgpu_primitives_speedup":7.200512},
+    {"system":"dopey","workload":"sort_full_width","items":1000000,"wgpu_primitives_process_medians_ms":[2.592484,2.592165,2.593476],"wgpu_primitives_ms":2.592484,"massively_process_medians_ms":[9.891236,9.931365,9.904037],"massively_ms":9.904037,"wgpu_primitives_speedup":3.820289},
+    {"system":"dopey","workload":"exclusive_scan","items":1000000,"wgpu_primitives_process_medians_ms":[0.764468,0.757044,0.760468],"wgpu_primitives_ms":0.760468,"massively_process_medians_ms":[1.642059,1.648876,1.619946],"massively_ms":1.642059,"wgpu_primitives_speedup":2.159274},
+    {"system":"dopey","workload":"compact_50","items":1000000,"wgpu_primitives_process_medians_ms":[1.016379,1.010939,1.012922],"wgpu_primitives_ms":1.012922,"massively_process_medians_ms":[1.648044,1.597802,1.697581],"massively_ms":1.648044,"wgpu_primitives_speedup":1.627020},
+    {"system":"dopey","workload":"sort_bounded16","items":10000000,"wgpu_primitives_process_medians_ms":[11.258377,11.255209,11.250857],"wgpu_primitives_ms":11.255209,"massively_process_medians_ms":[95.900800,96.122117,96.007394],"massively_ms":96.007394,"wgpu_primitives_speedup":8.530041},
+    {"system":"dopey","workload":"sort_full_width","items":10000000,"wgpu_primitives_process_medians_ms":[21.738653,21.773982,21.752239],"wgpu_primitives_ms":21.752239,"massively_process_medians_ms":[98.723114,99.109041,98.809482],"massively_ms":98.809482,"wgpu_primitives_speedup":4.542497},
+    {"system":"dopey","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[6.216416,6.222656,6.243361],"wgpu_primitives_ms":6.222656,"massively_process_medians_ms":[5.414988,5.439659,5.350601],"massively_ms":5.414988,"wgpu_primitives_speedup":0.870205},
+    {"system":"dopey","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[7.724903,7.725671,7.730631],"wgpu_primitives_ms":7.725671,"massively_process_medians_ms":[6.851952,7.064598,6.995924],"massively_ms":6.995924,"wgpu_primitives_speedup":0.905543},
+    {"system":"dopey","workload":"sort_bounded16","items":100000000,"wgpu_primitives_process_medians_ms":[112.556537,112.521409,112.647500],"wgpu_primitives_ms":112.556537,"massively_process_medians_ms":[8290.482285,8290.373520,8290.595340],"massively_ms":8290.482285,"wgpu_primitives_speedup":73.656160},
+    {"system":"dopey","workload":"sort_full_width","items":100000000,"wgpu_primitives_process_medians_ms":[215.078076,214.819616,215.013549],"wgpu_primitives_ms":215.013549,"massively_process_medians_ms":[8455.198624,8455.211869,8455.403496],"massively_ms":8455.211869,"wgpu_primitives_speedup":39.324089},
+
+    {"system":"grumpy","workload":"sort_bounded16","items":1000000,"wgpu_primitives_process_medians_ms":[1.400004,1.398083,1.400036],"wgpu_primitives_ms":1.400004,"massively_process_medians_ms":[10.228775,10.105091,10.212007],"massively_ms":10.212007,"wgpu_primitives_speedup":7.294270},
+    {"system":"grumpy","workload":"sort_full_width","items":1000000,"wgpu_primitives_process_medians_ms":[2.645540,2.661316,2.659813],"wgpu_primitives_ms":2.659813,"massively_process_medians_ms":[10.184869,10.254887,10.220070],"massively_ms":10.220070,"wgpu_primitives_speedup":3.842402},
+    {"system":"grumpy","workload":"exclusive_scan","items":1000000,"wgpu_primitives_process_medians_ms":[1.063099,1.058299,1.062299],"wgpu_primitives_ms":1.062299,"massively_process_medians_ms":[1.545000,1.551912,1.591401],"massively_ms":1.551912,"wgpu_primitives_speedup":1.460899},
+    {"system":"grumpy","workload":"compact_50","items":1000000,"wgpu_primitives_process_medians_ms":[1.314498,1.314594,1.310914],"wgpu_primitives_ms":1.314498,"massively_process_medians_ms":[1.620874,1.606953,1.635562],"massively_ms":1.620874,"wgpu_primitives_speedup":1.233075},
+    {"system":"grumpy","workload":"sort_bounded16","items":10000000,"wgpu_primitives_process_medians_ms":[11.458983,11.438790,11.442662],"wgpu_primitives_ms":11.442662,"massively_process_medians_ms":[97.430122,97.299079,97.401450],"massively_ms":97.401450,"wgpu_primitives_speedup":8.512132},
+    {"system":"grumpy","workload":"sort_full_width","items":10000000,"wgpu_primitives_process_medians_ms":[22.105304,22.097976,22.088153],"wgpu_primitives_ms":22.097976,"massively_process_medians_ms":[100.322165,100.380888,100.595326],"massively_ms":100.380888,"wgpu_primitives_speedup":4.542538},
+    {"system":"grumpy","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[9.183980,9.198669,9.195821],"wgpu_primitives_ms":9.195821,"massively_process_medians_ms":[5.453997,5.452140,5.356202],"massively_ms":5.452140,"wgpu_primitives_speedup":0.592893},
+    {"system":"grumpy","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[10.558576,10.555664,10.558096],"wgpu_primitives_ms":10.558096,"massively_process_medians_ms":[6.838640,6.849040,6.947123],"massively_ms":6.849040,"wgpu_primitives_speedup":0.648700},
+    {"system":"grumpy","workload":"sort_bounded16","items":100000000,"wgpu_primitives_process_medians_ms":[113.886556,113.846976,113.767940],"wgpu_primitives_ms":113.846976,"massively_process_medians_ms":[8294.118503,8294.100010,8293.565200],"massively_ms":8294.100010,"wgpu_primitives_speedup":72.853055},
+    {"system":"grumpy","workload":"sort_full_width","items":100000000,"wgpu_primitives_process_medians_ms":[217.199267,217.219850,217.181070],"wgpu_primitives_ms":217.199267,"massively_process_medians_ms":[8460.407920,8461.018291,8460.191154],"massively_ms":8460.407920,"wgpu_primitives_speedup":38.952286}
+  ],
+  "excluded_100m_scan_comparison": {
+    "system": "rtx",
+    "massively_exclusive_scan_ms": 3.1004,
+    "massively_compact_50_ms": 5.6263,
+    "wgpu_primitives_scan_failures": 3,
+    "wgpu_primitives_first_mismatch_index": 96471040,
+    "wgpu_primitives_compaction_failures": 3,
+    "expected_selected": 50000000,
+    "observed_selected": [49336704, 49336704, 49005056],
+    "suspected_root_cause": "Hierarchical scan data and auxiliary writable bindings use size None on offset views into the same scratch buffer, allowing overlap and rounded-thread writes into the next level."
+  }
+}
