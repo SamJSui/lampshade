@@ -5,6 +5,28 @@ use crate::{common, profiling};
 const BLOCK_SIZE: u32 = 256;
 const PARAMS_SIZE_BYTES: u64 = 16;
 
+#[derive(Clone, Copy)]
+pub(crate) enum CompactItemKind {
+    Value,
+    KeyValue,
+}
+
+impl CompactItemKind {
+    pub(crate) const fn size_bytes(self) -> u64 {
+        match self {
+            Self::Value => size_of::<u32>() as u64,
+            Self::KeyValue => size_of::<crate::KeyValue>() as u64,
+        }
+    }
+
+    const fn shader_item_type(self) -> &'static str {
+        match self {
+            Self::Value => "u32",
+            Self::KeyValue => "KeyValue",
+        }
+    }
+}
+
 pub struct CompactPipeline {
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::ComputePipeline,
@@ -21,7 +43,7 @@ pub struct CompactDispatch<'a> {
 }
 
 impl CompactPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, item_kind: CompactItemKind) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Stream Compaction Layout"),
             entries: &[
@@ -33,10 +55,12 @@ impl CompactPipeline {
                 common::buffers::bind_entry(5, false, true),
             ],
         });
+        let shader_source =
+            include_str!("compact.wgsl").replace("{{ITEM_TYPE}}", item_kind.shader_item_type());
         let pipeline = common::shader::create_compute_pipeline(
             device,
             &bind_group_layout,
-            include_str!("compact.wgsl"),
+            &shader_source,
             "Stream Compaction Pipeline",
             "main",
             None,

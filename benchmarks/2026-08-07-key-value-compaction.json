@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "source": {
+    "base_revision": "20271441a4bd8359c0e7da5a9996828a1d1030f6",
+    "measured_package_sha256": "9AB587C389ED92BC05CAA89A08B658D9CBEABE6ACE61EC45B1A72B46159214CB",
+    "post_measurement_change": "Documentation only; measured implementation, shader, tests, examples, benchmarks, and profiler unchanged."
+  },
+  "method": {
+    "items": 10000000,
+    "backend": "vulkan",
+    "resident": true,
+    "samples": 11,
+    "warmup_ms": 2000,
+    "selectivity_percent": [0, 10, 50, 90, 100],
+    "cpu_reference_validation": true
+  },
+  "systems": [
+    {
+      "host": "rtx4070ti-super",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "driver": "591.86",
+      "active_gpu_tpcs": null,
+      "raw_output_sha256": "FC58DAC2466C0DAA74C141CEFAA84FBAAA5D0AF8AF4DFC421CA9C77D0D5046BD",
+      "u32_control_50pct_wall_ms": 0.896,
+      "results": [
+        {"selectivity_percent":0,"wall_ms":0.802,"gpu_elapsed_ms":0.617,"dispatch_ms":0.588,"scan_ms":0.513,"scatter_ms":0.075,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":0.849,"gpu_elapsed_ms":0.670,"dispatch_ms":0.645,"scan_ms":0.516,"scatter_ms":0.129,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":0.973,"gpu_elapsed_ms":0.782,"dispatch_ms":0.754,"scan_ms":0.516,"scatter_ms":0.239,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":1.098,"gpu_elapsed_ms":0.899,"dispatch_ms":0.871,"scan_ms":0.516,"scatter_ms":0.356,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":1.172,"gpu_elapsed_ms":0.918,"dispatch_ms":0.889,"scan_ms":0.515,"scatter_ms":0.374,"validated_output_items":10000000}
+      ]
+    },
+    {
+      "host": "dopey",
+      "gpu": "NVIDIA Tegra Orin",
+      "driver": "595.78",
+      "active_gpu_tpcs": 8,
+      "raw_output_sha256": "15CCD8AA48F383332E8328546F6FF5C0A6E1A407F20F183A2F2870B4F976F747",
+      "u32_control_50pct_wall_ms": 7.576,
+      "results": [
+        {"selectivity_percent":0,"wall_ms":6.951,"gpu_elapsed_ms":5.051,"dispatch_ms":5.014,"scan_ms":4.085,"scatter_ms":0.929,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":7.464,"gpu_elapsed_ms":5.584,"dispatch_ms":5.547,"scan_ms":4.083,"scatter_ms":1.464,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":7.873,"gpu_elapsed_ms":5.978,"dispatch_ms":5.941,"scan_ms":4.082,"scatter_ms":1.858,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":8.424,"gpu_elapsed_ms":6.520,"dispatch_ms":6.483,"scan_ms":4.086,"scatter_ms":2.397,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":8.768,"gpu_elapsed_ms":6.655,"dispatch_ms":6.618,"scan_ms":4.083,"scatter_ms":2.535,"validated_output_items":10000000}
+      ]
+    },
+    {
+      "host": "grumpy",
+      "gpu": "NVIDIA Tegra Orin",
+      "driver": "595.78",
+      "active_gpu_tpcs": 4,
+      "raw_output_sha256": "E17D5278F36BBB663E722D63E9EEEFA359F203058C90C3036AE06A9F4660263F",
+      "u32_control_50pct_wall_ms": 10.423,
+      "results": [
+        {"selectivity_percent":0,"wall_ms":9.829,"gpu_elapsed_ms":7.962,"dispatch_ms":7.925,"scan_ms":6.998,"scatter_ms":0.927,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":10.394,"gpu_elapsed_ms":8.510,"dispatch_ms":8.473,"scan_ms":6.999,"scatter_ms":1.472,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":10.903,"gpu_elapsed_ms":8.931,"dispatch_ms":8.894,"scan_ms":6.998,"scatter_ms":1.896,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":11.508,"gpu_elapsed_ms":9.469,"dispatch_ms":9.432,"scan_ms":7.000,"scatter_ms":2.432,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":11.662,"gpu_elapsed_ms":9.596,"dispatch_ms":9.559,"scan_ms":7.001,"scatter_ms":2.558,"validated_output_items":10000000}
+      ]
+    }
+  ],
+  "correctness": {
+    "tests_per_jetson": 52,
+    "key_value_compaction_tests": 6,
+    "validated_10m_selectivities_per_host": 5
+  },
+  "decision": {
+    "publish_key_value_compaction": true,
+    "u32_regression_guardrail_percent": 2.0,
+    "u32_guardrail_passed_on_all_hosts": true,
+    "next": "reusable selection predicates"
+  }
+}

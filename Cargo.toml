@@ -51,3 +51,7 @@ harness = false
 [[bench]]
 name = "compact"
 harness = false
+
+[[bench]]
+name = "key_value_compact"
+harness = false
