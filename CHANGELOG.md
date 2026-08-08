@@ -6,6 +6,9 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Added
 
+- Stable `u32` stream compaction from caller-provided 0/1 masks, including
+  slice, immediate GPU submission, command recording, resident output count,
+  and GPU timestamp profiling APIs.
 - Opt-in `*_with_key_bits` sort APIs for host slices, immediate GPU submission,
   command recording, and GPU timestamp profiling.
 - Host-slice validation for declared key widths, including explicit errors for
@@ -19,6 +22,9 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Performance
 
+- At 10 million items and 50% selectivity, resident compaction measured
+  0.892 ms on an RTX 4070 Ti SUPER, 7.601 ms on an 8-TPC Jetson Orin Nano,
+  and 10.428 ms on a 4-TPC Jetson Orin Nano.
 - On physical 8-TPC and 4-TPC Jetson Orin Nano configurations, the explicit
   16-bit path reduced 10-million-pair portable Vulkan latency by 52.2% and
   51.3% respectively. Full-width changes were +0.01% and +0.004%.

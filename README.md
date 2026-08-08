@@ -5,7 +5,7 @@
 [![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Safe, composable GPU prefix scan and unsigned integer radix sort for Rust applications using wgpu.
+Safe, composable GPU prefix scan, stream compaction, and unsigned integer radix sort for Rust applications using wgpu.
 
 `wgpu-primitives` continues the package previously published as `wgpu-algorithms` beginning with version 0.2.
 
@@ -32,6 +32,7 @@ speedup). The remaining headline rows are from version 0.3.
 ## Features
 
 - Inclusive and exclusive `u32` prefix scan.
+- Stable `u32` stream compaction from caller-provided 0/1 masks.
 - Stable 2-bit LSD radix sort for `u32` values.
 - Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
 - Opt-in significant-key-bit bounds that eliminate unnecessary portable and wide radix passes.
@@ -45,18 +46,21 @@ speedup). The remaining headline rows are from version 0.3.
 The convenience context is useful for standalone compute programs:
 
 ```rust
-use wgpu_primitives::{Context, Scanner, Sorter};
+use wgpu_primitives::{Compactor, Context, Scanner, Sorter};
 
 #[tokio::main]
 async fn main() -> Result<(), wgpu_primitives::Error> {
     let context = Context::init().await?;
     let mut scanner = Scanner::from_context(&context);
+    let mut compactor = Compactor::from_context(&context);
     let mut sorter = Sorter::from_context(&context);
 
     let prefixes = scanner.scan_exclusive(&[3, 1, 4, 1]).await?;
+    let compacted = compactor.compact(&[40, 10, 30, 20], &[0, 1, 1, 0]).await?;
     let sorted = sorter.sort(&[10, 4, 7, 1]).await?;
 
     assert_eq!(prefixes, [0, 3, 4, 8]);
+    assert_eq!(compacted, [10, 30]);
     assert_eq!(sorted, [1, 4, 7, 10]);
     Ok(())
 }
@@ -95,9 +99,18 @@ Applications that already own a wgpu device should reuse it:
 
 ```rust,ignore
 let mut scanner = Scanner::new(&device, &queue);
+let mut compactor = Compactor::new(&device, &queue);
 let mut sorter = Sorter::new(&device, &queue);
 
 scanner.record_scan(&mut encoder, &scan_input, &scan_output, item_count)?;
+compactor.record_compact(
+    &mut encoder,
+    &input,
+    &mask,
+    &compacted_output,
+    &compacted_count,
+    item_count,
+)?;
 sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
 queue.submit(Some(encoder.finish()));
 ```
@@ -124,7 +137,7 @@ full-width by default.
 `KeyValueSorter::new_for_adapter` enables measured adapter-specific kernels when
 adapter metadata is available. `KeyValueSorter::new` retains the portable path.
 
-`record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_sort` requires `STORAGE` on both buffers, and its input and output must be distinct allocations.
+`record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_compact` requires `STORAGE` on the input and output, `STORAGE | COPY_SRC` on its 0/1 mask, and `STORAGE | COPY_DST` on its four-byte resident count. Compaction input, mask, output, and count allocations must not overlap where writes could race with reads. `record_sort` requires `STORAGE` on both buffers, and its input and output must be distinct allocations.
 
 ## Installation
 
@@ -140,6 +153,12 @@ wgpu-primitives = "0.4"
 ## Algorithms
 
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
+
+Stream compaction exclusively scans a caller-provided 0/1 mask into stable
+destination indices, scatters selected `u32` values in their original order,
+and leaves the selected-item count in a caller-owned GPU buffer. The resident
+API performs no validation pass or readback, so GPU masks must contain only 0
+or 1; the slice convenience API validates them before upload.
 
 The portable radix sort processes two bits per pass. A full-width sort uses 16
 passes; `*_with_key_bits` calls use only the passes required by the declared
@@ -200,11 +219,15 @@ The bounded [full-width scatter experiment](benchmarks/2026-08-07-full-width-sca
 profiles the merged kernel on RTX and both Jetsons and rejects five isolated
 variants that missed the 5% improvement gate. It retains the production kernel
 and records why shared reorder and decoupled lookback remain necessary.
+The [stable stream-compaction baseline](benchmarks/2026-08-07-stream-compaction.md)
+validates 10 million items at five selectivities on the RTX and both Jetsons.
+At 50% kept, resident wall time is 0.892 ms, 7.601 ms, and 10.428 ms
+respectively; every workload matches a stable CPU reference.
 
 ## GPU profiling
 
-Version 0.4 adds capability-gated hardware timestamp queries to `Scanner`,
-`Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
+Capability-gated hardware timestamp queries are available for `Scanner`,
+`Compactor`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
 queries. Profiled calls return labeled dispatch spans, total dispatch time, and
 elapsed GPU time; the same compute passes carry stable labels for external tools
 such as NVIDIA Nsight Graphics.
@@ -216,6 +239,11 @@ $env:WGPU_BACKEND = 'vulkan' # or 'dx12'
 cargo run --release --example profile_primitives
 ```
 
+Set `WGPU_PRIMITIVES_PROFILE_CASES=compact_50` to isolate stable compaction
+with a deterministic 50%-selective mask. Any percentage from `compact_0` to
+`compact_100` is accepted; set `WGPU_PRIMITIVES_PROFILE_VALIDATE=1` to compare
+the profiled workload against a stable CPU reference afterward.
+
 At 100M items, the baseline profile attributed 74.8% of key-value dispatch time to stable scatter. The latest bounded-key profile spends 83.6% in two scatter passes, 16.3% in the all-byte histogram, and 0.1% in prefix setup. The finalized direct comparison harness measures the specialized path at 8.605 ms.
 
 ## Roadmap
@@ -225,7 +253,7 @@ subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 `wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano. The
 next work is ordered by measured impact:
 
-1. **Build derived primitives:** implement stable stream compaction and selection on top of scan, with a GPU-buffer API and resident output count.
+1. **Build derived primitives:** extend stable `u32` stream compaction to structured payloads and reusable selection predicates.
 2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
 3. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
@@ -243,6 +271,7 @@ cargo test --lib --tests
 cargo check --examples --benches
 cargo package
 cargo bench --bench scan -- --noplot
+cargo bench --bench compact -- --noplot
 cargo bench --bench sort -- --noplot
 cargo bench --bench key_value_sort -- --noplot
 ```

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "source": {
+    "base_revision": "1c19619bb83939a9fcdf9008f3cc7400289a3818",
+    "measured_package_sha256": "C1FA5E57E14826C1762DCC30A40B01319A5C971E81442BD17D331F4AB1C57B39",
+    "post_measurement_change": "Profiler and test presentation coverage only; library implementation and shader unchanged."
+  },
+  "method": {
+    "items": 10000000,
+    "backend": "vulkan",
+    "resident": true,
+    "samples": 11,
+    "warmup_ms": 2000,
+    "selectivity_percent": [0, 10, 50, 90, 100],
+    "cpu_reference_validation": true
+  },
+  "systems": [
+    {
+      "host": "rtx4070ti-super",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "driver": "591.86",
+      "active_gpu_tpcs": null,
+      "raw_output_sha256": "C92610C3585FF2868A23A71D30BFB537322A97CBFA76C3BF16C7230508736C68",
+      "results": [
+        {"selectivity_percent":0,"wall_ms":0.791,"gpu_elapsed_ms":0.601,"dispatch_ms":0.575,"scan_ms":0.499,"scatter_ms":0.075,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":0.829,"gpu_elapsed_ms":0.653,"dispatch_ms":0.627,"scan_ms":0.500,"scatter_ms":0.127,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":0.892,"gpu_elapsed_ms":0.714,"dispatch_ms":0.689,"scan_ms":0.500,"scatter_ms":0.188,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":0.965,"gpu_elapsed_ms":0.778,"dispatch_ms":0.752,"scan_ms":0.500,"scatter_ms":0.253,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":0.992,"gpu_elapsed_ms":0.783,"dispatch_ms":0.757,"scan_ms":0.500,"scatter_ms":0.257,"validated_output_items":10000000}
+      ]
+    },
+    {
+      "host": "dopey",
+      "gpu": "NVIDIA Tegra Orin",
+      "driver": "595.78",
+      "active_gpu_tpcs": 8,
+      "raw_output_sha256": "89F0D9A75E126A71850C837F7B1C545EFC3CEE48E2C609B76CC8D5A137788E0D",
+      "results": [
+        {"selectivity_percent":0,"wall_ms":6.937,"gpu_elapsed_ms":5.023,"dispatch_ms":4.986,"scan_ms":4.059,"scatter_ms":0.926,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":7.347,"gpu_elapsed_ms":5.540,"dispatch_ms":5.503,"scan_ms":4.057,"scatter_ms":1.446,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":7.601,"gpu_elapsed_ms":5.789,"dispatch_ms":5.751,"scan_ms":4.057,"scatter_ms":1.694,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":7.794,"gpu_elapsed_ms":5.997,"dispatch_ms":5.960,"scan_ms":4.059,"scatter_ms":1.902,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":7.823,"gpu_elapsed_ms":6.015,"dispatch_ms":5.977,"scan_ms":4.058,"scatter_ms":1.920,"validated_output_items":10000000}
+      ]
+    },
+    {
+      "host": "grumpy",
+      "gpu": "NVIDIA Tegra Orin",
+      "driver": "595.78",
+      "active_gpu_tpcs": 4,
+      "raw_output_sha256": "C4CF35A9109E16DC57B4A6BD86326DF5F45A9FE34F26C3A9177DAEB8646B0E64",
+      "results": [
+        {"selectivity_percent":0,"wall_ms":9.650,"gpu_elapsed_ms":7.846,"dispatch_ms":7.809,"scan_ms":6.885,"scatter_ms":0.924,"validated_output_items":0},
+        {"selectivity_percent":10,"wall_ms":10.165,"gpu_elapsed_ms":8.371,"dispatch_ms":8.334,"scan_ms":6.884,"scatter_ms":1.452,"validated_output_items":1000000},
+        {"selectivity_percent":50,"wall_ms":10.428,"gpu_elapsed_ms":8.627,"dispatch_ms":8.590,"scan_ms":6.882,"scatter_ms":1.709,"validated_output_items":5000000},
+        {"selectivity_percent":90,"wall_ms":10.684,"gpu_elapsed_ms":8.872,"dispatch_ms":8.834,"scan_ms":6.884,"scatter_ms":1.949,"validated_output_items":9000000},
+        {"selectivity_percent":100,"wall_ms":10.685,"gpu_elapsed_ms":8.881,"dispatch_ms":8.844,"scan_ms":6.884,"scatter_ms":1.960,"validated_output_items":10000000}
+      ]
+    }
+  ],
+  "correctness": {
+    "tests_per_host": 46,
+    "compaction_tests": 7,
+    "validated_10m_selectivities_per_host": 5,
+    "rtx_two_dimensional_dispatch_validation_items": 20000000
+  },
+  "decision": {
+    "publish_u32_compaction": true,
+    "next": ["structured payloads", "selection predicates"]
+  }
+}
