@@ -11,6 +11,9 @@ All notable changes to `wgpu-primitives` are documented here.
   and GPU timestamp profiling APIs.
 - Stable `KeyValue` stream compaction with matching slice, resident-buffer,
   command-recording, resident-count, and GPU timestamp profiling APIs.
+- Reusable GPU predicate masks for `u32` values and either field of `KeyValue`
+  records, with slice, immediate GPU submission, command-recording, and GPU
+  timestamp profiling APIs.
 - Opt-in `*_with_key_bits` sort APIs for host slices, immediate GPU submission,
   command recording, and GPU timestamp profiling.
 - Host-slice validation for declared key widths, including explicit errors for
@@ -24,6 +27,12 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Performance
 
+- On an RTX 4070 Ti SUPER, resident predicate-mask wall time measured 0.218 ms
+  for 10 million values and 1.379 ms for 100 million values, 4.80x and 17.28x
+  faster than the scalar CPU mask. Isolated GPU timestamps measured 0.127 ms
+  and 1.268 ms. CPU-reference validation passed at both sizes on 8-TPC and
+  4-TPC Jetson Orin Nano systems; their predicate times were effectively tied
+  at 100 million items.
 - At 10 million items and 50% selectivity, resident compaction measured
   0.892 ms on an RTX 4070 Ti SUPER, 7.601 ms on an 8-TPC Jetson Orin Nano,
   and 10.428 ms on a 4-TPC Jetson Orin Nano.

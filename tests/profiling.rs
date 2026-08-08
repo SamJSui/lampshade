@@ -1,7 +1,10 @@
 mod support;
 
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Compactor, Error, KeyValue, KeyValueSorter, Scanner, Sorter};
+use wgpu_primitives::{
+    Compactor, Error, KeyValue, KeyValueField, KeyValueSorter, MaskGenerator, Scanner, Sorter,
+    U32Predicate,
+};
 
 fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
     context
@@ -102,6 +105,77 @@ fn cpu_compact(input: &[u32], mask: &[u32]) -> Vec<u32> {
         .zip(mask)
         .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
         .collect()
+}
+
+#[tokio::test]
+async fn profiles_predicate_masks() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping predicate profile test because the adapter lacks timestamp queries");
+        return;
+    }
+
+    let input = support::random_u32(8_193, 0x50ED_1CA7);
+    let gpu_input = storage_buffer(&context.device, "Profile Predicate Input", &input);
+    let gpu_mask = output_buffer(
+        &context.device,
+        "Profile Predicate Mask",
+        MaskGenerator::mask_buffer_size(input.len() as u32).expect("mask size overflow"),
+    );
+    let generator = MaskGenerator::from_context(&context);
+    let predicate = U32Predicate::GreaterThanOrEqual(1_u32 << 31);
+    let profile = generator
+        .profile_mask_gpu_to_gpu(&gpu_input, &gpu_mask, input.len() as u32, predicate)
+        .await
+        .expect("profiled predicate mask failed");
+    let expected: Vec<_> = input
+        .iter()
+        .map(|&value| u32::from(value >= 1_u32 << 31))
+        .collect();
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_mask, input.len()).await,
+        expected
+    );
+    assert_eq!(profile.spans.len(), 1);
+    assert_eq!(profile.spans[0].label, "predicate.mask");
+    assert!(profile.gpu_elapsed >= profile.dispatch_time);
+
+    let pairs: Vec<_> = input
+        .iter()
+        .take(257)
+        .enumerate()
+        .map(|(index, &value)| KeyValue::new(index as u32, value))
+        .collect();
+    let pair_input = storage_buffer(&context.device, "Profile Pair Predicate Input", &pairs);
+    let pair_mask = output_buffer(
+        &context.device,
+        "Profile Pair Predicate Mask",
+        MaskGenerator::mask_buffer_size(pairs.len() as u32).expect("mask size overflow"),
+    );
+    let pair_profile = generator
+        .profile_key_value_mask_gpu_to_gpu(
+            &pair_input,
+            &pair_mask,
+            pairs.len() as u32,
+            KeyValueField::Value,
+            predicate,
+        )
+        .await
+        .expect("profiled key-value predicate mask failed");
+    let expected: Vec<_> = pairs
+        .iter()
+        .map(|item| u32::from(item.value >= 1_u32 << 31))
+        .collect();
+
+    assert_eq!(
+        support::read_u32(&context, &pair_mask, pairs.len()).await,
+        expected
+    );
+    assert_eq!(pair_profile.spans.len(), 1);
+    assert_eq!(pair_profile.spans[0].label, "predicate.mask");
 }
 
 #[tokio::test]
@@ -330,6 +404,13 @@ async fn trivial_profiles_complete_without_timestamp_dispatches() -> Result<(), 
     let mut scanner = Scanner::from_context(&context);
     let profile = scanner.profile_scan_gpu_to_gpu(&buffer, &buffer, 0).await?;
 
+    assert!(profile.spans.is_empty());
+    assert!(profile.gpu_elapsed.is_zero());
+
+    let generator = MaskGenerator::from_context(&context);
+    let profile = generator
+        .profile_mask_gpu_to_gpu(&buffer, &buffer, 0, U32Predicate::Equal(0))
+        .await?;
     assert!(profile.spans.is_empty());
     assert!(profile.gpu_elapsed.is_zero());
 

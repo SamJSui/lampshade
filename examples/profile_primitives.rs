@@ -3,13 +3,15 @@ use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
-    Compactor, Context, GpuProfile, KeyValue, KeyValueCompactor, KeyValueSorter, Scanner, Sorter,
+    Compactor, Context, GpuProfile, KeyValue, KeyValueCompactor, KeyValueSorter, MaskGenerator,
+    Scanner, Sorter, U32Predicate,
 };
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 6] = [
+const DEFAULT_CASES: [ProfileCase; 7] = [
+    ProfileCase::Predicate(50),
     ProfileCase::Scan,
     ProfileCase::Compact(50),
     ProfileCase::KeyValueCompact(50),
@@ -20,6 +22,7 @@ const DEFAULT_CASES: [ProfileCase; 6] = [
 
 #[derive(Clone, Copy)]
 enum ProfileCase {
+    Predicate(u32),
     Scan,
     Compact(u32),
     KeyValueCompact(u32),
@@ -68,6 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for item_count in sizes {
         for case in &cases {
             match case {
+                ProfileCase::Predicate(selectivity) => {
+                    profile_predicate(&context, item_count, *selectivity, &config).await?
+                }
                 ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
                 ProfileCase::Compact(selectivity) => {
                     profile_compaction(&context, item_count, *selectivity, &config).await?
@@ -87,6 +93,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+async fn profile_predicate(
+    context: &Context,
+    item_count: usize,
+    selectivity: u32,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let input = deterministic_keys(item_count);
+    let predicate = predicate_for_selectivity(selectivity);
+    let gpu_input = create_input(context, "Profile Predicate Input", &input);
+    let gpu_mask = create_output(
+        context,
+        "Profile Predicate Mask",
+        MaskGenerator::mask_buffer_size(item_count as u32)?,
+    );
+    let generator = MaskGenerator::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || generator.mask_gpu_to_gpu(&gpu_input, &gpu_mask, item_count as u32, predicate),
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || generator.mask_gpu_to_gpu(&gpu_input, &gpu_mask, item_count as u32, predicate),
+        context,
+    )?;
+    let _ = generator
+        .profile_mask_gpu_to_gpu(&gpu_input, &gpu_mask, item_count as u32, predicate)
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            generator
+                .profile_mask_gpu_to_gpu(&gpu_input, &gpu_mask, item_count as u32, predicate)
+                .await?,
+        );
+    }
+    let primitive = format!("predicate_{selectivity}");
+    report(&primitive, item_count, wall, &profiles);
+    if profile_validation_enabled() {
+        let actual = generator.mask(&input, predicate).await?;
+        let expected: Vec<_> = input
+            .iter()
+            .map(|&value| u32::from(predicate_matches(value, predicate)))
+            .collect();
+        if actual != expected {
+            return Err(format!("{primitive} validation failed").into());
+        }
+        let selected = actual.iter().map(|&flag| flag as usize).sum::<usize>();
+        println!("validation,{primitive},{item_count},passed,{selected}");
+    }
     Ok(())
 }
 
@@ -515,7 +575,9 @@ fn report(primitive: &str, item_count: usize, wall: Duration, profiles: &[GpuPro
 }
 
 fn stage(label: &str) -> &'static str {
-    if label.ends_with(".histogram") {
+    if label == "predicate.mask" {
+        "predicate"
+    } else if label.ends_with(".histogram") {
         "histogram"
     } else if label.ends_with(".prefix") {
         "prefix"
@@ -558,6 +620,26 @@ fn deterministic_keys(item_count: usize) -> Vec<u32> {
         .collect()
 }
 
+fn predicate_for_selectivity(selectivity: u32) -> U32Predicate {
+    match selectivity {
+        0 => U32Predicate::LessThan(0),
+        100 => U32Predicate::LessThanOrEqual(u32::MAX),
+        _ => U32Predicate::LessThan(((1_u64 << 32) * u64::from(selectivity) / 100) as u32),
+    }
+}
+
+fn predicate_matches(value: u32, predicate: U32Predicate) -> bool {
+    match predicate {
+        U32Predicate::Equal(target) => value == target,
+        U32Predicate::NotEqual(target) => value != target,
+        U32Predicate::LessThan(target) => value < target,
+        U32Predicate::LessThanOrEqual(target) => value <= target,
+        U32Predicate::GreaterThan(target) => value > target,
+        U32Predicate::GreaterThanOrEqual(target) => value >= target,
+        U32Predicate::BetweenInclusive { min, max } => value >= min && value <= max,
+    }
+}
+
 fn create_input<T: bytemuck::Pod>(
     context: &Context,
     label: &'static str,
@@ -576,7 +658,9 @@ fn create_output(context: &Context, label: &'static str, size: u64) -> wgpu::Buf
     context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     })
 }
@@ -613,6 +697,17 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
                 "key_sort" => Ok(ProfileCase::KeySort),
                 "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),
                 "key_value_full_width" => Ok(ProfileCase::KeyValueFullWidth),
+                value if value.starts_with("predicate_") => {
+                    let selectivity: u32 = value["predicate_".len()..]
+                        .parse()
+                        .map_err(|error| format!("invalid predicate selectivity: {error}"))?;
+                    if selectivity > 100 {
+                        return Err(format!(
+                            "predicate selectivity must be at most 100, got {selectivity}"
+                        ));
+                    }
+                    Ok(ProfileCase::Predicate(selectivity))
+                }
                 value if value.starts_with("key_value_compact_") => {
                     let selectivity: u32 = value["key_value_compact_".len()..]
                         .parse()
