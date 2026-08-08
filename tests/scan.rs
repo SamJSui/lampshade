@@ -94,6 +94,34 @@ async fn exclusive_scan_matches_cpu_across_boundaries_and_patterns() {
 }
 
 #[tokio::test]
+async fn exclusive_scan_matches_cpu_across_multiple_hierarchy_levels() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut scanner = Scanner::from_context(&context);
+
+    // The high-end path scans 2,048 items per workgroup. One item beyond
+    // 2,048 squared forces a third hierarchy level in the scratch buffer.
+    let input = scan_input(2, 4_194_305);
+    let expected = cpu_exclusive_scan(&input);
+    let actual = scanner
+        .scan_exclusive(&input)
+        .await
+        .expect("GPU exclusive scan failed");
+
+    if let Some(index) = actual
+        .iter()
+        .zip(&expected)
+        .position(|(actual, expected)| actual != expected)
+    {
+        panic!(
+            "exclusive scan mismatch at index {index}: expected {}, got {}",
+            expected[index], actual[index]
+        );
+    }
+}
+
+#[tokio::test]
 async fn scan_uses_the_explicit_logical_length() {
     let Some(context) = support::gpu_context().await else {
         return;

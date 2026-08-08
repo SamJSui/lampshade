@@ -120,6 +120,13 @@ impl ScanPipeline {
         let (data_buf, data_off) = dispatch.data;
         let (aux_buf, aux_off) = dispatch.auxiliary;
 
+        let items_per_block = self.vt * self.block_size;
+        let workgroups = common::math::calc_groups(dispatch.num_items, items_per_block);
+        let data_size = wgpu::BufferSize::new(u64::from(dispatch.num_items) * 4)
+            .expect("scan dispatch data range is non-empty");
+        let auxiliary_size = wgpu::BufferSize::new(u64::from(workgroups) * 4)
+            .expect("scan dispatch auxiliary range is non-empty");
+
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Scan Dispatch BG"),
             layout: &self.bind_group_layout,
@@ -129,7 +136,7 @@ impl ScanPipeline {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: data_buf,
                         offset: data_off,
-                        size: None,
+                        size: Some(data_size),
                     }),
                 },
                 wgpu::BindGroupEntry {
@@ -137,14 +144,11 @@ impl ScanPipeline {
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: aux_buf,
                         offset: aux_off,
-                        size: None,
+                        size: Some(auxiliary_size),
                     }),
                 },
             ],
         });
-
-        let items_per_block = self.vt * self.block_size;
-        let workgroups = common::math::calc_groups(dispatch.num_items, items_per_block);
 
         let max_dispatch = 65535;
         let x = if workgroups > max_dispatch {
