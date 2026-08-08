@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "source": {
+    "base_revision": "92479c2dda8e07ca5c4e703a30292e05ec9749f1",
+    "measured_package_sha256": "07CD015B4A9B880017C5655EFE28E4F1F88874E32B39CA562F9EF2D20EB36769",
+    "post_measurement_change": "Benchmark report, machine-readable snapshot, README, changelog, and Rustdoc text only; implementation and shader unchanged."
+  },
+  "workload": {
+    "resident": true,
+    "predicate": "u32 less than 2147483648",
+    "input_seed": "0x50ED1CA7",
+    "approximate_selectivity_percent": 50,
+    "excluded": ["allocation", "upload", "readback"]
+  },
+  "timestamp_method": {
+    "samples": 5,
+    "warmup_ms": 2000,
+    "cpu_reference_validation": true
+  },
+  "criterion_method": {
+    "samples": 10,
+    "warmup_ms": 3000,
+    "measurement_ms": 15000,
+    "timed_region": ["command_encoding", "submission", "gpu_execution", "device_wait"]
+  },
+  "systems": [
+    {
+      "id": "rtx",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "backend": "Vulkan",
+      "device_type": "DiscreteGpu",
+      "driver": "NVIDIA",
+      "driver_info": "591.86"
+    },
+    {
+      "id": "dopey",
+      "gpu": "NVIDIA Tegra Orin (nvgpu)",
+      "active_gpu_tpcs": 8,
+      "power_mode": "MAXN_SUPER",
+      "clocks": "jetson_clocks pinned",
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "NVIDIA",
+      "driver_info": "595.78"
+    },
+    {
+      "id": "grumpy",
+      "gpu": "NVIDIA Tegra Orin (nvgpu)",
+      "active_gpu_tpcs": 4,
+      "power_mode": "MAXN_SUPER",
+      "clocks": "jetson_clocks pinned",
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "NVIDIA",
+      "driver_info": "595.78"
+    }
+  ],
+  "timestamp_results": [
+    {"system": "rtx", "items": 10000000, "resident_wall_ms": 0.220, "gpu_elapsed_ms": 0.127, "selected": 5001643},
+    {"system": "rtx", "items": 100000000, "resident_wall_ms": 1.368, "gpu_elapsed_ms": 1.268, "selected": 49992112},
+    {"system": "dopey", "items": 10000000, "resident_wall_ms": 1.286, "gpu_elapsed_ms": 1.180, "selected": 5001643},
+    {"system": "dopey", "items": 100000000, "resident_wall_ms": 16.522, "gpu_elapsed_ms": 16.422, "selected": 49992112},
+    {"system": "grumpy", "items": 10000000, "resident_wall_ms": 1.331, "gpu_elapsed_ms": 1.220, "selected": 5001643},
+    {"system": "grumpy", "items": 100000000, "resident_wall_ms": 16.489, "gpu_elapsed_ms": 16.373, "selected": 49992112}
+  ],
+  "rtx_criterion_results": [
+    {
+      "items": 10000000,
+      "cpu_mask_ms": 1.0447,
+      "cpu_mask_range_ms": [1.0403, 1.0486],
+      "gpu_mask_ms": 0.21781,
+      "gpu_mask_range_ms": [0.21736, 0.21829],
+      "gpu_mask_speedup": 4.80,
+      "gpu_mask_billion_items_per_second": 45.911,
+      "gpu_mask_then_compact_ms": 1.1236,
+      "gpu_mask_then_compact_range_ms": [1.1230, 1.1243]
+    },
+    {
+      "items": 100000000,
+      "cpu_mask_ms": 23.833,
+      "cpu_mask_range_ms": [23.728, 23.893],
+      "gpu_mask_ms": 1.3791,
+      "gpu_mask_range_ms": [1.3780, 1.3801],
+      "gpu_mask_speedup": 17.28,
+      "gpu_mask_billion_items_per_second": 72.511,
+      "gpu_mask_then_compact_ms": 9.6829,
+      "gpu_mask_then_compact_range_ms": [9.6716, 9.6877]
+    }
+  ],
+  "composition_controls": [
+    {"system": "rtx", "items": 10000000, "compact_ms": 0.93734, "predicate_then_compact_ms": 1.1236, "difference_ms": 0.18626},
+    {"system": "dopey", "items": 10000000, "compact_ms": 7.3325, "predicate_then_compact_ms": 8.8999, "difference_ms": 1.5674},
+    {"system": "grumpy", "items": 10000000, "compact_ms": 10.320, "predicate_then_compact_ms": 11.805, "difference_ms": 1.485}
+  ],
+  "correctness": {
+    "cpu_reference_predicate_variants": 7,
+    "workgroup_boundary_sizes": [255, 256, 257],
+    "key_value_fields": ["key", "value"],
+    "single_encoder_composition": true,
+    "multiple_predicates_per_submission": true,
+    "buffer_contract_tests": true,
+    "validated_items_per_physical_system": [10000000, 100000000]
+  },
+  "portability": {
+    "observed_issue": "short-lived predicate bind groups produced stale bindings on the 4-TPC Jetson Vulkan path",
+    "resolution": "CommandEncoder completion callbacks retain bind groups and parameter buffers until GPU completion",
+    "grumpy_repeated_runs": 5,
+    "predicate_tests_per_run": 6
+  }
+}
