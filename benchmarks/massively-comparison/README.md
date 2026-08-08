@@ -57,6 +57,9 @@ Both scripts write machine-readable output to `results/latest.json` by default. 
 individual workload failures (including out-of-memory failures) and continues the remaining
 matrix; the POSIX runner currently fails fast.
 
-The first three-GPU result and the 100M scan correctness finding are published in the
+The first three-GPU result and the original 100M scan correctness finding are published in the
 [2026-08-08 report](../2026-08-08-massively-comparison.md) with a compact
 [machine-readable snapshot](../2026-08-08-massively-comparison.json).
+The exact-range fix and the now-valid 100M scan and compaction results are in the
+[fix follow-up](../2026-08-08-scan-scratch-binding-fix.md) and its compact
+[machine-readable snapshot](../2026-08-08-scan-scratch-binding-fix.json).

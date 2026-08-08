@@ -310,8 +310,12 @@ ranges from 3.82x at 1M on Jetson to 11.09x at 100M on RTX, while the explicit
 compaction are 1.69x and 1.54x faster on the 4-TPC Jetson, identifying the
 portable hierarchical scan as the next measured performance target. The same
 harness exposed a scheduling-sensitive 100M scratch-binding race in scan and
-scan-derived compaction; those two 100M comparisons are withheld pending a
-correctness fix and rerun.
+scan-derived compaction. The
+[exact-range fix follow-up](benchmarks/2026-08-08-scan-scratch-binding-fix.md)
+closes that correctness gap on RTX and both Jetsons without a 10M regression.
+The now-valid 100M results show Massively ahead on scan and compaction, most
+strongly on the 4-TPC Jetson, so the corrected portable hierarchy remains the
+next measured performance target.
 
 ## GPU profiling
 
@@ -345,23 +349,21 @@ Version 0.4 adds per-dispatch GPU timestamp profiling, a measured NVIDIA Vulkan
 subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 `wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano.
 Reusable predicate masks and the pinned Massively comparison complete the first
-post-0.4 evidence pass. The remaining work
-is ordered by measured impact:
+post-0.4 evidence pass. Exact hierarchical scan binding ranges, a three-level
+regression, and validated 100M scan-derived results close the first correctness
+item. The remaining work is ordered by measured impact:
 
-1. **Fix hierarchical scan scratch ranges:** bind every scan level to its exact
-   logical byte range, add a multi-level regression, and rerun 100M scan and
-   scan-derived compaction before publishing those comparisons.
-2. **Improve integrated scan performance:** profile the corrected portable scan
-   on the 4-TPC Jetson, where Massively leads by 1.69x at 10M; carry any win into
-   compaction without regressing RTX.
-3. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
-4. **Improve portability:** build on the explicit non-subgroup key-width path
+1. **Improve integrated scan performance:** profile the corrected portable scan
+   on the 4-TPC Jetson, where Massively leads by 1.69x at 10M and 2.03x at 100M;
+   carry any win into compaction without regressing RTX.
+2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
+3. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
    not already known by the application.
-5. **Extend derived primitives from evidence:** use real workloads and predicate
+4. **Extend derived primitives from evidence:** use real workloads and predicate
    benchmarks to decide whether logical composition or fused predicate-compaction
    kernels justify their API and maintenance cost.
-6. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
+5. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 

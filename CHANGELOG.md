@@ -24,6 +24,9 @@ All notable changes to `wgpu-primitives` are documented here.
 - Portable and wide radix paths now record only the passes required by a
   declared key width and route both odd and even pass counts to the caller's
   output buffer. Existing APIs remain full-width by default.
+- Hierarchical scan dispatches bind exact logical data and auxiliary ranges,
+  preventing deeper scratch levels from overlapping. A regression now covers
+  the first three-level high-end hierarchy size.
 
 ### Performance
 

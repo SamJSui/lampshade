@@ -119,6 +119,12 @@ cost; it should not be interpreted as a kernel-only radix comparison.
 
 ## 100M scan correctness finding
 
+> **Resolved:** exact scratch binding ranges and a multi-level regression landed in
+> fix revision `f9b4982`. All 10M and 100M scan/compaction validations now pass on
+> RTX, dopey, and grumpy. The previously withheld results are published in the
+> [fix follow-up](2026-08-08-scan-scratch-binding-fix.md). The text below is retained
+> as the original discovery record.
+
 The RTX comparison deliberately does not publish a 100M scan or compaction speedup.
 All three process-isolated `wgpu-primitives` scan validations first diverged at item
 96,471,040. All three compaction validations returned too few selected items because

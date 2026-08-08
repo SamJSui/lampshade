@@ -69,5 +69,10 @@
     "expected_selected": 50000000,
     "observed_selected": [49336704, 49336704, 49005056],
     "suspected_root_cause": "Hierarchical scan data and auxiliary writable bindings use size None on offset views into the same scratch buffer, allowing overlap and rounded-thread writes into the next level."
+  },
+  "resolution": {
+    "fix_revision": "f9b4982e4afadced2d773e1c696f2763757a7fe8",
+    "status": "fixed and validated at 10M and 100M on RTX, dopey, and grumpy",
+    "follow_up": "2026-08-08-scan-scratch-binding-fix.json"
   }
 }
