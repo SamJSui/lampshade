@@ -1,33 +1,37 @@
-use crate::{Error, context::Context, profiling::GpuProfile};
+use crate::{Error, KeyValue, context::Context, profiling::GpuProfile};
 
 use super::{core::CompactCore, pipeline::CompactItemKind};
 
-/// Stably packs selected `u32` values into a contiguous output buffer.
+/// Stably packs selected [`KeyValue`] records into a contiguous output buffer.
 ///
-/// Masks contain one `u32` per input item and must contain only `0` (discard)
-/// or `1` (keep). GPU-buffer entry points trust this contract to avoid a
-/// validation pass or readback.
-pub struct Compactor {
+/// Both fields move together, and selected records retain their original order.
+/// Masks contain one `u32` per record and must contain only `0` (discard) or
+/// `1` (keep). GPU-buffer entry points trust the mask contents.
+pub struct KeyValueCompactor {
     core: CompactCore,
 }
 
-impl Compactor {
-    /// Creates a compactor that submits work through an existing device and queue.
+impl KeyValueCompactor {
+    /// Creates a key-value compactor for an existing device and queue.
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
-            core: CompactCore::new(device, queue, CompactItemKind::Value),
+            core: CompactCore::new(device, queue, CompactItemKind::KeyValue),
         }
     }
 
-    /// Creates a compactor from the crate's optional convenience context.
+    /// Creates a key-value compactor from the crate's convenience context.
     pub fn from_context(context: &Context) -> Self {
         Self {
-            core: CompactCore::from_context(context, CompactItemKind::Value),
+            core: CompactCore::from_context(context, CompactItemKind::KeyValue),
         }
     }
 
-    /// Uploads values and a mask, compacts them on the GPU, and downloads the result.
-    pub async fn compact(&mut self, input: &[u32], mask: &[u32]) -> Result<Vec<u32>, Error> {
+    /// Uploads records and a mask, compacts them on the GPU, and downloads the result.
+    pub async fn compact(
+        &mut self,
+        input: &[KeyValue],
+        mask: &[u32],
+    ) -> Result<Vec<KeyValue>, Error> {
         self.core.compact_slice(input, mask).await
     }
 
@@ -35,8 +39,7 @@ impl Compactor {
     ///
     /// `input` and `output` require `STORAGE`; `mask` requires `STORAGE |
     /// COPY_SRC`; and the four-byte `output_count` requires `STORAGE |
-    /// COPY_DST`. `output` must have capacity for `num_items` values. The input,
-    /// mask, output, and count buffers remain GPU-resident.
+    /// COPY_DST`. `output` must have capacity for `num_items` eight-byte records.
     pub fn compact_gpu_to_gpu(
         &mut self,
         input: &wgpu::Buffer,
@@ -49,7 +52,7 @@ impl Compactor {
             .compact_gpu_to_gpu(input, mask, output, output_count, num_items)
     }
 
-    /// Records stable stream compaction without submitting or waiting.
+    /// Records stable key-value compaction without submitting or waiting.
     pub fn record_compact(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -63,7 +66,7 @@ impl Compactor {
             .record_compact(encoder, input, mask, output, output_count, num_items)
     }
 
-    /// Profiles GPU-buffer compaction using hardware timestamp queries.
+    /// Profiles GPU-buffer key-value compaction using hardware timestamp queries.
     pub async fn profile_compact_gpu_to_gpu(
         &mut self,
         input: &wgpu::Buffer,

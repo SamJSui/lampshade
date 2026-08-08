@@ -7,7 +7,7 @@ pub mod profiling;
 pub mod scan;
 pub mod sort;
 
-pub use compact::Compactor;
+pub use compact::{Compactor, KeyValueCompactor};
 pub use context::Context;
 pub use error::Error;
 pub use profiling::{GpuProfile, GpuTimestampSpan};

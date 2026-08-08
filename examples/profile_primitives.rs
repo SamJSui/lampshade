@@ -2,14 +2,17 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Compactor, Context, GpuProfile, KeyValue, KeyValueSorter, Scanner, Sorter};
+use wgpu_primitives::{
+    Compactor, Context, GpuProfile, KeyValue, KeyValueCompactor, KeyValueSorter, Scanner, Sorter,
+};
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 5] = [
+const DEFAULT_CASES: [ProfileCase; 6] = [
     ProfileCase::Scan,
     ProfileCase::Compact(50),
+    ProfileCase::KeyValueCompact(50),
     ProfileCase::KeySort,
     ProfileCase::KeyValueBounded16,
     ProfileCase::KeyValueFullWidth,
@@ -19,6 +22,7 @@ const DEFAULT_CASES: [ProfileCase; 5] = [
 enum ProfileCase {
     Scan,
     Compact(u32),
+    KeyValueCompact(u32),
     KeySort,
     KeyValueBounded16,
     KeyValueFullWidth,
@@ -67,6 +71,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
                 ProfileCase::Compact(selectivity) => {
                     profile_compaction(&context, item_count, *selectivity, &config).await?
+                }
+                ProfileCase::KeyValueCompact(selectivity) => {
+                    profile_key_value_compaction(&context, item_count, *selectivity, &config)
+                        .await?
                 }
                 ProfileCase::KeySort => profile_key_sort(&context, item_count, &config).await?,
                 ProfileCase::KeyValueBounded16 => {
@@ -159,6 +167,108 @@ async fn profile_compaction(
             .iter()
             .zip(&mask)
             .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
+            .collect();
+        if actual != expected {
+            return Err(format!(
+                "{primitive} validation failed: expected {} items, got {}",
+                expected.len(),
+                actual.len()
+            )
+            .into());
+        }
+        println!(
+            "validation,{primitive},{item_count},passed,{}",
+            actual.len()
+        );
+    }
+    Ok(())
+}
+
+async fn profile_key_value_compaction(
+    context: &Context,
+    item_count: usize,
+    selectivity: u32,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let input: Vec<_> = deterministic_keys(item_count)
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| KeyValue::new(key, index as u32))
+        .collect();
+    let mask: Vec<u32> = (0..item_count)
+        .map(|index| u32::from(index % 100 < selectivity as usize))
+        .collect();
+    let gpu_input = create_input(context, "Profile Key-Value Compaction Input", &input);
+    let gpu_mask = create_input(context, "Profile Key-Value Compaction Mask", &mask);
+    let gpu_output = create_output(
+        context,
+        "Profile Key-Value Compaction Output",
+        gpu_input.size(),
+    );
+    let gpu_count = create_output(
+        context,
+        "Profile Key-Value Compaction Output Count",
+        size_of::<u32>() as u64,
+    );
+    let mut compactor = KeyValueCompactor::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || {
+            compactor.compact_gpu_to_gpu(
+                &gpu_input,
+                &gpu_mask,
+                &gpu_output,
+                &gpu_count,
+                item_count as u32,
+            )
+        },
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || {
+            compactor.compact_gpu_to_gpu(
+                &gpu_input,
+                &gpu_mask,
+                &gpu_output,
+                &gpu_count,
+                item_count as u32,
+            )
+        },
+        context,
+    )?;
+    let _ = compactor
+        .profile_compact_gpu_to_gpu(
+            &gpu_input,
+            &gpu_mask,
+            &gpu_output,
+            &gpu_count,
+            item_count as u32,
+        )
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            compactor
+                .profile_compact_gpu_to_gpu(
+                    &gpu_input,
+                    &gpu_mask,
+                    &gpu_output,
+                    &gpu_count,
+                    item_count as u32,
+                )
+                .await?,
+        );
+    }
+    let primitive = format!("key_value_compact_{selectivity}");
+    report(&primitive, item_count, wall, &profiles);
+    if profile_validation_enabled() {
+        let actual = compactor.compact(&input, &mask).await?;
+        let expected: Vec<_> = input
+            .iter()
+            .zip(&mask)
+            .filter_map(|(&item, &keep)| (keep == 1).then_some(item))
             .collect();
         if actual != expected {
             return Err(format!(
@@ -503,6 +613,19 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
                 "key_sort" => Ok(ProfileCase::KeySort),
                 "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),
                 "key_value_full_width" => Ok(ProfileCase::KeyValueFullWidth),
+                value if value.starts_with("key_value_compact_") => {
+                    let selectivity: u32 = value["key_value_compact_".len()..]
+                        .parse()
+                        .map_err(|error| {
+                            format!("invalid key-value compaction selectivity: {error}")
+                        })?;
+                    if selectivity > 100 {
+                        return Err(format!(
+                            "key-value compaction selectivity must be at most 100, got {selectivity}"
+                        ));
+                    }
+                    Ok(ProfileCase::KeyValueCompact(selectivity))
+                }
                 value if value.starts_with("compact_") => {
                     let selectivity: u32 = value["compact_".len()..]
                         .parse()

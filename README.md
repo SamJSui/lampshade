@@ -32,7 +32,7 @@ speedup). The remaining headline rows are from version 0.3.
 ## Features
 
 - Inclusive and exclusive `u32` prefix scan.
-- Stable `u32` stream compaction from caller-provided 0/1 masks.
+- Stable `u32` and `KeyValue` stream compaction from caller-provided 0/1 masks.
 - Stable 2-bit LSD radix sort for `u32` values.
 - Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
 - Opt-in significant-key-bit bounds that eliminate unnecessary portable and wide radix passes.
@@ -91,6 +91,27 @@ async fn main() -> Result<(), wgpu_primitives::Error> {
             KeyValue::new(2, 30),
         ]
     );
+    Ok(())
+}
+```
+
+The same record type can be filtered without separating keys from values:
+
+```rust
+use wgpu_primitives::{Context, KeyValue, KeyValueCompactor};
+
+#[tokio::main]
+async fn main() -> Result<(), wgpu_primitives::Error> {
+    let context = Context::init().await?;
+    let mut compactor = KeyValueCompactor::from_context(&context);
+    let records = [
+        KeyValue::new(2, 10),
+        KeyValue::new(1, 20),
+        KeyValue::new(2, 30),
+    ];
+
+    let selected = compactor.compact(&records, &[1, 0, 1]).await?;
+    assert_eq!(selected, [KeyValue::new(2, 10), KeyValue::new(2, 30)]);
     Ok(())
 }
 ```
@@ -155,7 +176,7 @@ wgpu-primitives = "0.4"
 The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
 
 Stream compaction exclusively scans a caller-provided 0/1 mask into stable
-destination indices, scatters selected `u32` values in their original order,
+destination indices, scatters selected `u32` values or `KeyValue` records in their original order,
 and leaves the selected-item count in a caller-owned GPU buffer. The resident
 API performs no validation pass or readback, so GPU masks must contain only 0
 or 1; the slice convenience API validates them before upload.
@@ -223,11 +244,15 @@ The [stable stream-compaction baseline](benchmarks/2026-08-07-stream-compaction.
 validates 10 million items at five selectivities on the RTX and both Jetsons.
 At 50% kept, resident wall time is 0.892 ms, 7.601 ms, and 10.428 ms
 respectively; every workload matches a stable CPU reference.
+The [structured compaction follow-up](benchmarks/2026-08-07-key-value-compaction.md)
+adds stable eight-byte `KeyValue` records. At the same 10-million-item, 50%
+workload, it measured 0.973 ms, 7.873 ms, and 10.903 ms. Same-source `u32`
+controls remained within 0.5% of the published baseline on all three systems.
 
 ## GPU profiling
 
 Capability-gated hardware timestamp queries are available for `Scanner`,
-`Compactor`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
+`Compactor`, `KeyValueCompactor`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
 queries. Profiled calls return labeled dispatch spans, total dispatch time, and
 elapsed GPU time; the same compute passes carry stable labels for external tools
 such as NVIDIA Nsight Graphics.
@@ -243,6 +268,8 @@ Set `WGPU_PRIMITIVES_PROFILE_CASES=compact_50` to isolate stable compaction
 with a deterministic 50%-selective mask. Any percentage from `compact_0` to
 `compact_100` is accepted; set `WGPU_PRIMITIVES_PROFILE_VALIDATE=1` to compare
 the profiled workload against a stable CPU reference afterward.
+Use `key_value_compact_50` (or any percentage from 0 to 100) for structured
+record compaction.
 
 At 100M items, the baseline profile attributed 74.8% of key-value dispatch time to stable scatter. The latest bounded-key profile spends 83.6% in two scatter passes, 16.3% in the all-byte histogram, and 0.1% in prefix setup. The finalized direct comparison harness measures the specialized path at 8.605 ms.
 
@@ -253,7 +280,7 @@ subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 `wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano. The
 next work is ordered by measured impact:
 
-1. **Build derived primitives:** extend stable `u32` stream compaction to structured payloads and reusable selection predicates.
+1. **Build derived primitives:** add reusable GPU selection predicates that generate masks for the stable `u32` and `KeyValue` compaction paths.
 2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
 3. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
@@ -272,6 +299,7 @@ cargo check --examples --benches
 cargo package
 cargo bench --bench scan -- --noplot
 cargo bench --bench compact -- --noplot
+cargo bench --bench key_value_compact -- --noplot
 cargo bench --bench sort -- --noplot
 cargo bench --bench key_value_sort -- --noplot
 ```
