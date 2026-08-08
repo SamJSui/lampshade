@@ -2,13 +2,14 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, GpuProfile, KeyValue, KeyValueSorter, Scanner, Sorter};
+use wgpu_primitives::{Compactor, Context, GpuProfile, KeyValue, KeyValueSorter, Scanner, Sorter};
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 4] = [
+const DEFAULT_CASES: [ProfileCase; 5] = [
     ProfileCase::Scan,
+    ProfileCase::Compact(50),
     ProfileCase::KeySort,
     ProfileCase::KeyValueBounded16,
     ProfileCase::KeyValueFullWidth,
@@ -17,6 +18,7 @@ const DEFAULT_CASES: [ProfileCase; 4] = [
 #[derive(Clone, Copy)]
 enum ProfileCase {
     Scan,
+    Compact(u32),
     KeySort,
     KeyValueBounded16,
     KeyValueFullWidth,
@@ -63,6 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for case in &cases {
             match case {
                 ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
+                ProfileCase::Compact(selectivity) => {
+                    profile_compaction(&context, item_count, *selectivity, &config).await?
+                }
                 ProfileCase::KeySort => profile_key_sort(&context, item_count, &config).await?,
                 ProfileCase::KeyValueBounded16 => {
                     profile_key_value_sort(&context, item_count, &config, false).await?
@@ -74,6 +79,100 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+async fn profile_compaction(
+    context: &Context,
+    item_count: usize,
+    selectivity: u32,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let input = deterministic_keys(item_count);
+    let mask: Vec<u32> = (0..item_count)
+        .map(|index| u32::from(index % 100 < selectivity as usize))
+        .collect();
+    let gpu_input = create_input(context, "Profile Compaction Input", &input);
+    let gpu_mask = create_input(context, "Profile Compaction Mask", &mask);
+    let gpu_output = create_output(context, "Profile Compaction Output", gpu_input.size());
+    let gpu_count = create_output(
+        context,
+        "Profile Compaction Output Count",
+        size_of::<u32>() as u64,
+    );
+    let mut compactor = Compactor::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || {
+            compactor.compact_gpu_to_gpu(
+                &gpu_input,
+                &gpu_mask,
+                &gpu_output,
+                &gpu_count,
+                item_count as u32,
+            )
+        },
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || {
+            compactor.compact_gpu_to_gpu(
+                &gpu_input,
+                &gpu_mask,
+                &gpu_output,
+                &gpu_count,
+                item_count as u32,
+            )
+        },
+        context,
+    )?;
+    let _ = compactor
+        .profile_compact_gpu_to_gpu(
+            &gpu_input,
+            &gpu_mask,
+            &gpu_output,
+            &gpu_count,
+            item_count as u32,
+        )
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            compactor
+                .profile_compact_gpu_to_gpu(
+                    &gpu_input,
+                    &gpu_mask,
+                    &gpu_output,
+                    &gpu_count,
+                    item_count as u32,
+                )
+                .await?,
+        );
+    }
+    let primitive = format!("compact_{selectivity}");
+    report(&primitive, item_count, wall, &profiles);
+    if profile_validation_enabled() {
+        let actual = compactor.compact(&input, &mask).await?;
+        let expected: Vec<_> = input
+            .iter()
+            .zip(&mask)
+            .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
+            .collect();
+        if actual != expected {
+            return Err(format!(
+                "{primitive} validation failed: expected {} items, got {}",
+                expected.len(),
+                actual.len()
+            )
+            .into());
+        }
+        println!(
+            "validation,{primitive},{item_count},passed,{}",
+            actual.len()
+        );
+    }
     Ok(())
 }
 
@@ -314,7 +413,9 @@ fn stage(label: &str) -> &'static str {
         "reduce"
     } else if label.ends_with(".scatter") {
         "scatter"
-    } else if label.contains(".scan.") {
+    } else if label.starts_with("compact.scan.") {
+        "scan"
+    } else if label.starts_with("radix.") && label.contains(".scan.") {
         "histogram_scan"
     } else if label.contains(".level.") {
         "scan"
@@ -395,20 +496,39 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
     let cases: Vec<_> = raw
         .to_string_lossy()
         .split(',')
-        .map(|value| match value.trim() {
-            "scan" => Ok(ProfileCase::Scan),
-            "key_sort" => Ok(ProfileCase::KeySort),
-            "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),
-            "key_value_full_width" => Ok(ProfileCase::KeyValueFullWidth),
-            value => Err(format!(
-                "unknown WGPU_PRIMITIVES_PROFILE_CASES value {value:?}"
-            )),
+        .map(|value| {
+            let value = value.trim();
+            match value {
+                "scan" => Ok(ProfileCase::Scan),
+                "key_sort" => Ok(ProfileCase::KeySort),
+                "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),
+                "key_value_full_width" => Ok(ProfileCase::KeyValueFullWidth),
+                value if value.starts_with("compact_") => {
+                    let selectivity: u32 = value["compact_".len()..]
+                        .parse()
+                        .map_err(|error| format!("invalid compaction selectivity: {error}"))?;
+                    if selectivity > 100 {
+                        return Err(format!(
+                            "compaction selectivity must be at most 100, got {selectivity}"
+                        ));
+                    }
+                    Ok(ProfileCase::Compact(selectivity))
+                }
+                value => Err(format!(
+                    "unknown WGPU_PRIMITIVES_PROFILE_CASES value {value:?}"
+                )),
+            }
         })
         .collect::<Result<_, _>>()?;
     if cases.is_empty() {
         return Err("WGPU_PRIMITIVES_PROFILE_CASES must not be empty".into());
     }
     Ok(cases)
+}
+
+fn profile_validation_enabled() -> bool {
+    std::env::var("WGPU_PRIMITIVES_PROFILE_VALIDATE")
+        .is_ok_and(|value| matches!(value.as_str(), "1" | "true" | "yes"))
 }
 
 fn profile_config() -> Result<ProfileConfig, Box<dyn std::error::Error>> {

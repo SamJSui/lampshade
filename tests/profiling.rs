@@ -1,7 +1,7 @@
 mod support;
 
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Error, KeyValue, KeyValueSorter, Scanner, Sorter};
+use wgpu_primitives::{Compactor, Error, KeyValue, KeyValueSorter, Scanner, Sorter};
 
 fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
     context
@@ -31,6 +31,77 @@ fn output_buffer(device: &wgpu::Device, label: &'static str, size: u64) -> wgpu:
             | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     })
+}
+
+#[tokio::test]
+async fn profiles_stream_compaction_scan_and_scatter() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping timestamp profile test because the adapter lacks timestamp queries");
+        return;
+    }
+
+    let input = support::random_u32(8_193, 0x0C0A_0AC7);
+    let mask: Vec<_> = input.iter().map(|value| value & 1).collect();
+    let gpu_input = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Profile Compaction Input"),
+            contents: bytemuck::cast_slice(&input),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let gpu_mask = storage_buffer(&context.device, "Profile Compaction Mask", &mask);
+    let gpu_output = output_buffer(
+        &context.device,
+        "Profile Compaction Output",
+        gpu_input.size(),
+    );
+    let gpu_count = output_buffer(&context.device, "Profile Compaction Count", 4);
+    let mut compactor = Compactor::from_context(&context);
+
+    let profile = compactor
+        .profile_compact_gpu_to_gpu(
+            &gpu_input,
+            &gpu_mask,
+            &gpu_output,
+            &gpu_count,
+            input.len() as u32,
+        )
+        .await
+        .expect("profiled compaction failed");
+    let expected = cpu_compact(&input, &mask);
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_count, 1).await,
+        [expected.len() as u32]
+    );
+    assert_eq!(
+        support::read_u32(&context, &gpu_output, expected.len()).await,
+        expected
+    );
+    assert!(
+        profile
+            .spans
+            .iter()
+            .any(|span| span.label == "compact.scan.level.0")
+    );
+    assert!(
+        profile
+            .spans
+            .iter()
+            .any(|span| span.label == "compact.scatter")
+    );
+    assert!(profile.gpu_elapsed >= profile.dispatch_time);
+}
+
+fn cpu_compact(input: &[u32], mask: &[u32]) -> Vec<u32> {
+    input
+        .iter()
+        .zip(mask)
+        .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
+        .collect()
 }
 
 #[tokio::test]
@@ -267,5 +338,16 @@ async fn trivial_profiles_complete_without_timestamp_dispatches() -> Result<(), 
     let profile = scanner.profile_scan_gpu_to_gpu(&input, &output, 1).await?;
     assert_eq!(support::read_u32(&context, &output, 1).await, [42]);
     assert!(profile.spans.is_empty());
+
+    let mask = storage_buffer(&context.device, "Empty Compaction Mask", &[0_u32]);
+    let compacted = output_buffer(&context.device, "Empty Compaction Output", 4);
+    let count = output_buffer(&context.device, "Empty Compaction Count", 4);
+    let mut compactor = Compactor::from_context(&context);
+    let profile = compactor
+        .profile_compact_gpu_to_gpu(&input, &mask, &compacted, &count, 0)
+        .await?;
+    assert!(profile.spans.is_empty());
+    assert!(profile.gpu_elapsed.is_zero());
+    assert_eq!(support::read_u32(&context, &count, 1).await, [0]);
     Ok(())
 }

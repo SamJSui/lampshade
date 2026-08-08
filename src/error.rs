@@ -23,6 +23,14 @@ pub enum Error {
         key: u32,
         bits: u32,
     },
+    CompactionLengthMismatch {
+        input: usize,
+        mask: usize,
+    },
+    InvalidCompactionFlag {
+        index: usize,
+        value: u32,
+    },
     SizeOverflow,
     BufferLimitExceeded {
         requested: u64,
@@ -73,6 +81,14 @@ impl fmt::Display for Error {
             Self::KeyExceedsBitRange { key, bits } => write!(
                 f,
                 "key {key} does not fit in the declared {bits}-bit radix-sort range"
+            ),
+            Self::CompactionLengthMismatch { input, mask } => write!(
+                f,
+                "compaction input and mask lengths differ: input has {input} items, mask has {mask}"
+            ),
+            Self::InvalidCompactionFlag { index, value } => write!(
+                f,
+                "compaction mask value at index {index} must be 0 or 1, got {value}"
             ),
             Self::SizeOverflow => f.write_str("buffer size calculation overflowed"),
             Self::BufferLimitExceeded { requested, limit } => write!(

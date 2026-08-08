@@ -256,6 +256,28 @@ impl Scanner {
         )
     }
 
+    pub(crate) fn record_profiled_exclusive_scan(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+        profile_prefix: &str,
+        profiler: &mut TimestampRecorder,
+    ) -> Result<(), Error> {
+        self.record_scan_with_mode(
+            encoder,
+            ScanRecording {
+                input: input_buf,
+                output: output_buf,
+                num_items,
+                mode: ScanMode::Exclusive,
+                profile_prefix,
+            },
+            Some(profiler),
+        )
+    }
+
     pub(crate) fn compute_pass_count(&self, num_items: u32) -> u32 {
         self.pipeline.compute_pass_count(num_items)
     }
