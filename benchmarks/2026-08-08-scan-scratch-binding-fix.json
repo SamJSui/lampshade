@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "fix": {
+    "revision": "f9b4982e4afadced2d773e1c696f2763757a7fe8",
+    "cause": "Unbounded writable data and auxiliary bindings overlapped at deeper hierarchical scan scratch levels.",
+    "change": "Bind data to num_items * 4 bytes and auxiliary to ceil(num_items / items_per_block) * 4 bytes.",
+    "regression_items": 4194305
+  },
+  "method": {
+    "timing": "resident public API call through GPU completion",
+    "excluded": ["host upload", "readback", "correctness validation"],
+    "normal_warmups_minimum": 4,
+    "normal_warmup_ms_minimum": 2000,
+    "normal_samples": 11,
+    "large_warmups": 2,
+    "large_samples": 7,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "massively_version": "0.96.0",
+    "massively_revision": "ef9de55190529be98203aca207edab9d560d312e"
+  },
+  "systems": [
+    {
+      "id": "rtx",
+      "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "backend": "Vulkan",
+      "driver": "NVIDIA 591.86",
+      "test_revision": "f9b4982e4afadced2d773e1c696f2763757a7fe8",
+      "working_tree_dirty": false
+    },
+    {
+      "id": "dopey",
+      "gpu": "NVIDIA Tegra Orin (nvgpu)",
+      "active_gpu_tpcs": 8,
+      "backend": "Vulkan",
+      "driver": "NVIDIA 595.78",
+      "test_revision": "9ec3dcdd4dcb327bfabe3f9a8c0b6ccd9f7b779e",
+      "applied_fix_revision": "f9b4982e4afadced2d773e1c696f2763757a7fe8",
+      "working_tree_note": "Dirty only because the copied benchmark harness was untracked.",
+      "power_mode": "MAXN_SUPER",
+      "clocks": "GPU and EMC pinned during measurement; dynamic settings verified afterward"
+    },
+    {
+      "id": "grumpy",
+      "gpu": "NVIDIA Tegra Orin (nvgpu)",
+      "active_gpu_tpcs": 4,
+      "backend": "Vulkan",
+      "driver": "NVIDIA 595.78",
+      "test_revision": "2958eb5a32f488bfe34bba9cd61c89efe37cb301",
+      "applied_fix_revision": "f9b4982e4afadced2d773e1c696f2763757a7fe8",
+      "working_tree_note": "Dirty only because the copied benchmark harness was untracked.",
+      "power_mode": "MAXN_SUPER",
+      "clocks": "GPU and EMC pinned during measurement; dynamic settings verified afterward"
+    }
+  ],
+  "correctness": {
+    "workloads": ["exclusive_scan", "compact_50"],
+    "items": [10000000, 100000000],
+    "systems": ["rtx", "dopey", "grumpy"],
+    "validated_processes_per_case": 3,
+    "all_passed": true
+  },
+  "control_delta_percent": [
+    {"system":"rtx","workload":"exclusive_scan","items":10000000,"delta_percent":-0.584},
+    {"system":"rtx","workload":"compact_50","items":10000000,"delta_percent":-0.276},
+    {"system":"dopey","workload":"exclusive_scan","items":10000000,"delta_percent":-1.388},
+    {"system":"dopey","workload":"compact_50","items":10000000,"delta_percent":-0.630},
+    {"system":"grumpy","workload":"exclusive_scan","items":10000000,"delta_percent":-0.829},
+    {"system":"grumpy","workload":"compact_50","items":10000000,"delta_percent":-0.247}
+  ],
+  "results": [
+    {"system":"rtx","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[0.7154,0.7150,0.7277],"wgpu_primitives_ms":0.7154,"massively_process_medians_ms":[0.9448,0.9480,0.9393],"massively_ms":0.9448,"wgpu_primitives_speedup":1.320660},
+    {"system":"rtx","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[0.9418,0.9392,0.9408],"wgpu_primitives_ms":0.9408,"massively_process_medians_ms":[0.9698,0.9956,0.9860],"massively_ms":0.9860,"wgpu_primitives_speedup":1.048044},
+    {"system":"rtx","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[6.1320,6.1338,6.1698],"wgpu_primitives_ms":6.1338,"massively_process_medians_ms":[3.1235,3.1890,3.1543],"massively_ms":3.1543,"wgpu_primitives_speedup":0.514249},
+    {"system":"rtx","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[8.4697,8.3758,8.4157],"wgpu_primitives_ms":8.4157,"massively_process_medians_ms":[5.6986,5.6625,5.6191],"massively_ms":5.6625,"wgpu_primitives_speedup":0.672850},
+
+    {"system":"dopey","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[6.151362,6.124673,6.136258],"wgpu_primitives_ms":6.136258,"massively_process_medians_ms":[5.406926,5.428366,5.438863],"massively_ms":5.428366,"wgpu_primitives_speedup":0.884638},
+    {"system":"dopey","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[7.676969,7.675305,7.697322],"wgpu_primitives_ms":7.676969,"massively_process_medians_ms":[6.877589,6.939638,6.892277],"massively_ms":6.892277,"wgpu_primitives_speedup":0.897786},
+    {"system":"dopey","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[65.151664,65.121006,65.169392],"wgpu_primitives_ms":65.151664,"massively_process_medians_ms":[45.806739,45.778419,45.623791],"massively_ms":45.778419,"wgpu_primitives_speedup":0.702644},
+    {"system":"dopey","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[88.594615,88.579351,88.621464],"wgpu_primitives_ms":88.594615,"massively_process_medians_ms":[68.296450,68.307299,68.352035],"massively_ms":68.307299,"wgpu_primitives_speedup":0.771010},
+
+    {"system":"grumpy","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[9.119576,9.130392,9.114104],"wgpu_primitives_ms":9.119576,"massively_process_medians_ms":[5.391122,5.392915,5.444691],"massively_ms":5.392915,"wgpu_primitives_speedup":0.591356},
+    {"system":"grumpy","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[10.519837,10.539134,10.531997],"wgpu_primitives_ms":10.531997,"massively_process_medians_ms":[6.929403,7.026846,6.924956],"massively_ms":6.929403,"wgpu_primitives_speedup":0.657938},
+    {"system":"grumpy","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[93.299616,93.278622,93.251837],"wgpu_primitives_ms":93.278622,"massively_process_medians_ms":[45.820665,45.875034,45.846041],"massively_ms":45.846041,"wgpu_primitives_speedup":0.491496},
+    {"system":"grumpy","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[117.173506,117.185504,117.172158],"wgpu_primitives_ms":117.173506,"massively_process_medians_ms":[68.464668,68.510107,68.595518],"massively_ms":68.510107,"wgpu_primitives_speedup":0.584689}
+  ]
+}
