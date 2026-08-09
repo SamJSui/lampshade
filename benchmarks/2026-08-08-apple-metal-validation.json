@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-08-09T04:24:46.486847+00:00",
+  "system": {
+    "model": "MacBook Pro Mac15,6",
+    "chip": "Apple M3 Pro",
+    "gpu_cores": 14,
+    "memory_gb": 18,
+    "architecture": "arm64",
+    "os": "macOS 15.6.1 (24G90)",
+    "backend": "Metal",
+    "metal_support": "Metal 3",
+    "power": "AC, charging, lowpowermode=0"
+  },
+  "wgpu_primitives": {
+    "version": "0.4.0",
+    "revision": "1ff738ec573e9c2def8f1cf786476a0136ce19fb",
+    "wgpu_version": "28.0.0",
+    "adapter_subgroup_min_size": 4,
+    "adapter_subgroup_max_size": 64
+  },
+  "comparison": {
+    "name": "massively",
+    "version": "0.96.0",
+    "revision": "ef9de55190529be98203aca207edab9d560d312e",
+    "wgpu_version": "30.0.0"
+  },
+  "method": {
+    "timing": "resident public API call through GPU completion",
+    "excluded": ["host upload", "readback", "correctness validation"],
+    "normal_warmups_minimum": 4,
+    "normal_warmup_ms_minimum": 2000,
+    "normal_samples": 11,
+    "large_warmups": 2,
+    "large_samples": 7,
+    "processes": 3,
+    "aggregate": "median of process medians"
+  },
+  "validation": {
+    "release_tests_passed": 64,
+    "benchmark_correctness_checked": true,
+    "maximum_items_validated": 100000000,
+    "working_tree_dirty": false
+  },
+  "wgpu_primitives_aggregates": [
+    {"workload":"sort_bounded16","items":1000000,"process_medians_ms":[8.557667,3.949292,3.792417],"median_ms":3.949292,"throughput_items_per_second":253209942.440316},
+    {"workload":"sort_full_width","items":1000000,"process_medians_ms":[5.914958,5.330083,6.120625],"median_ms":5.914958,"throughput_items_per_second":169062907.969930},
+    {"workload":"exclusive_scan","items":1000000,"process_medians_ms":[1.592167,1.542000,1.737458],"median_ms":1.592167,"throughput_items_per_second":628074818.784713},
+    {"workload":"compact_50","items":1000000,"process_medians_ms":[1.914625,1.955292,3.317750],"median_ms":1.955292,"throughput_items_per_second":511432563.525039},
+    {"workload":"sort_bounded16","items":10000000,"process_medians_ms":[19.441667,19.644167,19.507834],"median_ms":19.507834,"throughput_items_per_second":512614573.201720},
+    {"workload":"sort_full_width","items":10000000,"process_medians_ms":[37.976584,38.373833,39.257625],"median_ms":38.373833,"throughput_items_per_second":260594243.999550},
+    {"workload":"exclusive_scan","items":10000000,"process_medians_ms":[3.058083,3.004000,2.942875],"median_ms":3.004000,"throughput_items_per_second":3328894806.924101},
+    {"workload":"compact_50","items":10000000,"process_medians_ms":[2.715250,2.696750,2.695750],"median_ms":2.696750,"throughput_items_per_second":3708167238.342449},
+    {"workload":"sort_bounded16","items":100000000,"process_medians_ms":[173.918791,168.973167,174.749625],"median_ms":173.918791,"throughput_items_per_second":574980997.884237},
+    {"workload":"sort_full_width","items":100000000,"process_medians_ms":[344.112208,344.635000,346.190916],"median_ms":344.635000,"throughput_items_per_second":290162055.508001},
+    {"workload":"exclusive_scan","items":100000000,"process_medians_ms":[16.531375,15.251875,15.253083],"median_ms":15.253083,"throughput_items_per_second":6556051651.984061},
+    {"workload":"compact_50","items":100000000,"process_medians_ms":[20.384459,20.369666,20.401292],"median_ms":20.384459,"throughput_items_per_second":4905698012.392676}
+  ],
+  "massively_metal_compatibility": {
+    "status": "unsupported_by_observation",
+    "timings_available": false,
+    "directly_reproduced_workloads": ["sort_bounded16", "exclusive_scan", "compact_50"],
+    "full_width_sort_uses_same_failed_sort_pipeline": true,
+    "adapter_max_storage_buffers_per_shader_stage": 29,
+    "generated_layout_storage_buffer_counts": [42, 47],
+    "failure_stage": "wgpu Device::create_bind_group_layout",
+    "post_failure_validation": [
+      "sort output repeats value 0 at 1",
+      "exclusive scan mismatch at 1: expected 1, got 0",
+      "compaction output length mismatch: expected 500000, got 0"
+    ],
+    "speedup_reported": false
+  }
+}

@@ -333,6 +333,13 @@ removes compaction's full-size prefix-add pass. Fresh 10M all-fronts matrices
 lead Massively by 1.48x-8.55x on both Jetsons, while the complete RTX matrix
 leads by 1.12x-19.71x. Compaction specifically reaches 2.06x/1.52x at 10M/100M
 on RTX, 1.66x/1.52x on dopey, and 1.63x/1.49x on grumpy.
+The [Apple Metal validation](benchmarks/2026-08-08-apple-metal-validation.md)
+passes all 64 release tests and every 100M benchmark validator on an M3 Pro.
+At 100M, resident scan reaches 6.56 billion items/s and compaction reaches 4.91
+billion items/s. Pinned Massively 0.96 cannot produce a timing on this adapter:
+its generated compute layouts request 42 or 47 storage buffers against Metal's
+per-stage limit of 29. The harness records these as explicit compatibility
+failures rather than assigning an artificial speedup.
 
 ## GPU profiling
 
@@ -372,8 +379,9 @@ item. Direct output, the feature-gated subgroup scan, and fused compaction block
 prefixes now close the measured Massively gaps without regressing Jetson sort.
 The remaining work is ordered by measured impact:
 
-1. **Validate more hardware:** measure scan, compaction, and the specialized sort
-   paths on AMD, Intel, and Apple adapters plus additional driver versions.
+1. **Validate more hardware:** extend the now-validated NVIDIA Vulkan and Apple
+   Metal matrix to AMD and Intel adapters plus additional driver versions and
+   Apple GPU generations.
 2. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
    not already known by the application.
