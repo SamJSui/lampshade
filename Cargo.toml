@@ -14,7 +14,7 @@ include = [
     "tests/**/*.rs",
     "benches/**/*.rs",
     "benchmarks/**/*.md",
-    "benchmarks/**/*.json",
+    "benchmarks/*.json",
     "examples/**/*.rs",
     "Cargo.toml",
     "README.md",
