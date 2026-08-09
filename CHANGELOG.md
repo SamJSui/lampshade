@@ -47,8 +47,8 @@ All notable changes to `wgpu-primitives` are documented here.
   50%-selective compaction is 2.06x/1.52x faster at 10M/100M on RTX,
   1.66x/1.52x on the 8-TPC Jetson, and 1.63x/1.49x on the 4-TPC Jetson.
 - On an Apple M3 Pro through Metal, all 64 release tests and 100M benchmark
-  validators pass. At 100M, exclusive scan measures 15.253 ms and 50%-selective
-  compaction measures 20.384 ms. Pinned Massively 0.96 cannot initialize the
+  validators pass. At 100M, exclusive scan measures 13.736 ms and 50%-selective
+  compaction measures 18.302 ms. Pinned Massively 0.96 cannot initialize the
   compared Metal pipelines because generated layouts require 42 or 47 storage
   buffers against the adapter limit of 29, so no speedup is reported.
 

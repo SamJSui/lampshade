@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-08-09T04:24:46.486847+00:00",
+  "generated_at_utc": "2026-08-09T04:44:31.758220+00:00",
   "system": {
     "model": "MacBook Pro Mac15,6",
     "chip": "Apple M3 Pro",
@@ -14,7 +14,8 @@
   },
   "wgpu_primitives": {
     "version": "0.4.0",
-    "revision": "1ff738ec573e9c2def8f1cf786476a0136ce19fb",
+    "production_revision": "1ff738ec573e9c2def8f1cf786476a0136ce19fb",
+    "validation_revision": "5dcc321e3b1cb9203f314ecc1ccf88a6f0dde369",
     "wgpu_version": "28.0.0",
     "adapter_subgroup_min_size": 4,
     "adapter_subgroup_max_size": 64
@@ -40,27 +41,30 @@
     "release_tests_passed": 64,
     "benchmark_correctness_checked": true,
     "maximum_items_validated": 100000000,
+    "successful_runs": 36,
+    "recorded_massively_failures": 36,
+    "aggregates": 12,
+    "timing_comparisons": 0,
     "working_tree_dirty": false
   },
   "wgpu_primitives_aggregates": [
-    {"workload":"sort_bounded16","items":1000000,"process_medians_ms":[8.557667,3.949292,3.792417],"median_ms":3.949292,"throughput_items_per_second":253209942.440316},
-    {"workload":"sort_full_width","items":1000000,"process_medians_ms":[5.914958,5.330083,6.120625],"median_ms":5.914958,"throughput_items_per_second":169062907.969930},
-    {"workload":"exclusive_scan","items":1000000,"process_medians_ms":[1.592167,1.542000,1.737458],"median_ms":1.592167,"throughput_items_per_second":628074818.784713},
-    {"workload":"compact_50","items":1000000,"process_medians_ms":[1.914625,1.955292,3.317750],"median_ms":1.955292,"throughput_items_per_second":511432563.525039},
-    {"workload":"sort_bounded16","items":10000000,"process_medians_ms":[19.441667,19.644167,19.507834],"median_ms":19.507834,"throughput_items_per_second":512614573.201720},
-    {"workload":"sort_full_width","items":10000000,"process_medians_ms":[37.976584,38.373833,39.257625],"median_ms":38.373833,"throughput_items_per_second":260594243.999550},
-    {"workload":"exclusive_scan","items":10000000,"process_medians_ms":[3.058083,3.004000,2.942875],"median_ms":3.004000,"throughput_items_per_second":3328894806.924101},
-    {"workload":"compact_50","items":10000000,"process_medians_ms":[2.715250,2.696750,2.695750],"median_ms":2.696750,"throughput_items_per_second":3708167238.342449},
-    {"workload":"sort_bounded16","items":100000000,"process_medians_ms":[173.918791,168.973167,174.749625],"median_ms":173.918791,"throughput_items_per_second":574980997.884237},
-    {"workload":"sort_full_width","items":100000000,"process_medians_ms":[344.112208,344.635000,346.190916],"median_ms":344.635000,"throughput_items_per_second":290162055.508001},
-    {"workload":"exclusive_scan","items":100000000,"process_medians_ms":[16.531375,15.251875,15.253083],"median_ms":15.253083,"throughput_items_per_second":6556051651.984061},
-    {"workload":"compact_50","items":100000000,"process_medians_ms":[20.384459,20.369666,20.401292],"median_ms":20.384459,"throughput_items_per_second":4905698012.392676}
+    {"workload":"sort_bounded16","items":1000000,"process_medians_ms":[5.647708,4.067833,5.387792],"median_ms":5.387792,"throughput_items_per_second":185604789.494472},
+    {"workload":"sort_full_width","items":1000000,"process_medians_ms":[5.795208,5.716708,5.481250],"median_ms":5.716708,"throughput_items_per_second":174925848.932637},
+    {"workload":"exclusive_scan","items":1000000,"process_medians_ms":[1.747833,1.945125,1.880042],"median_ms":1.880042,"throughput_items_per_second":531903010.677421},
+    {"workload":"compact_50","items":1000000,"process_medians_ms":[2.249583,2.135667,2.169541],"median_ms":2.169541,"throughput_items_per_second":460926988.704062},
+    {"workload":"sort_bounded16","items":10000000,"process_medians_ms":[17.004791,15.599833,17.091583],"median_ms":17.004791,"throughput_items_per_second":588069562.278066},
+    {"workload":"sort_full_width","items":10000000,"process_medians_ms":[31.238875,32.741459,31.241916],"median_ms":31.241916,"throughput_items_per_second":320082801.579775},
+    {"workload":"exclusive_scan","items":10000000,"process_medians_ms":[6.529334,3.421375,3.425125],"median_ms":3.425125,"throughput_items_per_second":2919601474.398745},
+    {"workload":"compact_50","items":10000000,"process_medians_ms":[5.255917,5.284417,5.275292],"median_ms":5.275292,"throughput_items_per_second":1895629663.722880},
+    {"workload":"sort_bounded16","items":100000000,"process_medians_ms":[147.804209,147.769583,147.835167],"median_ms":147.804209,"throughput_items_per_second":676570719.308812},
+    {"workload":"sort_full_width","items":100000000,"process_medians_ms":[294.373625,301.110292,294.698833],"median_ms":294.698833,"throughput_items_per_second":339329474.032902},
+    {"workload":"exclusive_scan","items":100000000,"process_medians_ms":[13.735667,13.740834,12.215000],"median_ms":13.735667,"throughput_items_per_second":7280316274.411719},
+    {"workload":"compact_50","items":100000000,"process_medians_ms":[18.302084,16.788584,18.315292],"median_ms":18.302084,"throughput_items_per_second":5463858651.288017}
   ],
   "massively_metal_compatibility": {
     "status": "unsupported_by_observation",
     "timings_available": false,
-    "directly_reproduced_workloads": ["sort_bounded16", "exclusive_scan", "compact_50"],
-    "full_width_sort_uses_same_failed_sort_pipeline": true,
+    "directly_reproduced_workloads": ["sort_bounded16", "sort_full_width", "exclusive_scan", "compact_50"],
     "adapter_max_storage_buffers_per_shader_stage": 29,
     "generated_layout_storage_buffer_counts": [42, 47],
     "failure_stage": "wgpu Device::create_bind_group_layout",

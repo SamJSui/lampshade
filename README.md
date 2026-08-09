@@ -335,7 +335,7 @@ leads by 1.12x-19.71x. Compaction specifically reaches 2.06x/1.52x at 10M/100M
 on RTX, 1.66x/1.52x on dopey, and 1.63x/1.49x on grumpy.
 The [Apple Metal validation](benchmarks/2026-08-08-apple-metal-validation.md)
 passes all 64 release tests and every 100M benchmark validator on an M3 Pro.
-At 100M, resident scan reaches 6.56 billion items/s and compaction reaches 4.91
+At 100M, resident scan reaches 7.28 billion items/s and compaction reaches 5.46
 billion items/s. Pinned Massively 0.96 cannot produce a timing on this adapter:
 its generated compute layouts request 42 or 47 storage buffers against Metal's
 per-stage limit of 29. The harness records these as explicit compatibility

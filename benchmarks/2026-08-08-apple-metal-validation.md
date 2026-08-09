@@ -13,6 +13,8 @@ of converting failed runs into artificial timings.
 - macOS 15.6.1 (`24G90`), Metal 3, arm64, Rust 1.97.1.
 - `wgpu-primitives` 0.4.0 at
   `1ff738ec573e9c2def8f1cf786476a0136ce19fb`, using wgpu 28.
+- Failure-recording comparison harness at
+  `5dcc321e3b1cb9203f314ecc1ccf88a6f0dde369`.
 - Massively 0.96.0 at
   `ef9de55190529be98203aca207edab9d560d312e`, using CubeCL and wgpu 30.
 - AC power, Low Power Mode disabled.
@@ -37,12 +39,12 @@ the fixed-32-wide NVIDIA Vulkan fast-path gate and correctly uses the portable
 
 | Workload | 1M | 10M | 100M |
 |---|---:|---:|---:|
-| Bounded 16-bit stable sort | 3.949 ms | 19.508 ms | 173.919 ms |
-| Full-width stable sort | 5.915 ms | 38.374 ms | 344.635 ms |
-| Exclusive scan | 1.592 ms | 3.004 ms | 15.253 ms |
-| 50%-selective stable compaction | 1.955 ms | 2.697 ms | 20.384 ms |
+| Bounded 16-bit stable sort | 5.388 ms | 17.005 ms | 147.804 ms |
+| Full-width stable sort | 5.717 ms | 31.242 ms | 294.699 ms |
+| Exclusive scan | 1.880 ms | 3.425 ms | 13.736 ms |
+| 50%-selective stable compaction | 2.170 ms | 5.275 ms | 18.302 ms |
 
-At 100M items, scan reaches 6.56 billion items/s and compaction reaches 4.91
+At 100M items, scan reaches 7.28 billion items/s and compaction reaches 5.46
 billion items/s. These are absolute Apple measurements; no Massively speedup is
 reported because its corresponding pipelines do not initialize.
 
@@ -86,5 +88,5 @@ Exact process medians and the compatibility evidence are in
 Apple Metal joins NVIDIA Vulkan as a validated physical backend for all current
 primitives through 100M items. The next cross-vendor evidence targets are AMD
 and Intel. Apple sort optimization should begin with the portable scatter path,
-but only after profiling establishes where the 100M full-width 344.635 ms is
+but only after profiling establishes where the 100M full-width 294.699 ms is
 spent.
