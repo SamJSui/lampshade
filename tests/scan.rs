@@ -100,8 +100,8 @@ async fn exclusive_scan_matches_cpu_across_multiple_hierarchy_levels() {
     };
     let mut scanner = Scanner::from_context(&context);
 
-    // The high-end path scans 2,048 items per workgroup. One item beyond
-    // 2,048 squared forces a third hierarchy level in the scratch buffer.
+    // This crosses at least three hierarchy levels on both the portable
+    // 2,048-item blocks and the subgroup path's 256-item blocks.
     let input = scan_input(2, 4_194_305);
     let expected = cpu_exclusive_scan(&input);
     let actual = scanner
