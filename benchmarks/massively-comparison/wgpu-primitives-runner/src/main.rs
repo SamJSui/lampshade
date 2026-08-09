@@ -42,7 +42,7 @@ async fn run() -> Result<(), AnyError> {
             "MASSIVELY_BENCH_IMPLEMENTATION_REVISION",
             "working-tree",
         ),
-        runtime_stack: "wgpu 28.0.0".into(),
+        runtime_stack: "wgpu 30.0.0".into(),
         adapter: adapter_metadata(&context),
         config: config.clone(),
         generator: GeneratorMetadata::current(),
@@ -92,7 +92,89 @@ fn run_reduce(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, 
         black_box(value);
         Ok(())
     })?;
+    if std::env::var_os("MASSIVELY_BENCH_PROFILE_REDUCTION_PHASES").is_some() {
+        profile_reduction_readback(context, &mut reducer, &gpu_input, &gpu_output, config.items)?;
+    }
     Ok((samples, 1))
+}
+
+#[derive(Default)]
+struct ReductionReadbackPhases {
+    total_ms: f64,
+    allocation_ms: f64,
+    encoding_ms: f64,
+    submission_ms: f64,
+    map_request_ms: f64,
+    poll_ms: f64,
+    receive_and_read_ms: f64,
+}
+
+fn profile_reduction_readback(
+    context: &Context,
+    reducer: &mut Reducer,
+    input: &wgpu::Buffer,
+    output: &wgpu::Buffer,
+    items: u32,
+) -> Result<(), AnyError> {
+    let reusable = create_reduction_readback_buffer(context);
+    let mut allocated_samples = Vec::with_capacity(11);
+    let mut reused_samples = Vec::with_capacity(11);
+
+    for sample in 0..15 {
+        let (_, allocated) = reduce_to_host_timed(context, reducer, input, output, items, None)?;
+        let (_, reused) =
+            reduce_to_host_timed(context, reducer, input, output, items, Some(&reusable))?;
+        if sample >= 4 {
+            allocated_samples.push(allocated);
+            reused_samples.push(reused);
+        }
+    }
+
+    print_reduction_phases("allocated", &allocated_samples);
+    print_reduction_phases("reused", &reused_samples);
+    let mut gpu_elapsed_samples = Vec::with_capacity(7);
+    let mut dispatch_samples = Vec::with_capacity(7);
+    for _ in 0..7 {
+        let profile = pollster::block_on(reducer.profile_reduce_gpu_to_gpu(
+            input,
+            output,
+            items,
+            U32Reduction::Sum,
+        ))?;
+        gpu_elapsed_samples.push(profile.gpu_elapsed.as_secs_f64() * 1_000.0);
+        dispatch_samples.push(profile.dispatch_time.as_secs_f64() * 1_000.0);
+    }
+    eprintln!(
+        "reduction_gpu_phases gpu_elapsed_ms={:.4} dispatch_ms={:.4}",
+        median(&gpu_elapsed_samples),
+        median(&dispatch_samples),
+    );
+    Ok(())
+}
+
+fn print_reduction_phases(label: &str, samples: &[ReductionReadbackPhases]) {
+    let field_median = |field: fn(&ReductionReadbackPhases) -> f64| {
+        median(&samples.iter().map(field).collect::<Vec<_>>())
+    };
+    eprintln!(
+        "reduction_readback_phases variant={label} total_ms={:.4} allocation_ms={:.4} encoding_ms={:.4} submission_ms={:.4} map_request_ms={:.4} poll_ms={:.4} receive_and_read_ms={:.4}",
+        field_median(|sample| sample.total_ms),
+        field_median(|sample| sample.allocation_ms),
+        field_median(|sample| sample.encoding_ms),
+        field_median(|sample| sample.submission_ms),
+        field_median(|sample| sample.map_request_ms),
+        field_median(|sample| sample.poll_ms),
+        field_median(|sample| sample.receive_and_read_ms),
+    );
+}
+
+fn create_reduction_readback_buffer(context: &Context) -> wgpu::Buffer {
+    context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Massively Comparison Reduction Readback"),
+        size: Reducer::output_buffer_size(),
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
 }
 
 fn reduce_to_host(
@@ -102,12 +184,7 @@ fn reduce_to_host(
     output: &wgpu::Buffer,
     items: u32,
 ) -> Result<u32, AnyError> {
-    let staging = context.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Massively Comparison Reduction Readback"),
-        size: Reducer::output_buffer_size(),
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
+    let staging = create_reduction_readback_buffer(context);
     let mut encoder = context
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -124,9 +201,76 @@ fn reduce_to_host(
         timeout: None,
     })?;
     receiver.recv()??;
-    let value = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range())[0];
+    let value = {
+        let mapped = slice.get_mapped_range()?;
+        bytemuck::cast_slice::<u8, u32>(&mapped)[0]
+    };
     staging.unmap();
     Ok(value)
+}
+
+fn reduce_to_host_timed(
+    context: &Context,
+    reducer: &mut Reducer,
+    input: &wgpu::Buffer,
+    output: &wgpu::Buffer,
+    items: u32,
+    reusable_staging: Option<&wgpu::Buffer>,
+) -> Result<(u32, ReductionReadbackPhases), AnyError> {
+    let total_started = Instant::now();
+    let allocation_started = Instant::now();
+    let owned_staging = reusable_staging
+        .is_none()
+        .then(|| create_reduction_readback_buffer(context));
+    let staging = reusable_staging.unwrap_or_else(|| {
+        owned_staging
+            .as_ref()
+            .expect("owned reduction readback buffer exists")
+    });
+    let allocation_ms = allocation_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let encoding_started = Instant::now();
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    reducer.record_reduce(&mut encoder, input, output, items, U32Reduction::Sum)?;
+    encoder.copy_buffer_to_buffer(output, 0, staging, 0, Reducer::output_buffer_size());
+    let encoding_ms = encoding_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let submission_started = Instant::now();
+    let submission = context.queue.submit([encoder.finish()]);
+    let submission_ms = submission_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let map_request_started = Instant::now();
+    let slice = staging.slice(..);
+    let (sender, receiver) = mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    let map_request_ms = map_request_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let poll_started = Instant::now();
+    context.device.poll(wgpu::PollType::Wait {
+        submission_index: Some(submission),
+        timeout: None,
+    })?;
+    let poll_ms = poll_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let receive_started = Instant::now();
+    receiver.recv()??;
+    let value = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range()?)[0];
+    staging.unmap();
+    let receive_and_read_ms = receive_started.elapsed().as_secs_f64() * 1_000.0;
+    let phases = ReductionReadbackPhases {
+        total_ms: total_started.elapsed().as_secs_f64() * 1_000.0,
+        allocation_ms,
+        encoding_ms,
+        submission_ms,
+        map_request_ms,
+        poll_ms,
+        receive_and_read_ms,
+    };
+    Ok((value, phases))
 }
 
 fn run_sort(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, u32), AnyError> {
@@ -318,7 +462,7 @@ fn read_buffer<T: bytemuck::Pod>(
         timeout: None,
     })?;
     receiver.recv()??;
-    let values = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+    let values = bytemuck::cast_slice(&slice.get_mapped_range()?).to_vec();
     staging.unmap();
     Ok(values)
 }

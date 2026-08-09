@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-algorithms"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Deprecated compatibility package for wgpu-primitives."
 authors = ["samjsui"]
@@ -12,4 +12,4 @@ categories = ["algorithms", "graphics", "science"]
 include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-wgpu-primitives = { version = "0.5.0", path = "../.." }
+wgpu-primitives = { version = "0.6.0", path = "../.." }

@@ -18,15 +18,16 @@ pub async fn gpu_context() -> Option<Context> {
 pub async fn gpu_context_without_optional_features() -> Option<Context> {
     let descriptor = wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
-        ..Default::default()
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
     }
     .with_env();
-    let instance = wgpu::Instance::new(&descriptor);
+    let instance = wgpu::Instance::new(descriptor);
     let adapter = match instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
     {
@@ -103,7 +104,12 @@ pub async fn read_pod<T: bytemuck::Pod>(
         .expect("GPU test readback channel closed")
         .expect("GPU test readback map failed");
 
-    let result = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+    let result = {
+        let mapped = slice
+            .get_mapped_range()
+            .expect("test readback buffer is mapped");
+        bytemuck::cast_slice(&mapped).to_vec()
+    };
     staging.unmap();
     result
 }

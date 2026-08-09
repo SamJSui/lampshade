@@ -11,16 +11,17 @@ impl Context {
     pub async fn init() -> Result<Self, Error> {
         let descriptor = wgpu::InstanceDescriptor {
             backends: Backends::PRIMARY,
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         }
         .with_env();
-        let instance = Instance::new(&descriptor);
+        let instance = Instance::new(descriptor);
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await?;
         let adapter_info = adapter.get_info();
