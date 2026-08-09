@@ -68,9 +68,10 @@ predicate mask does not own changing workspace, so its public methods can use
 
 Kernel selection uses explicit enums rather than trait objects. That keeps the
 selected path visible, avoids dynamic dispatch in command recording, and lets
-each implementation own different workspace. Intel and Apple currently route
-to portable sort kernels; compatible NVIDIA Vulkan adapters can route to wider
-or subgroup-specialized kernels.
+each implementation own different workspace. Capable Intel Vulkan adapters
+route to 4-bit key-value sort kernels, compatible NVIDIA Vulkan adapters can
+route to wider or subgroup-specialized kernels, and other devices retain the
+portable implementation.
 
 ## Performance contract
 

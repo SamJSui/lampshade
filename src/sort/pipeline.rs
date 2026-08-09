@@ -2,6 +2,8 @@ use crate::common::{self, capabilities::AdapterCapabilities};
 
 const EIGHT_BIT_BLOCK_SIZE: u32 = 256;
 const EIGHT_BIT_WORKGROUP_STORAGE_BYTES: u32 = 16_388;
+const WIDE_RADIX_BUCKET_GROUPS: u32 = 4;
+const WIDE_RADIX_BYTES_PER_BUCKET_GROUP: u32 = 16;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SortItemKind {
@@ -45,6 +47,7 @@ pub struct SortPipeline {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RadixVariant {
     Portable,
+    IntelVulkanWide,
     NvidiaVulkanWide,
     NvidiaVulkanSubgroup,
 }
@@ -63,15 +66,14 @@ impl RadixVariant {
     }
 
     fn for_capabilities(item_kind: SortItemKind, capabilities: AdapterCapabilities) -> Self {
-        let is_nvidia_vulkan_key_value = item_kind == SortItemKind::KeyValue
-            && capabilities.backend == wgpu::Backend::Vulkan
-            && capabilities.vendor == 0x10de;
-
-        if !is_nvidia_vulkan_key_value {
+        let is_vulkan_key_value =
+            item_kind == SortItemKind::KeyValue && capabilities.backend == wgpu::Backend::Vulkan;
+        if !is_vulkan_key_value {
             return Self::Portable;
         }
 
-        if capabilities.subgroups_enabled
+        if capabilities.vendor == 0x10de
+            && capabilities.subgroups_enabled
             && capabilities.subgroup_min_size == 32
             && capabilities.subgroup_max_size == 32
             && capabilities.supports_workgroup(
@@ -81,8 +83,12 @@ impl RadixVariant {
             )
         {
             Self::NvidiaVulkanSubgroup
-        } else if capabilities.device_type == wgpu::DeviceType::DiscreteGpu {
+        } else if capabilities.vendor == 0x10de
+            && capabilities.device_type == wgpu::DeviceType::DiscreteGpu
+        {
             Self::NvidiaVulkanWide
+        } else if capabilities.vendor == 0x8086 && supports_wide_radix(capabilities) {
+            Self::IntelVulkanWide
         } else {
             Self::Portable
         }
@@ -95,7 +101,7 @@ impl RadixVariant {
     fn bits_per_pass(self) -> u32 {
         match self {
             Self::Portable => 2,
-            Self::NvidiaVulkanWide => 4,
+            Self::IntelVulkanWide | Self::NvidiaVulkanWide => 4,
             Self::NvidiaVulkanSubgroup => {
                 unreachable!("8-bit radix uses its dedicated pipeline")
             }
@@ -105,11 +111,25 @@ impl RadixVariant {
     fn shader_source(self) -> &'static str {
         match self {
             Self::Portable => include_str!("sort.wgsl"),
-            Self::NvidiaVulkanWide => include_str!("sort_wide.wgsl"),
+            Self::IntelVulkanWide | Self::NvidiaVulkanWide => include_str!("sort_wide.wgsl"),
             Self::NvidiaVulkanSubgroup => {
                 unreachable!("8-bit radix uses its dedicated shader")
             }
         }
+    }
+}
+
+fn supports_wide_radix(capabilities: AdapterCapabilities) -> bool {
+    let (_, block_size) = radix_workgroup_config(capabilities.max_compute_workgroup_storage_size);
+    let storage_bytes = block_size * WIDE_RADIX_BUCKET_GROUPS * WIDE_RADIX_BYTES_PER_BUCKET_GROUP;
+    capabilities.supports_workgroup(block_size, block_size, storage_bytes)
+}
+
+fn radix_workgroup_config(max_workgroup_storage_size: u32) -> (u32, u32) {
+    if max_workgroup_storage_size >= 32_768 {
+        (8, 256)
+    } else {
+        (4, 128)
     }
 }
 
@@ -130,13 +150,7 @@ impl SortPipeline {
         });
 
         let limits = device.limits();
-        let max_shared_mem = limits.max_compute_workgroup_storage_size;
-
-        let (vt, block_size) = if max_shared_mem >= 32768 {
-            (8, 256) // M3 / Desktop
-        } else {
-            (4, 128) // Mobile
-        };
+        let (vt, block_size) = radix_workgroup_config(limits.max_compute_workgroup_storage_size);
 
         let bits_per_pass = radix_variant.bits_per_pass();
         let bucket_count = 1 << bits_per_pass;
@@ -204,7 +218,7 @@ mod tests {
     use super::{RadixVariant, SortItemKind};
 
     #[test]
-    fn selects_subgroup_radix_only_for_compatible_nvidia_vulkan_key_value_items() {
+    fn selects_radix_variant_from_adapter_capabilities() {
         let select = |item_kind, backend, vendor, device_type, min, max, feature, limits| {
             let workgroup_limit = if limits { u32::MAX } else { 0 };
             RadixVariant::for_capabilities(
@@ -290,6 +304,32 @@ mod tests {
         );
         assert_eq!(
             select(
+                SortItemKind::Key,
+                wgpu::Backend::Vulkan,
+                0x8086,
+                wgpu::DeviceType::IntegratedGpu,
+                8,
+                32,
+                true,
+                true,
+            ),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            select(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Dx12,
+                0x8086,
+                wgpu::DeviceType::IntegratedGpu,
+                8,
+                32,
+                true,
+                true,
+            ),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            select(
                 SortItemKind::KeyValue,
                 wgpu::Backend::Dx12,
                 0x10de,
@@ -315,23 +355,44 @@ mod tests {
             RadixVariant::Portable
         );
 
-        for (backend, vendor) in [
-            (wgpu::Backend::Vulkan, 0x8086),
-            (wgpu::Backend::Metal, 0x106b),
-        ] {
-            assert_eq!(
-                select(
-                    SortItemKind::KeyValue,
-                    backend,
-                    vendor,
-                    wgpu::DeviceType::IntegratedGpu,
-                    32,
-                    32,
-                    true,
-                    true,
-                ),
-                RadixVariant::Portable
-            );
-        }
+        assert_eq!(
+            select(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Vulkan,
+                0x8086,
+                wgpu::DeviceType::IntegratedGpu,
+                8,
+                32,
+                true,
+                true,
+            ),
+            RadixVariant::IntelVulkanWide
+        );
+        assert_eq!(
+            select(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Vulkan,
+                0x8086,
+                wgpu::DeviceType::IntegratedGpu,
+                8,
+                32,
+                true,
+                false,
+            ),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            select(
+                SortItemKind::KeyValue,
+                wgpu::Backend::Metal,
+                0x106b,
+                wgpu::DeviceType::IntegratedGpu,
+                4,
+                64,
+                true,
+                true,
+            ),
+            RadixVariant::Portable
+        );
     }
 }
