@@ -37,9 +37,11 @@ pub struct CompactDispatch<'a> {
     pub input: &'a wgpu::Buffer,
     pub mask: &'a wgpu::Buffer,
     pub offsets: &'a wgpu::Buffer,
+    pub block_prefixes: &'a wgpu::Buffer,
     pub output: &'a wgpu::Buffer,
     pub output_count: &'a wgpu::Buffer,
     pub num_items: u32,
+    pub scan_items_per_block: u32,
 }
 
 impl CompactPipeline {
@@ -52,7 +54,8 @@ impl CompactPipeline {
                 common::buffers::bind_entry(2, true, false),
                 common::buffers::bind_entry(3, false, false),
                 common::buffers::bind_entry(4, false, false),
-                common::buffers::bind_entry(5, false, true),
+                common::buffers::bind_entry(5, true, false),
+                common::buffers::bind_entry(6, false, true),
             ],
         });
         let shader_source =
@@ -85,7 +88,12 @@ impl CompactPipeline {
         let groups_y = workgroups.div_ceil(self.max_workgroups_per_dimension);
         let params = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Stream Compaction Parameters"),
-            contents: bytemuck::cast_slice(&[dispatch.num_items, groups_x, 0_u32, 0]),
+            contents: bytemuck::cast_slice(&[
+                dispatch.num_items,
+                groups_x,
+                dispatch.scan_items_per_block,
+                0,
+            ]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -114,6 +122,10 @@ impl CompactPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
+                    resource: dispatch.block_prefixes.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                         buffer: &params,
                         offset: 0,

@@ -17,6 +17,7 @@ struct ScanRecording<'a> {
     num_items: u32,
     mode: ScanMode,
     profile_prefix: &'a str,
+    propagate_output: bool,
 }
 
 /// Performs inclusive and exclusive unsigned 32-bit prefix scans on a wgpu device.
@@ -108,6 +109,7 @@ impl Scanner {
                 num_items,
                 mode,
                 profile_prefix: "scan",
+                propagate_output: true,
             },
             None,
         )?;
@@ -159,6 +161,7 @@ impl Scanner {
                     num_items,
                     mode,
                     profile_prefix: "scan",
+                    propagate_output: true,
                 },
                 None,
             )?;
@@ -184,6 +187,7 @@ impl Scanner {
                 num_items,
                 mode,
                 profile_prefix: "scan",
+                propagate_output: true,
             },
             Some(&mut profiler),
         )?;
@@ -208,6 +212,7 @@ impl Scanner {
                 num_items,
                 mode: ScanMode::Inclusive,
                 profile_prefix: "scan",
+                propagate_output: true,
             },
             None,
         )
@@ -229,6 +234,7 @@ impl Scanner {
                 num_items,
                 mode: ScanMode::Exclusive,
                 profile_prefix: "scan",
+                propagate_output: true,
             },
             None,
         )
@@ -251,20 +257,31 @@ impl Scanner {
                 num_items,
                 mode: ScanMode::Inclusive,
                 profile_prefix,
+                propagate_output: true,
             },
             Some(profiler),
         )
     }
 
-    pub(crate) fn record_profiled_exclusive_scan(
+    pub(crate) fn compute_pass_count(&self, num_items: u32) -> u32 {
+        self.pipeline.compute_pass_count(num_items)
+    }
+
+    pub(crate) fn compute_block_local_pass_count(&self, num_items: u32) -> u32 {
+        self.pipeline
+            .compute_pass_count(num_items)
+            .saturating_sub(u32::from(num_items > 1))
+    }
+
+    pub(crate) fn record_block_local_exclusive_scan(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
         num_items: u32,
         profile_prefix: &str,
-        profiler: &mut TimestampRecorder,
-    ) -> Result<(), Error> {
+        profiler: Option<&mut TimestampRecorder>,
+    ) -> Result<u32, Error> {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
@@ -273,13 +290,15 @@ impl Scanner {
                 num_items,
                 mode: ScanMode::Exclusive,
                 profile_prefix,
+                propagate_output: false,
             },
-            Some(profiler),
-        )
+            profiler,
+        )?;
+        Ok(self.pipeline.vt * self.pipeline.block_size)
     }
 
-    pub(crate) fn compute_pass_count(&self, num_items: u32) -> u32 {
-        self.pipeline.compute_pass_count(num_items)
+    pub(crate) fn block_prefix_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.scratch_buffer.as_ref()
     }
 
     fn record_scan_with_mode(
@@ -294,6 +313,7 @@ impl Scanner {
             num_items,
             mode,
             profile_prefix,
+            propagate_output,
         } = recording;
         if num_items == 0 {
             return Ok(());
@@ -404,7 +424,8 @@ impl Scanner {
             current_scratch_offset = aux_offset + aux_size;
         }
 
-        for i in (0..levels.len() - 1).rev() {
+        let first_add_level = usize::from(!propagate_output);
+        for i in (first_add_level..levels.len() - 1).rev() {
             let data_level = &levels[i];
             let aux_level = &levels[i + 1];
             let profile_label = profiler

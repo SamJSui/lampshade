@@ -223,11 +223,13 @@ through the hierarchy. Devices with enabled subgroups use coalesced one-item
 lanes and subgroup prefix operations; other devices retain the portable
 multi-item shared-memory path.
 
-Stream compaction exclusively scans a caller-provided 0/1 mask into stable
-destination indices, scatters selected `u32` values or `KeyValue` records in their original order,
-and leaves the selected-item count in a caller-owned GPU buffer. The resident
-API performs no validation pass or readback, so GPU masks must contain only 0
-or 1; the slice convenience API validates them before upload.
+Stream compaction exclusively scans a caller-provided 0/1 mask into block-local
+destination indices, propagates the small block-total hierarchy, and adds each
+preceding block total during stable scatter. This avoids materializing a second
+full-size global-offset pass. Selected `u32` values or `KeyValue` records retain
+their original order, and the selected-item count remains in a caller-owned GPU
+buffer. The resident API performs no validation pass or readback, so GPU masks
+must contain only 0 or 1; the slice convenience API validates them before upload.
 
 The portable radix sort processes two bits per pass. A full-width sort uses 16
 passes; `*_with_key_bits` calls use only the passes required by the declared
@@ -326,6 +328,11 @@ The [direct subgroup scan follow-up](benchmarks/2026-08-08-direct-subgroup-scan.
 closes that target. `wgpu-primitives` now wins every measured Massively scan and
 compaction row: 1.09x-2.81x on RTX, 1.10x-1.53x on dopey, and 1.09x-1.49x on
 grumpy. Jetson sort controls remained within 0.12% of their prior baseline.
+The [fused compaction-prefix follow-up](benchmarks/2026-08-08-fused-compaction-prefix.md)
+removes compaction's full-size prefix-add pass. Fresh 10M all-fronts matrices
+lead Massively by 1.48x-8.55x on both Jetsons, while the complete RTX matrix
+leads by 1.12x-19.71x. Compaction specifically reaches 2.06x/1.52x at 10M/100M
+on RTX, 1.66x/1.52x on dopey, and 1.63x/1.49x on grumpy.
 
 ## GPU profiling
 
@@ -361,9 +368,9 @@ subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 Reusable predicate masks and the pinned Massively comparison complete the first
 post-0.4 evidence pass. Exact hierarchical scan binding ranges, a three-level
 regression, and validated 100M scan-derived results close the first correctness
-item. Direct output and the feature-gated subgroup scan now also close the
-measured scan-performance gap without regressing Jetson sort. The remaining work
-is ordered by measured impact:
+item. Direct output, the feature-gated subgroup scan, and fused compaction block
+prefixes now close the measured Massively gaps without regressing Jetson sort.
+The remaining work is ordered by measured impact:
 
 1. **Validate more hardware:** measure scan, compaction, and the specialized sort
    paths on AMD, Intel, and Apple adapters plus additional driver versions.

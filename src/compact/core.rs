@@ -151,7 +151,7 @@ impl CompactCore {
 
         let span_count = self
             .scanner
-            .compute_pass_count(num_items)
+            .compute_block_local_pass_count(num_items)
             .checked_add(1)
             .ok_or(Error::SizeOverflow)?;
         let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
@@ -225,19 +225,15 @@ impl CompactCore {
             .as_ref()
             .expect("compaction offsets exist for non-empty inputs");
 
-        if let Some(profiler) = profiler.as_deref_mut() {
-            self.scanner.record_profiled_exclusive_scan(
-                encoder,
-                mask,
-                offsets,
-                num_items,
-                "compact.scan",
-                profiler,
-            )?;
-        } else {
-            self.scanner
-                .record_exclusive_scan(encoder, mask, offsets, num_items)?;
-        }
+        let scan_items_per_block = self.scanner.record_block_local_exclusive_scan(
+            encoder,
+            mask,
+            offsets,
+            num_items,
+            "compact.scan",
+            profiler.as_deref_mut(),
+        )?;
+        let block_prefixes = self.scanner.block_prefix_buffer().unwrap_or(offsets);
         self.pipeline.dispatch(
             &self.device,
             encoder,
@@ -245,9 +241,11 @@ impl CompactCore {
                 input,
                 mask,
                 offsets,
+                block_prefixes,
                 output,
                 output_count,
                 num_items,
+                scan_items_per_block,
             },
             profiler,
         );

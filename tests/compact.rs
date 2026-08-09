@@ -48,6 +48,26 @@ async fn compact_matches_cpu_across_boundaries_and_patterns() {
 }
 
 #[tokio::test]
+async fn portable_compaction_fuses_block_prefixes_without_subgroups() {
+    let Some(context) = support::gpu_context_without_optional_features().await else {
+        return;
+    };
+    assert!(!context.device.features().contains(wgpu::Features::SUBGROUP));
+    let size = 4_097;
+    let input: Vec<_> = (0..size as u32).map(|index| index ^ 0x5A5A_0000).collect();
+    let mask: Vec<_> = (0..size).map(|index| u32::from(index % 3 != 1)).collect();
+    let mut compactor = Compactor::from_context(&context);
+
+    assert_eq!(
+        compactor
+            .compact(&input, &mask)
+            .await
+            .expect("portable GPU compaction failed"),
+        cpu_compact(&input, &mask)
+    );
+}
+
+#[tokio::test]
 async fn compact_preserves_selected_input_order() {
     let Some(context) = support::gpu_context().await else {
         return;

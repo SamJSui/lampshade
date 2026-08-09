@@ -55,5 +55,10 @@
     "subgroup_hierarchy_regression_items": 4194305,
     "portable_fallback_test_items": 4097,
     "portable_fallback_subgroups_enabled": false
+  },
+  "compaction_follow_up": {
+    "status": "fused block prefixes improve compaction by 19.9%-27.3%",
+    "report": "2026-08-08-fused-compaction-prefix.md",
+    "snapshot": "2026-08-08-fused-compaction-prefix.json"
   }
 }

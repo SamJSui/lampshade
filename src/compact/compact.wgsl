@@ -1,7 +1,7 @@
 struct Params {
     num_items: u32,
     groups_x: u32,
-    _padding_0: u32,
+    scan_items_per_block: u32,
     _padding_1: u32,
 }
 
@@ -15,7 +15,8 @@ struct KeyValue {
 @group(0) @binding(2) var<storage, read> offsets: array<u32>;
 @group(0) @binding(3) var<storage, read_write> output: array<{{ITEM_TYPE}}>;
 @group(0) @binding(4) var<storage, read_write> output_count: array<u32>;
-@group(0) @binding(5) var<uniform> params: Params;
+@group(0) @binding(5) var<storage, read> block_prefixes: array<u32>;
+@group(0) @binding(6) var<uniform> params: Params;
 
 const BLOCK_SIZE: u32 = 256u;
 
@@ -31,11 +32,16 @@ fn main(
     }
 
     let keep = mask[index];
+    let scan_block = index / params.scan_items_per_block;
+    var destination = offsets[index];
+    if (scan_block > 0u) {
+        destination += block_prefixes[scan_block - 1u];
+    }
     if (keep == 1u) {
-        output[offsets[index]] = input[index];
+        output[destination] = input[index];
     }
 
     if (index + 1u == params.num_items) {
-        output_count[0] = offsets[index] + keep;
+        output_count[0] = destination + keep;
     }
 }
