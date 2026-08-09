@@ -4,14 +4,15 @@ use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
     Compactor, Context, GpuProfile, KeyValue, KeyValueCompactor, KeyValueSorter, MaskGenerator,
-    Scanner, Sorter, U32Predicate,
+    Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 7] = [
+const DEFAULT_CASES: [ProfileCase; 8] = [
     ProfileCase::Predicate(50),
+    ProfileCase::ReductionSum,
     ProfileCase::Scan,
     ProfileCase::Compact(50),
     ProfileCase::KeyValueCompact(50),
@@ -23,6 +24,7 @@ const DEFAULT_CASES: [ProfileCase; 7] = [
 #[derive(Clone, Copy)]
 enum ProfileCase {
     Predicate(u32),
+    ReductionSum,
     Scan,
     Compact(u32),
     KeyValueCompact(u32),
@@ -74,6 +76,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ProfileCase::Predicate(selectivity) => {
                     profile_predicate(&context, item_count, *selectivity, &config).await?
                 }
+                ProfileCase::ReductionSum => {
+                    profile_reduction_sum(&context, item_count, &config).await?
+                }
                 ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
                 ProfileCase::Compact(selectivity) => {
                     profile_compaction(&context, item_count, *selectivity, &config).await?
@@ -93,6 +98,83 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+async fn profile_reduction_sum(
+    context: &Context,
+    item_count: usize,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let input = deterministic_keys(item_count);
+    let gpu_input = create_input(context, "Profile Reduction Input", &input);
+    let gpu_output = create_output(
+        context,
+        "Profile Reduction Output",
+        Reducer::output_buffer_size(),
+    );
+    let mut reducer = Reducer::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || {
+            reducer.reduce_gpu_to_gpu(
+                &gpu_input,
+                &gpu_output,
+                item_count as u32,
+                U32Reduction::Sum,
+            )
+        },
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || {
+            reducer.reduce_gpu_to_gpu(
+                &gpu_input,
+                &gpu_output,
+                item_count as u32,
+                U32Reduction::Sum,
+            )
+        },
+        context,
+    )?;
+    let _ = reducer
+        .profile_reduce_gpu_to_gpu(
+            &gpu_input,
+            &gpu_output,
+            item_count as u32,
+            U32Reduction::Sum,
+        )
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            reducer
+                .profile_reduce_gpu_to_gpu(
+                    &gpu_input,
+                    &gpu_output,
+                    item_count as u32,
+                    U32Reduction::Sum,
+                )
+                .await?,
+        );
+    }
+    report("reduction_sum", item_count, wall, &profiles);
+
+    if profile_validation_enabled() {
+        let actual = reducer.sum(&input).await?;
+        let expected = input
+            .iter()
+            .fold(0_u32, |sum, value| sum.wrapping_add(*value));
+        if actual != expected {
+            return Err(format!(
+                "reduction_sum validation failed: expected {expected}, got {actual}"
+            )
+            .into());
+        }
+        println!("validation,reduction_sum,{item_count},passed,1");
+    }
     Ok(())
 }
 
@@ -589,6 +671,8 @@ fn stage(label: &str) -> &'static str {
         "scan"
     } else if label.starts_with("radix.") && label.contains(".scan.") {
         "histogram_scan"
+    } else if label.starts_with("reduction.") {
+        "reduce"
     } else if label.contains(".level.") {
         "scan"
     } else {
@@ -693,6 +777,7 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
         .map(|value| {
             let value = value.trim();
             match value {
+                "reduction_sum" => Ok(ProfileCase::ReductionSum),
                 "scan" => Ok(ProfileCase::Scan),
                 "key_sort" => Ok(ProfileCase::KeySort),
                 "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),

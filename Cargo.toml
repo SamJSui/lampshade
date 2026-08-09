@@ -60,3 +60,7 @@ harness = false
 [[bench]]
 name = "predicate"
 harness = false
+
+[[bench]]
+name = "reduce"
+harness = false

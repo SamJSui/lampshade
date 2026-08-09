@@ -151,9 +151,9 @@ def main() -> None:
             "quick": args.quick,
         },
         "methodology": {
-            "timing": "resident public API call through GPU completion",
-            "excluded": ["host upload", "readback", "correctness validation"],
-            "allocation_difference": "wgpu-primitives reuses caller-owned outputs; Massively public APIs allocate owned outputs and may reuse CubeCL allocator storage",
+            "timing": "per-run public API boundary; reduction returns a host scalar, other workloads end at GPU completion",
+            "excluded": ["host upload", "correctness validation", "non-reduction readback"],
+            "allocation_difference": "reduction includes each implementation's scalar readback path; other wgpu-primitives workloads reuse caller-owned outputs while Massively returns owned outputs",
         },
         "runs": runs,
         "failures": failures,

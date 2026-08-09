@@ -8,21 +8,25 @@ pinned exactly in `Cargo.lock`; its `v0.96` source revision is
 
 ## Workloads
 
+- `reduce_sum`: wrapping unsigned 32-bit sum reduction to one host scalar.
 - `sort_bounded16`: stable `u32` key/value radix sort where keys are known to fit in 16 bits.
 - `sort_full_width`: stable `u32` key/value radix sort across the full 32-bit key range.
 - `exclusive_scan`: wrapping unsigned 32-bit exclusive prefix sum.
 - `compact_50`: stable copy-if using a precomputed `u32` mask with 50% selectivity.
 
 Every runner generates the same deterministic input. Before timing, it reads the output back and
-checks ordering, sort stability and permutation, exact scan values, or exact stable compaction.
+checks the wrapping sum, ordering, sort stability and permutation, exact scan values, or exact
+stable compaction.
 Massively's sort-by-key API returns only the permuted values, whereas `KeyValueSorter`
 writes both keys and values; the validator reconstructs Massively's keys through the
 original value indices so both implementations must satisfy the same stable ordering.
 
 ## Timing boundary
 
-The primary measurement is resident public-API wall time through confirmed GPU completion. Host
-upload, readback, and correctness validation are excluded. This includes a real API difference:
+The primary measurement is resident public-API wall time through confirmed GPU completion. For
+sort, scan, and compaction, host upload, readback, and correctness validation are excluded. The
+reduction boundary instead ends at the returned host scalar for both libraries, so its timed call
+includes the four-byte readback. This includes a real API difference:
 wgpu-primitives reuses caller-owned output and workspace buffers, while Massively's public APIs
 return a newly allocated owned output on each call. CubeCL may satisfy that allocation from its
 cache after warmup. The JSON preserves this distinction instead of presenting the calls as
@@ -72,3 +76,6 @@ The [fused compaction-prefix follow-up](../2026-08-08-fused-compaction-prefix.md
 removes the full-size compaction prefix-add pass and publishes a fresh RTX
 all-fronts matrix plus current Jetson controls. Exact compaction process medians
 are in its [machine-readable snapshot](../2026-08-08-fused-compaction-prefix.json).
+The [reduction report](../2026-08-09-reduction.md) adds wrapping sum to the
+cross-vendor matrix and separates GPU dispatch time from the required host-scalar
+readback. Its compact data is in the [reduction snapshot](../2026-08-09-reduction.json).

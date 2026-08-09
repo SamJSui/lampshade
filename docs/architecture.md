@@ -15,13 +15,15 @@ there is evidence that users need independent release cycles.
 
 ### 1. Slice convenience
 
-Methods such as `Sorter::sort(&mut self, input: &[u32])` accept borrowed CPU
-data, upload it, run the primitive, and return an owned `Vec`. They are the
-smallest path from ordinary Rust code to a correct GPU result.
+Methods such as `Sorter::sort(&mut self, input: &[u32])` and
+`Reducer::sum(&mut self, input: &[u32])` accept borrowed CPU data, upload it,
+run the primitive, and return an owned result. They are the smallest path from
+ordinary Rust code to a correct GPU result.
 
 The input borrow lasts across `.await` because the async function may still
-need the slice before it finishes. The returned `Vec` owns its allocation, so
-it remains valid independently of the input and sorter.
+need the slice before it finishes. The returned `Vec` owns its allocation,
+while a returned `u32` is copied by value; either remains valid independently
+of the input and primitive object.
 
 ### 2. Resident-buffer composition
 
@@ -61,9 +63,9 @@ Private code owns the mechanisms that public methods share:
 - `AdapterCapabilities` records hardware facts separately from kernel policy.
 - primitive-specific pipelines select and dispatch WGSL implementations.
 
-The reusable state explains why scan, compaction, and sort generally take
-`&mut self`: a call may grow scratch storage or refresh cached bindings. A
-predicate mask does not own changing workspace, so its public methods can use
+The reusable state explains why reduction, scan, compaction, and sort generally
+take `&mut self`: a call may grow scratch storage or refresh cached bindings.
+A predicate mask does not own changing workspace, so its public methods can use
 `&self`.
 
 Kernel selection uses explicit enums rather than trait objects. That keeps the

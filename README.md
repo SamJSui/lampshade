@@ -5,14 +5,16 @@
 [![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Fast, composable GPU predicate masks, prefix scan, stream compaction, and unsigned integer radix sort for Rust applications using wgpu.
+Fast, composable GPU reduction, predicate masks, prefix scan, stream compaction,
+and unsigned integer radix sort for Rust applications using wgpu.
 
 ## Benchmarks
 
 Resident GPU-buffer benchmarks include command recording, submission, execution,
-and reusable workspace management. They exclude host upload and readback. Inputs
-are deterministic, outputs are validated, and reported comparisons are the median
-of three process medians.
+and reusable workspace management. They exclude host upload and validation
+readback. Reduction comparisons include the required four-byte scalar readback
+for both libraries. Inputs are deterministic, outputs are validated, and reported
+comparisons are medians of independent process medians.
 
 ### Against Massively 0.96
 
@@ -25,6 +27,7 @@ overlapping 100-million-item workload:
 | Stable sort, full-width keys | 14.990 ms | 165.862 ms | 11.07x |
 | Exclusive scan | 2.836 ms | 3.174 ms | 1.12x |
 | Stable compaction, 50% selected | 3.736 ms | 5.695 ms | 1.52x |
+| Wrapping sum reduction | 0.747 ms | 1.038 ms | 1.39x |
 
 The same comparison at 10 million items also favored `wgpu-primitives` on two
 Jetson Orin Nano systems:
@@ -37,13 +40,14 @@ Jetson Orin Nano systems:
 | Stable compaction, 50% selected | 2.06x | 1.66x | 1.63x |
 
 See the [Massively harness](benchmarks/massively-comparison/README.md) and
-[latest NVIDIA report](benchmarks/2026-08-08-fused-compaction-prefix.md) for the
-method, exact revisions, complete matrices, and machine-readable results.
+[reduction report](benchmarks/2026-08-09-reduction.md) for the method, exact
+revisions, complete matrices, and machine-readable results.
 
 ### Intel Vulkan
 
-On Intel Alder Lake-N integrated graphics at 10 million items, the
-capability-gated 4-bit radix path led Massively in every workload:
+On Intel Alder Lake-N integrated graphics at 10 million items,
+`wgpu-primitives` led Massively in every workload. Sort uses the
+capability-gated 4-bit radix path; reduction uses the portable kernel:
 
 | Workload | `wgpu-primitives` | Massively | Speedup |
 | --- | ---: | ---: | ---: |
@@ -51,15 +55,17 @@ capability-gated 4-bit radix path led Massively in every workload:
 | Stable sort, full-width keys | 261.765 ms | 587.289 ms | 2.24x |
 | Exclusive scan | 12.820 ms | 33.620 ms | 2.62x |
 | Stable compaction, 50% selected | 15.609 ms | 40.408 ms | 2.59x |
+| Wrapping sum reduction | 3.676 ms | 4.471 ms | 1.22x |
 
-All 64 release tests passed. The
+All 74 release tests passed. At 100M, reduction measured 22.326 ms versus
+22.724 ms for Massively, a narrow 1.02x lead. The
 [Intel wide-radix report](benchmarks/2026-08-09-intel-wide-radix.md) includes
 1M-100M results, stage profiles, and measured regression controls. At 100M,
 the same four speedups are 9.78x, 4.79x, 2.44x, and 2.52x respectively.
 
 ### Apple Metal
 
-An M3 Pro completed all 64 release tests and every 100-million-item validator:
+An M3 Pro completed all 74 release tests and every 100-million-item validator:
 
 | Workload | Time | Throughput |
 | --- | ---: | ---: |
@@ -67,11 +73,16 @@ An M3 Pro completed all 64 release tests and every 100-million-item validator:
 | Stable sort, full-width keys | 294.699 ms | 0.34 billion pairs/s |
 | Exclusive scan | 13.736 ms | 7.28 billion items/s |
 | Stable compaction, 50% selected | 18.302 ms | 5.46 billion items/s |
+| Wrapping sum reduction, GPU-resident | 3.065 ms | 32.63 billion items/s |
 
 Massively 0.96 could not initialize these Metal pipelines: its generated layouts
 requested 42 or 47 storage buffers against the adapter limit of 29. The harness
-records this as an unsupported comparison, not an artificial speedup. See the
-[Apple report](benchmarks/2026-08-08-apple-metal-validation.md) and
+records this as an unsupported comparison, not an artificial speedup. Its
+reduction does run: the end-to-host scalar boundary measured 3.493 ms versus
+4.643 ms for `wgpu-primitives`, where about 1.6 ms is Metal completion/readback
+overhead. See the
+[reduction report](benchmarks/2026-08-09-reduction.md), the earlier
+[Apple report](benchmarks/2026-08-08-apple-metal-validation.md), and the
 [upstream issue](https://github.com/massively-labs/massively/issues/62).
 
 ### Against wgpu_sort
@@ -88,6 +99,7 @@ the pinned baseline and reproduction harness.
 
 ## Features
 
+- Wrapping sum, minimum, and maximum reduction for `u32` values.
 - Inclusive and exclusive `u32` prefix scan.
 - Reusable comparison predicates that produce compaction-ready masks.
 - Stable compaction of `u32` values and `KeyValue` records.
@@ -110,12 +122,15 @@ as `wgpu-algorithms`.
 ## Quick start
 
 ```rust
-use wgpu_primitives::{Compactor, Context, MaskGenerator, Scanner, Sorter, U32Predicate};
+use wgpu_primitives::{
+    Compactor, Context, MaskGenerator, Reducer, Scanner, Sorter, U32Predicate,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), wgpu_primitives::Error> {
     let context = Context::init().await?;
     let generator = MaskGenerator::from_context(&context);
+    let mut reducer = Reducer::from_context(&context);
     let mut scanner = Scanner::from_context(&context);
     let mut compactor = Compactor::from_context(&context);
     let mut sorter = Sorter::from_context(&context);
@@ -126,6 +141,7 @@ async fn main() -> Result<(), wgpu_primitives::Error> {
         .await?;
 
     assert_eq!(mask, [0, 1, 0, 1, 1, 0]);
+    assert_eq!(reducer.sum(&input).await?, 66);
     assert_eq!(scanner.scan_exclusive(&[3, 1, 4, 1]).await?, [0, 3, 4, 8]);
     assert_eq!(compactor.compact(&input, &mask).await?, [17, 22, 11]);
     assert_eq!(sorter.sort(&input).await?, [3, 4, 9, 11, 17, 22]);
@@ -179,6 +195,8 @@ resident composition, and private kernel/runtime layers.
 
 ## How it works
 
+- **Reduction:** each workgroup combines a coalesced input range into one
+  partial value; later passes repeat over the partials until one value remains.
 - **Predicate mask:** one thread evaluates each value or `KeyValue` field and
   writes a `0` or `1`.
 - **Scan:** workgroups scan local ranges, recursively scan block totals, then add
@@ -205,8 +223,8 @@ $env:WGPU_PRIMITIVES_PROFILE_VALIDATE = '1'
 cargo run --release --example profile_primitives
 ```
 
-Cases include scan, sort, predicate, value compaction, and key/value compaction
-at selectable sizes and selectivities.
+Cases include reduction, scan, sort, predicate, value compaction, and key/value
+compaction at selectable sizes and selectivities.
 
 ## Roadmap
 
@@ -231,9 +249,9 @@ cargo check --examples --benches
 cargo package
 ```
 
-Criterion benches cover `scan`, `compact`, `key_value_compact`, `predicate`,
-`sort`, and `key_value_sort`. GPU integration tests skip when no compatible
-adapter is available; CI uses Mesa's Vulkan software adapter.
+Criterion benches cover `reduce`, `scan`, `compact`, `key_value_compact`,
+`predicate`, `sort`, and `key_value_sort`. GPU integration tests skip when no
+compatible adapter is available; CI uses Mesa's Vulkan software adapter.
 
 ## License
 
