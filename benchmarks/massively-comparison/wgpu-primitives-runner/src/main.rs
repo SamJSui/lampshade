@@ -4,11 +4,13 @@ use std::time::{Duration, Instant};
 
 use massively_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkRun, GeneratorMetadata, SCHEMA_VERSION, SortInput,
-    Workload, generate_compact, generate_scan, median, public_buffer_memory, runtime_metadata,
-    validate_compact, validate_exclusive_scan,
+    Workload, generate_compact, generate_reduction, generate_scan, median, public_buffer_memory,
+    runtime_metadata, validate_compact, validate_exclusive_scan, validate_reduction_sum,
 };
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Compactor, Context, KeyValue, KeyValueSorter, Scanner};
+use wgpu_primitives::{
+    Compactor, Context, KeyValue, KeyValueSorter, Reducer, Scanner, U32Reduction,
+};
 
 type AnyError = Box<dyn std::error::Error>;
 
@@ -23,6 +25,7 @@ async fn run() -> Result<(), AnyError> {
     let config = BenchmarkConfig::from_env()?;
     let context = Context::init().await?;
     let (samples_ms, output_items) = match config.workload {
+        Workload::ReduceSum => run_reduce(&context, &config)?,
         Workload::SortBounded16 | Workload::SortFullWidth => run_sort(&context, &config)?,
         Workload::ExclusiveScan => run_scan(&context, &config)?,
         Workload::Compact50 => run_compact(&context, &config)?,
@@ -43,8 +46,14 @@ async fn run() -> Result<(), AnyError> {
         adapter: adapter_metadata(&context),
         config: config.clone(),
         generator: GeneratorMetadata::current(),
-        timing_boundary: "public resident GPU API call through device completion; excludes upload, readback, and validation".into(),
-        output_allocation: "caller-owned output and reusable primitive workspace allocated before timing".into(),
+        timing_boundary: match config.workload {
+            Workload::ReduceSum => "resident GPU input through returned host scalar; excludes upload and validation",
+            _ => "public resident GPU API call through device completion; excludes upload, readback, and validation",
+        }.into(),
+        output_allocation: match config.workload {
+            Workload::ReduceSum => "caller-owned scalar output; timed readback allocates one staging buffer per call",
+            _ => "caller-owned output and reusable primitive workspace allocated before timing",
+        }.into(),
         correctness_checked: true,
         samples_ms,
         median_ms,
@@ -54,6 +63,88 @@ async fn run() -> Result<(), AnyError> {
     };
     println!("{}", serde_json::to_string(&run)?);
     Ok(())
+}
+
+fn run_reduce(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, u32), AnyError> {
+    let input = generate_reduction(config.items);
+    let gpu_input = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Massively Comparison Reduction Input"),
+            contents: bytemuck::cast_slice(&input),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let gpu_output = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Massively Comparison Reduction Output"),
+        size: Reducer::output_buffer_size(),
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let mut reducer = Reducer::from_context(context);
+
+    let actual = reduce_to_host(
+        context,
+        &mut reducer,
+        &gpu_input,
+        &gpu_output,
+        config.items,
+    )?;
+    validate_reduction_sum(&input, actual)?;
+
+    let samples = warm_and_sample(config, || {
+        let value = reduce_to_host(
+            context,
+            &mut reducer,
+            &gpu_input,
+            &gpu_output,
+            config.items,
+        )?;
+        black_box(value);
+        Ok(())
+    })?;
+    Ok((samples, 1))
+}
+
+fn reduce_to_host(
+    context: &Context,
+    reducer: &mut Reducer,
+    input: &wgpu::Buffer,
+    output: &wgpu::Buffer,
+    items: u32,
+) -> Result<u32, AnyError> {
+    let staging = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Massively Comparison Reduction Readback"),
+        size: Reducer::output_buffer_size(),
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    reducer.record_reduce(&mut encoder, input, output, items, U32Reduction::Sum)?;
+    encoder.copy_buffer_to_buffer(
+        output,
+        0,
+        &staging,
+        0,
+        Reducer::output_buffer_size(),
+    );
+    let submission = context.queue.submit([encoder.finish()]);
+    let slice = staging.slice(..);
+    let (sender, receiver) = mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |result| {
+        let _ = sender.send(result);
+    });
+    context.device.poll(wgpu::PollType::Wait {
+        submission_index: Some(submission),
+        timeout: None,
+    })?;
+    receiver.recv()??;
+    let value = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range())[0];
+    staging.unmap();
+    Ok(value)
 }
 
 fn run_sort(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, u32), AnyError> {

@@ -7,7 +7,7 @@ Usage: benchmarks/massively-comparison/run.sh [options]
 
 Options:
   --items CSV       Item counts (default: 1000000,10000000,100000000)
-  --workloads CSV   sort_bounded16,sort_full_width,exclusive_scan,compact_50
+  --workloads CSV   reduce_sum,sort_bounded16,sort_full_width,exclusive_scan,compact_50
   --processes N     Independent processes, 1-20 (default: 3)
   --backend NAME    wgpu-primitives backend (default: vulkan)
   --output PATH     Aggregate JSON path
@@ -24,7 +24,7 @@ require_value() {
 }
 
 items_csv=1000000,10000000,100000000
-workloads_csv=sort_bounded16,sort_full_width,exclusive_scan,compact_50
+workloads_csv=reduce_sum,sort_bounded16,sort_full_width,exclusive_scan,compact_50
 processes=3
 backend=vulkan
 output_path=
@@ -52,7 +52,7 @@ if [ "$processes" -lt 1 ] || [ "$processes" -gt 20 ]; then
 fi
 if [ "$quick" = true ]; then
     items_csv=1000000
-    workloads_csv=sort_bounded16,sort_full_width,exclusive_scan,compact_50
+    workloads_csv=reduce_sum,sort_bounded16,sort_full_width,exclusive_scan,compact_50
     processes=1
 fi
 
@@ -144,7 +144,7 @@ for item_count in $(csv_words "$items_csv"); do
         warmups=4; warmup_ms=2000; samples=11
     fi
     for workload in $(csv_words "$workloads_csv"); do
-        case "$workload" in sort_bounded16|sort_full_width|exclusive_scan|compact_50) ;; *) echo "unsupported workload: $workload" >&2; exit 2 ;; esac
+        case "$workload" in reduce_sum|sort_bounded16|sort_full_width|exclusive_scan|compact_50) ;; *) echo "unsupported workload: $workload" >&2; exit 2 ;; esac
         process_index=1
         while [ "$process_index" -le "$processes" ]; do
             run_one "$primitives_executable" wgpu-primitives "wgpu-primitives-$package_version" "$repo_revision" "$item_count" "$workload" "$warmups" "$warmup_ms" "$samples" "$process_index"

@@ -2,8 +2,8 @@ mod support;
 
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
-    Compactor, Error, KeyValue, KeyValueField, KeyValueSorter, MaskGenerator, Scanner, Sorter,
-    U32Predicate,
+    Compactor, Error, GpuProfile, KeyValue, KeyValueField, KeyValueSorter, MaskGenerator, Reducer,
+    Scanner, Sorter, U32Predicate, U32Reduction,
 };
 
 fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
@@ -11,6 +11,20 @@ fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
         .device
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY)
+}
+
+fn assert_timestamps_contain_dispatches(profile: &GpuProfile) {
+    // Each span and the enclosing interval are independently converted from
+    // timestamp ticks to `Duration`, so allow at most one nanosecond of
+    // conversion rounding per span plus one for the enclosing interval.
+    let rounding_tolerance = std::time::Duration::from_nanos(profile.spans.len() as u64 + 1);
+    assert!(
+        profile.gpu_elapsed.saturating_add(rounding_tolerance) >= profile.dispatch_time,
+        "per-span timestamp rounding exceeded the enclosing GPU interval: elapsed={:?}, dispatch={:?}, tolerance={:?}",
+        profile.gpu_elapsed,
+        profile.dispatch_time,
+        rounding_tolerance
+    );
 }
 
 fn storage_buffer(
@@ -103,7 +117,7 @@ async fn profiles_stream_compaction_scan_and_scatter() {
             .all(|span| span.label != "compact.scan.add.0"),
         "compaction scatter should consume block prefixes without a full-size add pass"
     );
-    assert!(profile.gpu_elapsed >= profile.dispatch_time);
+    assert_timestamps_contain_dispatches(&profile);
 }
 
 fn cpu_compact(input: &[u32], mask: &[u32]) -> Vec<u32> {
@@ -148,7 +162,7 @@ async fn profiles_predicate_masks() {
     );
     assert_eq!(profile.spans.len(), 1);
     assert_eq!(profile.spans[0].label, "predicate.mask");
-    assert!(profile.gpu_elapsed >= profile.dispatch_time);
+    assert_timestamps_contain_dispatches(&profile);
 
     let pairs: Vec<_> = input
         .iter()
@@ -223,7 +237,48 @@ async fn profiles_prefix_scan_dispatches() {
             .any(|span| span.label == "scan.level.0")
     );
     assert!(profile.spans.iter().any(|span| span.label == "scan.add.0"));
-    assert!(profile.gpu_elapsed >= profile.dispatch_time);
+    assert_timestamps_contain_dispatches(&profile);
+}
+
+#[tokio::test]
+async fn profiles_reduction_hierarchy() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping timestamp profile test because the adapter lacks timestamp queries");
+        return;
+    }
+
+    let input = support::random_u32(8_193, 0x5ED0);
+    let gpu_input = storage_buffer(&context.device, "Profile Reduction Input", &input);
+    let gpu_output = output_buffer(
+        &context.device,
+        "Profile Reduction Output",
+        Reducer::output_buffer_size(),
+    );
+    let mut reducer = Reducer::from_context(&context);
+    let profile = reducer
+        .profile_reduce_gpu_to_gpu(
+            &gpu_input,
+            &gpu_output,
+            input.len() as u32,
+            U32Reduction::Sum,
+        )
+        .await
+        .expect("profiled reduction failed");
+    let expected = input
+        .iter()
+        .fold(0_u32, |sum, value| sum.wrapping_add(*value));
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_output, 1).await,
+        [expected]
+    );
+    assert_eq!(profile.spans.len(), 2);
+    assert_eq!(profile.spans[0].label, "reduction.sum.level.0");
+    assert_eq!(profile.spans[1].label, "reduction.sum.level.1");
+    assert_timestamps_contain_dispatches(&profile);
 }
 
 #[tokio::test]

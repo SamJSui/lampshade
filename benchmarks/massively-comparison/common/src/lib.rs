@@ -13,6 +13,8 @@ pub const MASSIVELY_REVISION: &str = "ef9de55190529be98203aca207edab9d560d312e";
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Workload {
+    #[serde(rename = "reduce_sum")]
+    ReduceSum,
     #[serde(rename = "sort_bounded16")]
     SortBounded16,
     #[serde(rename = "sort_full_width")]
@@ -26,6 +28,7 @@ pub enum Workload {
 impl Workload {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ReduceSum => "reduce_sum",
             Self::SortBounded16 => "sort_bounded16",
             Self::SortFullWidth => "sort_full_width",
             Self::ExclusiveScan => "exclusive_scan",
@@ -36,6 +39,7 @@ impl Workload {
     pub const fn output_items(self, input_items: u32) -> u32 {
         match self {
             Self::Compact50 => input_items.div_ceil(2),
+            Self::ReduceSum => 1,
             _ => input_items,
         }
     }
@@ -46,12 +50,13 @@ impl FromStr for Workload {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
+            "reduce_sum" => Ok(Self::ReduceSum),
             "sort_bounded16" => Ok(Self::SortBounded16),
             "sort_full_width" => Ok(Self::SortFullWidth),
             "exclusive_scan" => Ok(Self::ExclusiveScan),
             "compact_50" => Ok(Self::Compact50),
             _ => Err(ConfigError(format!(
-                "MASSIVELY_BENCH_WORKLOAD must be sort_bounded16, sort_full_width, exclusive_scan, or compact_50; got {value:?}"
+                "MASSIVELY_BENCH_WORKLOAD must be reduce_sum, sort_bounded16, sort_full_width, exclusive_scan, or compact_50; got {value:?}"
             ))),
         }
     }
@@ -179,6 +184,28 @@ pub fn generate_scan(items: u32) -> Vec<u32> {
         .collect()
 }
 
+pub fn generate_reduction(items: u32) -> Vec<u32> {
+    let mut state = GENERATOR_BASE_SEED ^ items ^ 0x5ED0_CE00;
+    (0..items)
+        .map(|_| {
+            state = xorshift32(state);
+            state
+        })
+        .collect()
+}
+
+pub fn validate_reduction_sum(input: &[u32], output: u32) -> Result<(), String> {
+    let expected = input
+        .iter()
+        .fold(0_u32, |sum, value| sum.wrapping_add(*value));
+    if output != expected {
+        return Err(format!(
+            "reduction sum mismatch: expected {expected}, got {output}"
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_exclusive_scan(input: &[u32], output: &[u32]) -> Result<(), String> {
     if output.len() != input.len() {
         return Err(format!(
@@ -263,6 +290,8 @@ pub fn public_buffer_memory(
 ) -> MemoryEstimate {
     let items = u64::from(items);
     let primary = match (implementation, workload) {
+        ("wgpu-primitives", Workload::ReduceSum) => 4 * items + 8,
+        ("massively", Workload::ReduceSum) => 4 * items,
         ("wgpu-primitives", Workload::SortBounded16 | Workload::SortFullWidth) => 16 * items,
         ("massively", Workload::SortBounded16 | Workload::SortFullWidth) => 12 * items,
         (_, Workload::ExclusiveScan) => 8 * items,
@@ -270,12 +299,12 @@ pub fn public_buffer_memory(
         _ => 0,
     };
     MemoryEstimate {
-        model: "public input/output allocations only".into(),
+        model: "known public input/output and timed I/O allocations".into(),
         primary_input_output_bytes: primary,
         workspace_bytes: None,
         total_known_buffer_bytes: primary,
         exclusions: vec![
-            "algorithm workspace and allocator caching".into(),
+            "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage".into(),
             "validation readback buffers".into(),
             "driver-managed allocations".into(),
         ],
@@ -385,6 +414,19 @@ mod tests {
     #[test]
     fn scan_validation_uses_wrapping_u32_addition() {
         assert!(validate_exclusive_scan(&[u32::MAX, 2], &[0, u32::MAX]).is_ok());
+    }
+
+    #[test]
+    fn reduction_validation_uses_wrapping_u32_addition() {
+        assert!(validate_reduction_sum(&[u32::MAX, 2], 1).is_ok());
+        assert!(validate_reduction_sum(&[u32::MAX, 2], 2).is_err());
+    }
+
+    #[test]
+    fn reduction_memory_counts_explicit_wgpu_scalar_buffers() {
+        let memory = public_buffer_memory("wgpu-primitives", Workload::ReduceSum, 10);
+        assert_eq!(memory.primary_input_output_bytes, 48);
+        assert_eq!(memory.total_known_buffer_bytes, 48);
     }
 
     #[test]

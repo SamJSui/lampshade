@@ -1,0 +1,43 @@
+{
+  "date": "2026-08-09",
+  "primitive": "u32_wrapping_sum_reduction",
+  "candidate_source": {
+    "branch": "feat/reduction",
+    "parent_revision": "bcb8b7b9aaa064802f715b2608827c5da0256ae2",
+    "benchmark_state": "dirty working tree; PR commit provides immutable candidate revision"
+  },
+  "kernel": {
+    "workgroup_threads": 128,
+    "items_per_thread": 32,
+    "items_per_workgroup": 4096
+  },
+  "timing_boundary": "resident GPU input through returned host scalar; excludes upload and validation",
+  "comparison": {
+    "name": "Massively",
+    "version": "0.96.0",
+    "revision": "ef9de55190529be98203aca207edab9d560d312e"
+  },
+  "results": [
+    {"adapter": "NVIDIA GeForce RTX 4070 Ti SUPER", "backend": "Vulkan", "items": 1000000, "wgpu_primitives_ms": 0.0818, "massively_ms": 0.2904, "speedup": 3.5501},
+    {"adapter": "NVIDIA GeForce RTX 4070 Ti SUPER", "backend": "Vulkan", "items": 10000000, "wgpu_primitives_ms": 0.1001, "massively_ms": 0.2942, "speedup": 2.9391},
+    {"adapter": "NVIDIA GeForce RTX 4070 Ti SUPER", "backend": "Vulkan", "items": 100000000, "wgpu_primitives_ms": 0.7473, "massively_ms": 1.0375, "speedup": 1.3883},
+    {"adapter": "Intel(R) Graphics (ADL-N)", "backend": "Vulkan", "items": 1000000, "wgpu_primitives_ms": 1.485, "massively_ms": 2.458, "speedup": 1.66},
+    {"adapter": "Intel(R) Graphics (ADL-N)", "backend": "Vulkan", "items": 10000000, "wgpu_primitives_ms": 3.676, "massively_ms": 4.471, "speedup": 1.22},
+    {"adapter": "Intel(R) Graphics (ADL-N)", "backend": "Vulkan", "items": 100000000, "wgpu_primitives_ms": 22.326, "massively_ms": 22.724, "speedup": 1.02},
+    {"adapter": "Apple M3 Pro", "backend": "Metal", "items": 1000000, "wgpu_primitives_ms": 1.729, "massively_ms": 0.524, "speedup": 0.30},
+    {"adapter": "Apple M3 Pro", "backend": "Metal", "items": 10000000, "wgpu_primitives_ms": 1.716, "massively_ms": 0.761, "speedup": 0.44},
+    {"adapter": "Apple M3 Pro", "backend": "Metal", "items": 100000000, "wgpu_primitives_ms": 4.643, "massively_ms": 3.493, "speedup": 0.75}
+  ],
+  "validation": {
+    "release_tests_intel": 74,
+    "release_tests_apple": 74,
+    "validated_sizes": [1000000, 10000000, 100000000]
+  },
+  "regression_control": {
+    "baseline_revision": "bcb8b7b9aaa064802f715b2608827c5da0256ae2",
+    "items": 10000000,
+    "budget_percent": 2.0,
+    "largest_regression_percent": 0.20,
+    "passed": true
+  }
+}

@@ -6,6 +6,10 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Added
 
+- Portable hierarchical `u32` sum, minimum, and maximum reduction, with slice,
+  immediate resident-buffer, command-recording, and timestamp-profiling APIs.
+- Deterministic reduction correctness coverage across workgroup and hierarchy
+  boundaries, including empty-input identities and wrapping sum overflow.
 - Physical Intel Alder Lake-N Vulkan validation, including all 64 release
   tests and reproducible 1M/10M comparisons against pinned Massively 0.96.
 - An architecture guide defining the slice convenience, resident composition,
@@ -23,6 +27,13 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Performance
 
+- The selected 128-thread, 32-item-per-thread portable reduction shape cuts
+  100M sum dispatch time by 37.5% on Intel Alder Lake-N and 17.2% on Apple M3
+  Pro relative to the initial 256-thread, 8-item implementation, while RTX
+  dispatch remains within 1%.
+- At 100M values, end-to-host wrapping sum is 1.39x faster than Massively on RTX
+  and 1.02x faster on Intel. On Apple it is 0.75x as fast because Metal
+  completion/readback adds about 1.6 ms; the GPU-resident operation is 3.065 ms.
 - On Intel Alder Lake-N, the 4-bit radix route reduces stable key-value sort
   latency by 24.46%-29.89% across 1M-100M items relative to the portable path.
 - At 10M items, `wgpu-primitives` leads Massively by 4.46x for bounded stable

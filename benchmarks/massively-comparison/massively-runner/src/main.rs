@@ -6,8 +6,9 @@ use cubecl::wgpu::{AutoGraphicsApi, RuntimeOptions, WgpuDevice, WgpuRuntime, ini
 use massively::{Executor, vector};
 use massively_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkRun, GeneratorMetadata, MASSIVELY_REVISION,
-    MASSIVELY_VERSION, SCHEMA_VERSION, SortInput, Workload, generate_compact, generate_scan,
-    median, public_buffer_memory, validate_compact, validate_exclusive_scan,
+    MASSIVELY_VERSION, SCHEMA_VERSION, SortInput, Workload, generate_compact, generate_reduction,
+    generate_scan, median, public_buffer_memory, validate_compact, validate_exclusive_scan,
+    validate_reduction_sum,
 };
 
 type AnyError = Box<dyn std::error::Error>;
@@ -36,6 +37,7 @@ fn run() -> Result<(), AnyError> {
     let exec = Executor::<WgpuRuntime>::new(device);
 
     let (samples_ms, output_items) = match config.workload {
+        Workload::ReduceSum => run_reduce(&exec, &config)?,
         Workload::SortBounded16 | Workload::SortFullWidth => run_sort(&exec, &config)?,
         Workload::ExclusiveScan => run_scan(&exec, &config)?,
         Workload::Compact50 => run_compact(&exec, &config)?,
@@ -50,8 +52,14 @@ fn run() -> Result<(), AnyError> {
         adapter,
         config: config.clone(),
         generator: GeneratorMetadata::current(),
-        timing_boundary: "public resident GPU API call through executor synchronization; excludes upload, readback, and validation".into(),
-        output_allocation: "public algorithm allocates an owned output per call; CubeCL allocator may recycle storage".into(),
+        timing_boundary: match config.workload {
+            Workload::ReduceSum => "resident GPU input through returned host scalar; excludes upload and validation",
+            _ => "public resident GPU API call through executor synchronization; excludes upload, readback, and validation",
+        }.into(),
+        output_allocation: match config.workload {
+            Workload::ReduceSum => "public algorithm returns a host scalar; internal temporary allocation is not exposed",
+            _ => "public algorithm allocates an owned output per call; CubeCL allocator may recycle storage",
+        }.into(),
         correctness_checked: true,
         samples_ms,
         median_ms,
@@ -61,6 +69,23 @@ fn run() -> Result<(), AnyError> {
     };
     println!("{}", serde_json::to_string(&run)?);
     Ok(())
+}
+
+fn run_reduce(
+    exec: &Executor<WgpuRuntime>,
+    config: &BenchmarkConfig,
+) -> Result<(Vec<f64>, u32), AnyError> {
+    let input = generate_reduction(config.items);
+    let device_input = exec.to_device(&input);
+
+    let actual = vector::reduce(exec, device_input.slice(..), 0_u32, Add)?;
+    validate_reduction_sum(&input, actual)?;
+
+    let samples = warm_and_sample(config, || {
+        black_box(vector::reduce(exec, device_input.slice(..), 0_u32, Add)?);
+        Ok(())
+    })?;
+    Ok((samples, 1))
 }
 
 fn run_sort(

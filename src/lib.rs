@@ -5,6 +5,7 @@ pub mod context;
 pub mod error;
 pub mod predicate;
 pub mod profiling;
+pub mod reduce;
 pub mod scan;
 pub mod sort;
 
@@ -13,5 +14,6 @@ pub use context::Context;
 pub use error::Error;
 pub use predicate::{KeyValueField, MaskGenerator, U32Predicate};
 pub use profiling::{GpuProfile, GpuTimestampSpan};
+pub use reduce::{Reducer, U32Reduction};
 pub use scan::Scanner;
 pub use sort::{KeyValue, KeyValueSorter, Sorter};

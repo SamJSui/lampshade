@@ -1,7 +1,7 @@
 param(
     [long[]]$Items = @(1000000, 10000000, 100000000),
-    [ValidateSet('sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50')]
-    [string[]]$Workloads = @('sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50'),
+    [ValidateSet('reduce_sum', 'sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50')]
+    [string[]]$Workloads = @('reduce_sum', 'sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50'),
     [ValidateRange(1, 20)]
     [int]$Processes = 3,
     [string]$Backend = 'vulkan',
@@ -25,7 +25,7 @@ if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
 }
 if ($Quick) {
     $Items = @(1000000)
-    $Workloads = @('sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50')
+    $Workloads = @('reduce_sum', 'sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50')
     $Processes = 1
 }
 
@@ -250,9 +250,9 @@ $result = [ordered]@{
         backend = $Backend; items = $Items; workloads = $Workloads; processes = $Processes; quick = [bool]$Quick
     }
     methodology = [ordered]@{
-        timing = 'resident public API call through GPU completion'
-        excluded = @('host upload', 'readback', 'correctness validation')
-        allocation_difference = 'wgpu-primitives reuses caller-owned outputs; Massively public APIs allocate owned outputs and may reuse CubeCL allocator storage'
+        timing = 'per-run public API boundary; reduction returns a host scalar, other workloads end at GPU completion'
+        excluded = @('host upload', 'correctness validation', 'non-reduction readback')
+        allocation_difference = 'reduction includes each implementation''s scalar readback path; other wgpu-primitives workloads reuse caller-owned outputs while Massively returns owned outputs'
     }
     runs = $runs
     failures = $failures
