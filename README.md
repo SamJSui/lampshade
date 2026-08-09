@@ -5,154 +5,128 @@
 [![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Safe, composable GPU predicate masks, prefix scan, stream compaction, and unsigned integer radix sort for Rust applications using wgpu.
+Fast, composable GPU predicate masks, prefix scan, stream compaction, and unsigned integer radix sort for Rust applications using wgpu.
 
-`wgpu-primitives` continues the package previously published as `wgpu-algorithms` beginning with version 0.2.
+## Benchmarks
 
-## Benchmark highlights
+Resident GPU-buffer benchmarks include command recording, submission, execution,
+and reusable workspace management. They exclude host upload and readback. Inputs
+are deterministic, outputs are validated, and reported comparisons are the median
+of three process medians.
 
-With data already resident on an NVIDIA RTX 4070 Ti SUPER, the GPU-buffer APIs delivered the following results at 100 million items (`u32` values or `KeyValue` pairs):
+### Against Massively 0.96
 
-| Primitive | Best backend | GPU time | Resident throughput | Reference | Relative speedup |
-| --- | --- | ---: | ---: | ---: | ---: |
-| Inclusive prefix scan | DX12 | 5.568 ms | 17.96 billion elements/s | Scalar CPU | 5.02x |
-| Exclusive prefix scan | DX12 | 6.238 ms | 16.03 billion elements/s | Scalar CPU | 4.58x |
-| Predicate mask | Vulkan | 1.379 ms | 72.51 billion elements/s | Scalar CPU | 17.28x |
-| Radix sort | Vulkan | 43.724 ms | 2.287 billion elements/s | Rayon | 6.35x |
-| Stable key-value radix sort, 16-bit keys | Vulkan | 8.605 ms | 11.62 billion pairs/s | `wgpu_sort` | 1.73x |
+On an RTX 4070 Ti SUPER using Vulkan, `wgpu-primitives` was faster in every
+overlapping 100-million-item workload:
 
-These figures measure the composable resident-buffer path: command encoding, submission, primitive execution, and reusable workspace management are included, while host upload and readback are excluded. See [Performance](#performance) for smaller inputs and round-trip results.
+| Workload | `wgpu-primitives` | Massively | Speedup |
+| --- | ---: | ---: | ---: |
+| Stable sort, 16-bit keys | 8.395 ms | 165.442 ms | 19.71x |
+| Stable sort, full-width keys | 14.990 ms | 165.862 ms | 11.07x |
+| Exclusive scan | 2.836 ms | 3.174 ms | 1.12x |
+| Stable compaction, 50% selected | 3.736 ms | 5.695 ms | 1.52x |
 
-The stable key-value row uses the NVIDIA Vulkan fast path added in version 0.4
-and the median of three benchmark-process medians. It has 42.2% lower latency
-(1.73x speedup) than `wgpu_sort` at 100 million pairs for this bounded-key
-workload on the tested NVIDIA Vulkan system. With random full-width `u32` keys,
-the same path measured 15.457 ms, a modest 2.8% latency reduction (1.03x
-speedup). The remaining headline rows are from version 0.3.
+The same comparison at 10 million items also favored `wgpu-primitives` on two
+Jetson Orin Nano systems:
+
+| Workload | RTX 4070 Ti SUPER | Jetson, 8 TPC | Jetson, 4 TPC |
+| --- | ---: | ---: | ---: |
+| Stable sort, 16-bit keys | 7.98x | 8.48x | 8.55x |
+| Stable sort, full-width keys | 4.51x | 4.53x | 4.55x |
+| Exclusive scan | 2.81x | 1.53x | 1.48x |
+| Stable compaction, 50% selected | 2.06x | 1.66x | 1.63x |
+
+See the [Massively harness](benchmarks/massively-comparison/README.md) and
+[latest NVIDIA report](benchmarks/2026-08-08-fused-compaction-prefix.md) for the
+method, exact revisions, complete matrices, and machine-readable results.
+
+### Apple Metal
+
+An M3 Pro completed all 64 release tests and every 100-million-item validator:
+
+| Workload | Time | Throughput |
+| --- | ---: | ---: |
+| Stable sort, 16-bit keys | 147.804 ms | 0.68 billion pairs/s |
+| Stable sort, full-width keys | 294.699 ms | 0.34 billion pairs/s |
+| Exclusive scan | 13.736 ms | 7.28 billion items/s |
+| Stable compaction, 50% selected | 18.302 ms | 5.46 billion items/s |
+
+Massively 0.96 could not initialize these Metal pipelines: its generated layouts
+requested 42 or 47 storage buffers against the adapter limit of 29. The harness
+records this as an unsupported comparison, not an artificial speedup. See the
+[Apple report](benchmarks/2026-08-08-apple-metal-validation.md) and
+[upstream issue](https://github.com/massively-labs/massively/issues/62).
+
+### Against wgpu_sort
+
+On the tested NVIDIA Vulkan system at 100 million key/value pairs:
+
+| Key width | `wgpu-primitives` | `wgpu_sort` | Speedup |
+| ---: | ---: | ---: | ---: |
+| 16 bits | 8.605 ms | 14.884 ms | 1.73x |
+| 32 bits | 15.457 ms | 15.907 ms | 1.03x |
+
+The [wgpu_sort report](benchmarks/2026-08-05-wgpu-sort-comparison.md) documents
+the pinned baseline and reproduction harness.
 
 ## Features
 
 - Inclusive and exclusive `u32` prefix scan.
-- Reusable `u32` comparison predicates that generate compaction-ready masks for
-  values or either field of `KeyValue` records.
-- Stable `u32` and `KeyValue` stream compaction from caller-provided 0/1 masks.
-- Stable 2-bit LSD radix sort for `u32` values.
-- Stable LSD radix sort for `(u32 key, u32 value)` pairs, with a profiled NVIDIA Vulkan fast path.
-- Opt-in significant-key-bit bounds that eliminate unnecessary portable and wide radix passes.
-- Convenience slice APIs that upload, execute, and read back.
-- GPU-buffer APIs that record into an existing command encoder.
-- Reusable internal scratch storage.
-- No `unsafe` blocks in library code.
+- Reusable comparison predicates that produce compaction-ready masks.
+- Stable compaction of `u32` values and `KeyValue` records.
+- Stable radix sort for `u32` values and `(u32 key, u32 value)` pairs.
+- Explicit key-width bounds that skip unnecessary radix passes.
+- Slice APIs for simple upload/execute/readback workflows.
+- GPU-buffer APIs for composing work in one command encoder.
+- Reusable scratch storage and no `unsafe` blocks in library code.
 
-## Usage
+## Installation
 
-The convenience context is useful for standalone compute programs:
-
-```rust
-use wgpu_primitives::{Compactor, Context, Scanner, Sorter};
-
-#[tokio::main]
-async fn main() -> Result<(), wgpu_primitives::Error> {
-    let context = Context::init().await?;
-    let mut scanner = Scanner::from_context(&context);
-    let mut compactor = Compactor::from_context(&context);
-    let mut sorter = Sorter::from_context(&context);
-
-    let prefixes = scanner.scan_exclusive(&[3, 1, 4, 1]).await?;
-    let compacted = compactor.compact(&[40, 10, 30, 20], &[0, 1, 1, 0]).await?;
-    let sorted = sorter.sort(&[10, 4, 7, 1]).await?;
-
-    assert_eq!(prefixes, [0, 3, 4, 8]);
-    assert_eq!(compacted, [10, 30]);
-    assert_eq!(sorted, [1, 4, 7, 10]);
-    Ok(())
-}
+```toml
+[dependencies]
+wgpu-primitives = "0.4"
 ```
 
-Stable key-value sorting keeps payloads in their original order when keys compare equal:
+Version 0.4 uses wgpu 28. The package continues the crate previously published
+as `wgpu-algorithms`.
+
+## Quick start
 
 ```rust
-use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
-
-#[tokio::main]
-async fn main() -> Result<(), wgpu_primitives::Error> {
-    let context = Context::init().await?;
-    let mut sorter = KeyValueSorter::from_context(&context);
-    let sorted = sorter
-        .sort(&[
-            KeyValue::new(2, 10),
-            KeyValue::new(1, 20),
-            KeyValue::new(2, 30),
-        ])
-        .await?;
-
-    assert_eq!(
-        sorted,
-        [
-            KeyValue::new(1, 20),
-            KeyValue::new(2, 10),
-            KeyValue::new(2, 30),
-        ]
-    );
-    Ok(())
-}
-```
-
-The same record type can be filtered without separating keys from values:
-
-```rust
-use wgpu_primitives::{Context, KeyValue, KeyValueCompactor};
-
-#[tokio::main]
-async fn main() -> Result<(), wgpu_primitives::Error> {
-    let context = Context::init().await?;
-    let mut compactor = KeyValueCompactor::from_context(&context);
-    let records = [
-        KeyValue::new(2, 10),
-        KeyValue::new(1, 20),
-        KeyValue::new(2, 30),
-    ];
-
-    let selected = compactor.compact(&records, &[1, 0, 1]).await?;
-    assert_eq!(selected, [KeyValue::new(2, 10), KeyValue::new(2, 30)]);
-    Ok(())
-}
-```
-
-Predicate masks remove the need to build selection flags on the CPU:
-
-```rust
-use wgpu_primitives::{Compactor, Context, MaskGenerator, U32Predicate};
+use wgpu_primitives::{Compactor, Context, MaskGenerator, Scanner, Sorter, U32Predicate};
 
 #[tokio::main]
 async fn main() -> Result<(), wgpu_primitives::Error> {
     let context = Context::init().await?;
     let generator = MaskGenerator::from_context(&context);
+    let mut scanner = Scanner::from_context(&context);
     let mut compactor = Compactor::from_context(&context);
-    let input = [4, 17, 9, 22, 11, 3];
+    let mut sorter = Sorter::from_context(&context);
 
+    let input = [4, 17, 9, 22, 11, 3];
     let mask = generator
         .mask(&input, U32Predicate::GreaterThanOrEqual(10))
         .await?;
-    let selected = compactor.compact(&input, &mask).await?;
 
     assert_eq!(mask, [0, 1, 0, 1, 1, 0]);
-    assert_eq!(selected, [17, 22, 11]);
+    assert_eq!(scanner.scan_exclusive(&[3, 1, 4, 1]).await?, [0, 3, 4, 8]);
+    assert_eq!(compactor.compact(&input, &mask).await?, [17, 22, 11]);
+    assert_eq!(sorter.sort(&input).await?, [3, 4, 9, 11, 17, 22]);
     Ok(())
 }
 ```
 
-The slice example emphasizes semantics. Performance-sensitive applications
-should record `MaskGenerator::record_mask` followed by `record_compact` into the
-same command encoder, keeping the generated mask resident and submitting once.
+See [`examples/`](examples/) for key/value sorting, structured compaction, and
+standalone examples for every primitive.
 
-Applications that already own a wgpu device should reuse it:
+## GPU-resident composition
+
+Applications that already own a wgpu device should reuse it and record multiple
+primitives before submitting once:
 
 ```rust,ignore
 let generator = MaskGenerator::new(&device, &queue);
-let mut scanner = Scanner::new(&device, &queue);
 let mut compactor = Compactor::new(&device, &queue);
-let mut sorter = Sorter::new(&device, &queue);
 
 generator.record_mask(
     &mut encoder,
@@ -161,260 +135,82 @@ generator.record_mask(
     item_count,
     U32Predicate::GreaterThanOrEqual(10),
 )?;
-scanner.record_scan(&mut encoder, &scan_input, &scan_output, item_count)?;
 compactor.record_compact(
     &mut encoder,
     &input,
     &mask,
-    &compacted_output,
-    &compacted_count,
+    &output,
+    &output_count,
     item_count,
 )?;
-sorter.record_sort(&mut encoder, &sort_input, &sort_output, item_count)?;
 queue.submit(Some(encoder.finish()));
 ```
 
-When an application knows that keys fit in a narrower range, it can explicitly
-reduce radix work. For example, 16-bit keys need 8 passes instead of 16 on the
-portable 2-bit path and 2 passes instead of 4 on the NVIDIA 8-bit path:
+The command encoder preserves GPU execution order. Rust borrows the encoder and
+buffers only while recording; no input is cloned or read back. Use
+`KeyValueSorter::new_for_adapter` when adapter metadata is available so compatible
+fast paths can be selected.
 
-```rust,ignore
-sorter.record_sort_with_key_bits(
-    &mut encoder,
-    &sort_input,
-    &sort_output,
-    item_count,
-    16,
-)?;
-```
+The resident methods validate sizes and usages, but do not inspect GPU data.
+Masks must contain only `0` or `1`; declared key-width bounds must contain every
+key. Sort input and output must be distinct, and buffers must not overlap where a
+write could race with a read. Full usage requirements are documented on each API
+at [docs.rs](https://docs.rs/wgpu-primitives).
 
-Slice methods validate every host key before upload. GPU-buffer methods trust
-the declared bound to avoid a validation reduction or readback; a key outside
-the bound can produce only partially sorted output. The existing methods remain
-full-width by default.
+## How it works
 
-`KeyValueSorter::new_for_adapter` enables measured adapter-specific kernels when
-adapter metadata is available. `KeyValueSorter::new` retains the portable path.
+- **Predicate mask:** one thread evaluates each value or `KeyValue` field and
+  writes a `0` or `1`.
+- **Scan:** workgroups scan local ranges, recursively scan block totals, then add
+  those totals to produce global prefixes. Supported devices use subgroup
+  operations; others use the portable shared-memory path.
+- **Compaction:** an exclusive mask scan gives stable destination indices.
+  Scatter combines block-local offsets with scanned block totals without
+  materializing another full-size prefix pass.
+- **Radix sort:** stable least-significant-digit passes ping-pong between buffers.
+  Known key-width bounds reduce the pass count. Adapter-aware NVIDIA Vulkan
+  devices use a specialized 8-bit path; other adapters use portable paths.
 
-`record_mask` requires `STORAGE` on the input and `STORAGE | COPY_SRC` on its output. Allocate the output with `MaskGenerator::mask_buffer_size`; its `num_items` flags feed compaction directly. `record_scan` requires `COPY_SRC` on the input and `COPY_DST | STORAGE` on the output. `record_compact` requires `STORAGE` on the input and output, `STORAGE | COPY_SRC` on its 0/1 mask, and `STORAGE | COPY_DST` on its four-byte resident count. Predicate and compaction buffers must not overlap where writes could race with reads. `record_sort` requires `STORAGE` on both buffers, and its input and output must be distinct allocations.
+## Profiling
 
-## Installation
-
-Version `0.4` contains inclusive and exclusive scan, key-only radix sort,
-stable key-value radix sort, GPU timestamp profiling, and the adapter-selected
-NVIDIA Vulkan fast path:
-
-```toml
-[dependencies]
-wgpu-primitives = "0.4"
-```
-
-## Algorithms
-
-Predicate masking runs one thread per item. Each thread reads a `u32` value—or
-the selected key/value field—evaluates an equality, ordering, or inclusive-range
-comparison, and writes exactly one `0` or `1`. Recording mask generation before
-compaction keeps the flags GPU-resident and lets one queue submission execute
-the predicate, exclusive scan, and stable scatter in order.
-
-The scan writes its top-level prefixes directly from caller input to caller
-output, recursively scans per-workgroup totals, and propagates those totals back
-through the hierarchy. Devices with enabled subgroups use coalesced one-item
-lanes and subgroup prefix operations; other devices retain the portable
-multi-item shared-memory path.
-
-Stream compaction exclusively scans a caller-provided 0/1 mask into block-local
-destination indices, propagates the small block-total hierarchy, and adds each
-preceding block total during stable scatter. This avoids materializing a second
-full-size global-offset pass. Selected `u32` values or `KeyValue` records retain
-their original order, and the selected-item count remains in a caller-owned GPU
-buffer. The resident API performs no validation pass or readback, so GPU masks
-must contain only 0 or 1; the slice convenience API validates them before upload.
-
-The portable radix sort processes two bits per pass. A full-width sort uses 16
-passes; `*_with_key_bits` calls use only the passes required by the declared
-width. Each pass builds four per-workgroup histograms, scans them into global
-offsets, and stably scatters values between ping-pong buffers. Odd and even pass
-counts both route the final scatter to the caller's output buffer.
-
-`KeyValueSorter` moves values with their keys during every scatter, so equal keys retain their original value order. On NVIDIA Vulkan adapters with enabled, fixed 32-wide subgroups, 256-thread workgroups, and at least 16,388 bytes of workgroup storage, adapter-aware construction selects a dedicated 8-bit path, including compatible integrated devices. It builds the active byte histograms in one read, computes their prefixes together, and uses subgroup-assisted stable scatter with partition lookback. Explicit bounds schedule one to four byte passes; on a full-width call, indirect dispatch can still skip the upper pair when both bytes are constant. Discrete NVIDIA Vulkan devices without compatible subgroups retain the 4-bit path; other hardware and backends use the portable 2-bit path.
-
-## Performance
-
-Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is the primary interface. Resident execution keeps data on the GPU; round-trip execution includes upload, allocation, execution, and readback. GPU acceleration becomes valuable as the workload grows enough to amortize dispatch and transfer overhead.
-
-| Primitive | Items | CPU | Best GPU resident | Resident speedup | Best GPU round trip |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Prefix scan | 1M | 0.220 ms | 0.170 ms (Vulkan) | 1.29x | 1.351 ms (DX12) |
-| Prefix scan | 10M | 2.232 ms | 0.340 ms (Vulkan) | 6.56x | 11.108 ms (DX12) |
-| Prefix scan | 100M | 27.949 ms | 2.984 ms (Vulkan) | 9.37x | 230.390 ms (DX12) |
-| Exclusive prefix scan | 100M | 28.580 ms | 2.828 ms (Vulkan) | 10.11x | Not measured |
-| Predicate mask | 10M | 1.045 ms | 0.218 ms (Vulkan) | 4.80x | Not measured |
-| Predicate mask | 100M | 23.833 ms | 1.379 ms (Vulkan) | 17.28x | Not measured |
-| Radix sort | 1M | 2.458 ms | 1.331 ms (Vulkan) | 1.85x | 2.453 ms (Vulkan) |
-| Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
-| Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
-
-At 100M items, resident throughput reached 33.51 billion elements/s for inclusive
-scan, 35.37 billion elements/s for exclusive scan, and 2.287 billion elements/s
-for key-only sort. The version 0.4 key-value path compares as follows:
-
-| Key width | Pairs | `wgpu-primitives` | `wgpu_sort` | Time change |
-| ---: | ---: | ---: | ---: | ---: |
-| 16 bits | 10M | 0.989 ms | 1.718 ms | -42.4% |
-| 16 bits | 100M | 8.605 ms | 14.884 ms | -42.2% |
-| 32 bits | 10M | 1.720 ms | 1.735 ms | -0.9% |
-| 32 bits | 100M | 15.457 ms | 15.907 ms | -2.8% |
-
-See the [base benchmark methodology](benchmarks/2026-08-05-windows.md),
-[timestamp baseline](benchmarks/2026-08-05-gpu-timestamps.md), and
-[direct `wgpu_sort` comparison](benchmarks/2026-08-05-wgpu-sort-comparison.md).
-The comparison has a
-[committed reproduction harness](benchmarks/wgpu-sort-comparison/README.md) and
-[machine-readable aggregate snapshot](benchmarks/2026-08-05-wgpu-sort-comparison.json).
-The [version 0.4 full-width profile](benchmarks/2026-08-07-full-width-profile.md)
-records a clean-revision confirmation and the measured scatter optimization
-budget. The [Jetson Orin Nano validation](benchmarks/2026-08-07-jetson-orin-nano.md)
-adds physical portable-Vulkan correctness and 4-TPC/8-TPC performance results.
-The follow-up [Jetson `wgpu_sort` comparison](benchmarks/2026-08-07-jetson-wgpu-sort-comparison.md)
-shows that an explicit 16-bit bound halves portable-path latency on both
-systems while leaving full-width performance unchanged within 0.2%.
-The [integrated NVIDIA subgroup follow-up](benchmarks/2026-08-07-jetson-integrated-subgroup.md)
-qualifies the existing 8-bit path on both Jetsons. At 10 million pairs it
-reduced bounded-key latency to 11.398-11.524 ms versus 25.045-25.111 ms for
-`wgpu_sort`, and full-width latency to 21.505-21.832 ms versus 26.253-26.423 ms.
-The [explicit byte-pass follow-up](benchmarks/2026-08-07-jetson-explicit-byte-passes.md)
-adds audited one-to-four-pass scheduling and a 100-million-pair stress result.
-At 10 million pairs, bounded 16-bit latency is 11.242-11.427 ms versus
-25.020-25.077 ms for `wgpu_sort`; full-width latency is 21.774-22.042 ms versus
-26.302-26.392 ms. Both 8 GB Jetsons completed and validated 100 million pairs,
-while the pinned `wgpu_sort` runner could not allocate its resident backup
-buffer at that size.
-The bounded [full-width scatter experiment](benchmarks/2026-08-07-full-width-scatter-experiments.md)
-profiles the merged kernel on RTX and both Jetsons and rejects five isolated
-variants that missed the 5% improvement gate. It retains the production kernel
-and records why shared reorder and decoupled lookback remain necessary.
-The [stable stream-compaction baseline](benchmarks/2026-08-07-stream-compaction.md)
-validates 10 million items at five selectivities on the RTX and both Jetsons.
-At 50% kept, resident wall time is 0.892 ms, 7.601 ms, and 10.428 ms
-respectively; every workload matches a stable CPU reference.
-The [structured compaction follow-up](benchmarks/2026-08-07-key-value-compaction.md)
-adds stable eight-byte `KeyValue` records. At the same 10-million-item, 50%
-workload, it measured 0.973 ms, 7.873 ms, and 10.903 ms. Same-source `u32`
-controls remained within 0.5% of the published baseline on all three systems.
-The [predicate-mask follow-up](benchmarks/2026-08-08-predicate-masks.md) adds
-GPU-generated selection flags. On the RTX, resident wall time measured 0.218 ms
-for 10 million values and 1.379 ms for 100 million values, while isolated GPU
-timestamps measured 0.127 ms and 1.268 ms. CPU-reference validation also passed
-at both sizes on 8-TPC and 4-TPC Jetson Orin Nano systems. Their nearly equal
-predicate times identify memory bandwidth, rather than TPC count, as the main
-limit; the full predicate-plus-compaction path still favored the 8-TPC system
-by 1.33x.
-The pinned [Massively 0.96 comparison](benchmarks/2026-08-08-massively-comparison.md)
-uses isolated wgpu 28 and wgpu 30 processes across the RTX and both Jetsons.
-`wgpu-primitives` wins every stable-sort case: the direct full-width advantage
-ranges from 3.82x at 1M on Jetson to 11.09x at 100M on RTX, while the explicit
-16-bit path reaches 19.75x on RTX. At 10M, however, Massively's scan and
-compaction are 1.69x and 1.54x faster on the 4-TPC Jetson, identifying the
-portable hierarchical scan as the next measured performance target. The same
-harness exposed a scheduling-sensitive 100M scratch-binding race in scan and
-scan-derived compaction. The
-[exact-range fix follow-up](benchmarks/2026-08-08-scan-scratch-binding-fix.md)
-closes that correctness gap on RTX and both Jetsons without a 10M regression.
-At that correctness-fix checkpoint, the now-valid 100M results showed Massively
-ahead on scan and compaction, most strongly on the 4-TPC Jetson, making the
-corrected hierarchy the next measured performance target.
-The [direct subgroup scan follow-up](benchmarks/2026-08-08-direct-subgroup-scan.md)
-closes that target. `wgpu-primitives` now wins every measured Massively scan and
-compaction row: 1.09x-2.81x on RTX, 1.10x-1.53x on dopey, and 1.09x-1.49x on
-grumpy. Jetson sort controls remained within 0.12% of their prior baseline.
-The [fused compaction-prefix follow-up](benchmarks/2026-08-08-fused-compaction-prefix.md)
-removes compaction's full-size prefix-add pass. Fresh 10M all-fronts matrices
-lead Massively by 1.48x-8.55x on both Jetsons, while the complete RTX matrix
-leads by 1.12x-19.71x. Compaction specifically reaches 2.06x/1.52x at 10M/100M
-on RTX, 1.66x/1.52x on dopey, and 1.63x/1.49x on grumpy.
-The [Apple Metal validation](benchmarks/2026-08-08-apple-metal-validation.md)
-passes all 64 release tests and every 100M benchmark validator on an M3 Pro.
-At 100M, resident scan reaches 7.28 billion items/s and compaction reaches 5.46
-billion items/s. Pinned Massively 0.96 cannot produce a timing on this adapter:
-its generated compute layouts request 42 or 47 storage buffers against Metal's
-per-stage limit of 29. The harness records these as explicit compatibility
-failures rather than assigning an artificial speedup.
-
-## GPU profiling
-
-Capability-gated hardware timestamp queries are available for `MaskGenerator`,
-`Scanner`, `Compactor`, `KeyValueCompactor`, `Sorter`, and `KeyValueSorter`. Normal execution does not allocate or resolve
-queries. Profiled calls return labeled dispatch spans, total dispatch time, and
-elapsed GPU time; the same compute passes carry stable labels for external tools
-such as NVIDIA Nsight Graphics.
-
-Run the steady-state profile from a source checkout:
+GPU timestamp spans are available for every primitive when the adapter supports
+timestamp queries. Dispatches also carry stable labels for tools such as NVIDIA
+Nsight Graphics.
 
 ```powershell
 $env:WGPU_BACKEND = 'vulkan' # or 'dx12'
+$env:WGPU_PRIMITIVES_PROFILE_CASES = 'compact_50'
+$env:WGPU_PRIMITIVES_PROFILE_VALIDATE = '1'
 cargo run --release --example profile_primitives
 ```
 
-Set `WGPU_PRIMITIVES_PROFILE_CASES=compact_50` to isolate stable compaction
-with a deterministic 50%-selective mask. Any percentage from `compact_0` to
-`compact_100` is accepted; set `WGPU_PRIMITIVES_PROFILE_VALIDATE=1` to compare
-the profiled workload against a stable CPU reference afterward.
-Use `predicate_50` (or any percentage from 0 to 100) to profile GPU-generated
-selection masks with the same optional CPU-reference validation.
-Use `key_value_compact_50` (or any percentage from 0 to 100) for structured
-record compaction.
-
-At 100M items, the baseline profile attributed 74.8% of key-value dispatch time to stable scatter. The latest bounded-key profile spends 83.6% in two scatter passes, 16.3% in the all-byte histogram, and 0.1% in prefix setup. The finalized direct comparison harness measures the specialized path at 8.605 ms.
+Cases include scan, sort, predicate, value compaction, and key/value compaction
+at selectable sizes and selectivities.
 
 ## Roadmap
 
-Version 0.4 adds per-dispatch GPU timestamp profiling, a measured NVIDIA Vulkan
-subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
-`wgpu_sort` comparison, and physical Vulkan validation on Jetson Orin Nano.
-Reusable predicate masks and the pinned Massively comparison complete the first
-post-0.4 evidence pass. Exact hierarchical scan binding ranges, a three-level
-regression, and validated 100M scan-derived results close the first correctness
-item. Direct output, the feature-gated subgroup scan, and fused compaction block
-prefixes now close the measured Massively gaps without regressing Jetson sort.
-The remaining work is ordered by measured impact:
+1. Validate AMD, Intel, more Apple GPUs, and additional driver versions.
+2. Improve portable key-width detection for GPU-resident inputs.
+3. Add derived primitives only when real workloads justify their API and cost.
+4. Revisit full-width scatter when hardware counters or a new algorithm provide
+   evidence for at least a 5% gain.
 
-1. **Validate more hardware:** extend the now-validated NVIDIA Vulkan and Apple
-   Metal matrix to AMD and Intel adapters plus additional driver versions and
-   Apple GPU generations.
-2. **Improve portability:** build on the explicit non-subgroup key-width path
-   with GPU-side identity-pass detection for resident inputs whose bounds are
-   not already known by the application.
-3. **Extend derived primitives from evidence:** use real workloads and predicate
-   benchmarks to decide whether logical composition or fused predicate-compaction
-   kernels justify their API and maintenance cost.
-4. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
-
-New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
+New primitives require a resident-buffer API, deterministic boundary tests,
+CPU-reference validation, and reproducible benchmarks.
 
 ## Development
 
 ```sh
 cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --lib --tests
+cargo test --release --all-targets
 cargo check --examples --benches
 cargo package
-cargo bench --bench scan -- --noplot
-cargo bench --bench compact -- --noplot
-cargo bench --bench key_value_compact -- --noplot
-cargo bench --bench predicate -- --noplot
-cargo bench --bench sort -- --noplot
-cargo bench --bench key_value_sort -- --noplot
 ```
 
-Run the independent, pinned `wgpu_sort` comparison on Windows with:
-
-```powershell
-& .\benchmarks\wgpu-sort-comparison\run.ps1
-```
-
-GPU integration tests skip when no compatible adapter is available. CI installs Mesa's Vulkan software adapter so the shader paths execute on Linux.
+Criterion benches cover `scan`, `compact`, `key_value_compact`, `predicate`,
+`sort`, and `key_value_sort`. GPU integration tests skip when no compatible
+adapter is available; CI uses Mesa's Vulkan software adapter.
 
 ## License
 
