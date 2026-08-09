@@ -42,20 +42,20 @@ method, exact revisions, complete matrices, and machine-readable results.
 
 ### Intel Vulkan
 
-On Intel Alder Lake-N integrated graphics at 10 million items, the portable
-path also led Massively in every workload:
+On Intel Alder Lake-N integrated graphics at 10 million items, the
+capability-gated 4-bit radix path led Massively in every workload:
 
 | Workload | `wgpu-primitives` | Massively | Speedup |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 174.815 ms | 563.336 ms | 3.22x |
-| Stable sort, full-width keys | 352.525 ms | 588.937 ms | 1.67x |
-| Exclusive scan | 13.084 ms | 33.872 ms | 2.59x |
-| Stable compaction, 50% selected | 17.179 ms | 41.848 ms | 2.44x |
+| Stable sort, 16-bit keys | 130.349 ms | 580.788 ms | 4.46x |
+| Stable sort, full-width keys | 261.765 ms | 587.289 ms | 2.24x |
+| Exclusive scan | 12.820 ms | 33.620 ms | 2.62x |
+| Stable compaction, 50% selected | 15.609 ms | 40.408 ms | 2.59x |
 
 All 64 release tests passed. The
-[Intel report](benchmarks/2026-08-09-intel-alder-lake-n.md) includes 1M results
-and measured pre/post migration controls on both Intel and RTX. At 100M, the
-same four speedups are 7.23x, 3.55x, 2.44x, and 2.52x respectively.
+[Intel wide-radix report](benchmarks/2026-08-09-intel-wide-radix.md) includes
+1M-100M results, stage profiles, and measured regression controls. At 100M,
+the same four speedups are 9.78x, 4.79x, 2.44x, and 2.52x respectively.
 
 ### Apple Metal
 
@@ -188,8 +188,9 @@ resident composition, and private kernel/runtime layers.
   Scatter combines block-local offsets with scanned block totals without
   materializing another full-size prefix pass.
 - **Radix sort:** stable least-significant-digit passes ping-pong between buffers.
-  Known key-width bounds reduce the pass count. Adapter-aware NVIDIA Vulkan
-  devices use a specialized 8-bit path; other adapters use portable paths.
+  Known key-width bounds reduce the pass count. Compatible NVIDIA Vulkan
+  devices use 8-bit or 4-bit paths, capable Intel Vulkan devices use a 4-bit
+  path, and other adapters retain the portable 2-bit path.
 
 ## Profiling
 

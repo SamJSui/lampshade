@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-09",
+  "experiment": "capability-gated Intel Vulkan 4-bit stable key-value radix",
+  "base_revision": "9bc5da70f3dcd470cf374502a9f2fe4cce51b99e",
+  "benchmark_revision": "4aa93004211134c88a00298dae9d9193a701152c plus the documented dirty src/sort/pipeline.rs production change",
+  "host": {
+    "hostname": "beehive",
+    "cpu": "Intel N150",
+    "gpu": "Intel(R) Graphics (ADL-N)",
+    "vendor": 32902,
+    "device": 18132,
+    "backend": "Vulkan",
+    "driver": "Intel open-source Mesa driver",
+    "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.2"
+  },
+  "comparison": {
+    "name": "Massively",
+    "version": "0.96.0",
+    "revision": "ef9de55190529be98203aca207edab9d560d312e"
+  },
+  "acceptance": {
+    "minimum_sort_improvement_percent": 5.0,
+    "maximum_unrelated_regression_percent": 2.0,
+    "correctness_required": true,
+    "decision": "accept"
+  },
+  "sort_results": [
+    {
+      "workload": "sort_bounded16",
+      "items": 1000000,
+      "portable_ms": 20.338216,
+      "wide_ms": 15.363929,
+      "change_percent": -24.46,
+      "massively_ms": 47.945017,
+      "speedup_over_massively": 3.12
+    },
+    {
+      "workload": "sort_full_width",
+      "items": 1000000,
+      "portable_ms": 40.644787,
+      "wide_ms": 28.494828,
+      "change_percent": -29.89,
+      "massively_ms": 48.750639,
+      "speedup_over_massively": 1.71
+    },
+    {
+      "workload": "sort_bounded16",
+      "items": 10000000,
+      "portable_ms": 174.815311,
+      "wide_ms": 130.349191,
+      "change_percent": -25.44,
+      "massively_ms": 580.788,
+      "speedup_over_massively": 4.46
+    },
+    {
+      "workload": "sort_full_width",
+      "items": 10000000,
+      "portable_ms": 352.525017,
+      "wide_ms": 261.765397,
+      "change_percent": -25.75,
+      "massively_ms": 587.289152,
+      "speedup_over_massively": 2.24
+    },
+    {
+      "workload": "sort_bounded16",
+      "items": 100000000,
+      "portable_ms": 1769.832768,
+      "wide_ms": 1308.815655,
+      "change_percent": -26.05,
+      "massively_ms": 12801.820392,
+      "speedup_over_massively": 9.78,
+      "massively_value_source": "preceding Intel validation"
+    },
+    {
+      "workload": "sort_full_width",
+      "items": 100000000,
+      "portable_ms": 3532.261447,
+      "wide_ms": 2617.170447,
+      "change_percent": -25.91,
+      "massively_ms": 12547.157326,
+      "speedup_over_massively": 4.79,
+      "massively_value_source": "preceding Intel validation"
+    }
+  ],
+  "profile_results": [
+    {"workload": "bounded16", "items": 10000000, "path": "portable_2_bit", "passes": 8, "gpu_elapsed_ms": 145.919, "reduce_ms": 51.230, "histogram_scan_ms": 0.275, "scatter_ms": 93.921},
+    {"workload": "bounded16", "items": 10000000, "path": "wide_4_bit", "passes": 4, "gpu_elapsed_ms": 106.866, "reduce_ms": 38.288, "histogram_scan_ms": 0.403, "scatter_ms": 67.866},
+    {"workload": "full_width", "items": 10000000, "path": "portable_2_bit", "passes": 16, "gpu_elapsed_ms": 301.489, "reduce_ms": 102.322, "histogram_scan_ms": 0.557, "scatter_ms": 197.546},
+    {"workload": "full_width", "items": 10000000, "path": "wide_4_bit", "passes": 8, "gpu_elapsed_ms": 230.158, "reduce_ms": 80.205, "histogram_scan_ms": 0.809, "scatter_ms": 148.483},
+    {"workload": "bounded16", "items": 100000000, "path": "portable_2_bit", "passes": 8, "gpu_elapsed_ms": 1604.758, "reduce_ms": 569.318, "histogram_scan_ms": 1.764, "scatter_ms": 1032.868},
+    {"workload": "bounded16", "items": 100000000, "path": "wide_4_bit", "passes": 4, "gpu_elapsed_ms": 1108.825, "reduce_ms": 414.297, "histogram_scan_ms": 3.279, "scatter_ms": 690.807},
+    {"workload": "full_width", "items": 100000000, "path": "portable_2_bit", "passes": 16, "gpu_elapsed_ms": 3344.316, "reduce_ms": 1146.926, "histogram_scan_ms": 3.536, "scatter_ms": 2193.741},
+    {"workload": "full_width", "items": 100000000, "path": "wide_4_bit", "passes": 8, "gpu_elapsed_ms": 2364.696, "reduce_ms": 868.582, "histogram_scan_ms": 6.571, "scatter_ms": 1488.656}
+  ],
+  "regression_controls": [
+    {"system": "Intel Alder Lake-N", "workload": "exclusive_scan", "items": 10000000, "before_ms": 13.08358, "after_ms": 12.820446, "change_percent": -2.01},
+    {"system": "Intel Alder Lake-N", "workload": "compact_50", "items": 10000000, "before_ms": 17.178738, "after_ms": 15.608842, "change_percent": -9.14},
+    {"system": "RTX 4070 Ti SUPER", "workload": "sort_bounded16", "items": 10000000, "before_ms": 0.9159, "after_ms": 0.9104, "change_percent": -0.60},
+    {"system": "RTX 4070 Ti SUPER", "workload": "sort_full_width", "items": 10000000, "before_ms": 1.6055, "after_ms": 1.6024, "change_percent": -0.19},
+    {"system": "RTX 4070 Ti SUPER", "workload": "exclusive_scan", "items": 10000000, "before_ms": 0.3399, "after_ms": 0.3382, "change_percent": -0.50},
+    {"system": "RTX 4070 Ti SUPER", "workload": "compact_50", "items": 10000000, "before_ms": 0.4827, "after_ms": 0.4812, "change_percent": -0.31}
+  ],
+  "validation": {
+    "intel_release_tests_passed": 64,
+    "local_release_tests_passed": 64,
+    "format": "passed",
+    "clippy_all_targets_all_features": "passed",
+    "examples_and_benches_check": "passed",
+    "cargo_package": "passed"
+  }
+}

@@ -17,14 +17,18 @@ All notable changes to `wgpu-primitives` are documented here.
 - Immediate submission, timestamp profiling, reusable buffer ownership, and
   adapter capability capture now use shared private engine components. Public
   APIs, WGSL kernels, dispatch sizes, and command order are unchanged.
+- Capable Intel Vulkan adapters now select the existing 4-bit stable key-value
+  radix kernels; key-only sort, other backends, and devices below the required
+  workgroup limits retain the portable 2-bit path.
 
 ### Performance
 
-- On Intel Alder Lake-N at 10M items, `wgpu-primitives` leads Massively by
-  3.22x for bounded stable sort, 1.67x for full-width stable sort, 2.59x for
-  exclusive scan, and 2.44x for 50%-selective stable compaction.
-- The same Intel workloads validate at 100M items and lead Massively by 7.23x,
-  3.55x, 2.44x, and 2.52x respectively.
+- On Intel Alder Lake-N, the 4-bit radix route reduces stable key-value sort
+  latency by 24.46%-29.89% across 1M-100M items relative to the portable path.
+- At 10M items, `wgpu-primitives` leads Massively by 4.46x for bounded stable
+  sort, 2.24x for full-width stable sort, 2.62x for exclusive scan, and 2.59x
+  for 50%-selective stable compaction. At 100M, the corresponding speedups are
+  9.78x, 4.79x, 2.44x, and 2.52x.
 - Identical pre/post migration controls pass a 2% regression gate on Intel and
   RTX 4070 Ti SUPER. The largest RTX increase is 0.57%; a targeted five-process
   Intel compaction control changes by -0.02%.

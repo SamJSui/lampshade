@@ -1,5 +1,9 @@
 # Intel Alder Lake-N Vulkan validation
 
+This report is the portable-path baseline. The accepted
+[4-bit follow-up](2026-08-09-intel-wide-radix.md) reduces Intel sort latency by
+24.46%-29.89% without changing these historical measurements.
+
 This run adds Intel integrated graphics to the physical-hardware matrix and
 checks the internal runtime/workspace migration against the exact pre-change
 revision. The Intel path uses the portable radix implementation, so it
