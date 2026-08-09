@@ -73,6 +73,8 @@ The runner then fails output validation because no valid result was produced.
 This is an upstream compatibility defect observed through Massively's public
 WGPU API; the responsible fix may be in Massively's kernel specialization,
 CubeCL lowering, or both.
+The defect is tracked upstream as
+[`massively-labs/massively#62`](https://github.com/massively-labs/massively/issues/62).
 
 The POSIX comparison harness now matches the PowerShell runner: it retains each
 successful run, records each failed implementation/workload/process with its
