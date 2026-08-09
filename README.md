@@ -84,10 +84,10 @@ the pinned baseline and reproduction harness.
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.4"
+wgpu-primitives = "0.5"
 ```
 
-Version 0.4 uses wgpu 28. The package continues the crate previously published
+Version 0.5 uses wgpu 28. The package continues the crate previously published
 as `wgpu-algorithms`.
 
 ## Quick start

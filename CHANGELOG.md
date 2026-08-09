@@ -4,6 +4,8 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-09
+
 ### Added
 
 - Stable `u32` stream compaction from caller-provided 0/1 masks, including
@@ -68,6 +70,10 @@ All notable changes to `wgpu-primitives` are documented here.
 - On physical 8-TPC and 4-TPC Jetson Orin Nano configurations, the explicit
   16-bit path reduced 10-million-pair portable Vulkan latency by 52.2% and
   51.3% respectively. Full-width changes were +0.01% and +0.004%.
+
+### Compatibility
+
+- The deprecated `wgpu-algorithms` forwarding package is updated to 0.5.0.
 
 ## 0.4.0 - 2026-08-07
 
