@@ -71,6 +71,34 @@ def comparisons(aggregates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def load_failures(index_path: Path | None) -> list[dict[str, Any]]:
+    if index_path is None or not index_path.exists():
+        return []
+
+    failures = []
+    with index_path.open(encoding="utf-8") as source:
+        for line_number, line in enumerate(source, start=1):
+            if not line.strip():
+                continue
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) != 5:
+                raise ValueError(
+                    f"invalid failure index line {line_number}: expected 5 tab-separated fields"
+                )
+            implementation, workload, items, process_index, error_path = fields
+            error = Path(error_path).read_text(encoding="utf-8", errors="replace").strip()
+            failures.append(
+                {
+                    "implementation": implementation,
+                    "workload": workload,
+                    "items": int(items),
+                    "process_index": int(process_index),
+                    "error": error,
+                }
+            )
+    return failures
+
+
 def csv_values(value: str) -> list[str]:
     return [part for part in value.split(",") if part]
 
@@ -78,6 +106,7 @@ def csv_values(value: str) -> list[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=Path, required=True)
+    parser.add_argument("--failures", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repository-revision", required=True)
     parser.add_argument("--repository-dirty", choices=("true", "false"), required=True)
@@ -98,6 +127,7 @@ def main() -> None:
         runs = [json.loads(line) for line in source if line.strip()]
     if not runs:
         raise ValueError("runner output did not contain any results")
+    failures = load_failures(args.failures)
     aggregates = aggregate_runs(runs)
     result = {
         "schema_version": 1,
@@ -126,6 +156,7 @@ def main() -> None:
             "allocation_difference": "wgpu-primitives reuses caller-owned outputs; Massively public APIs allocate owned outputs and may reuse CubeCL allocator storage",
         },
         "runs": runs,
+        "failures": failures,
         "aggregates": aggregates,
         "comparisons": comparisons(aggregates),
     }
@@ -139,6 +170,8 @@ def main() -> None:
             f"{row['workload']:<20} {row['items']:>10} {row['wgpu_primitives_ms']:>11.3f} "
             f"{row['massively_ms']:>14.3f} {row['wgpu_primitives_speedup']:>9.2f}x"
         )
+    if failures:
+        print(f"\n{len(failures)} run(s) failed; details are recorded in the result JSON.")
     print(f"Machine-readable results: {args.output}")
 
 

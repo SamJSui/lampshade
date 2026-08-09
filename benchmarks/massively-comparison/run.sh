@@ -91,7 +91,10 @@ package_version=$(cargo metadata --no-deps --format-version 1 --manifest-path "$
 temp_root=$(mktemp -d)
 trap 'rm -rf "$temp_root"' EXIT HUP INT TERM
 runs_path=$temp_root/runs.jsonl
+failures_path=$temp_root/failures.tsv
 : > "$runs_path"
+: > "$failures_path"
+failure_count=0
 
 csv_words() { printf '%s\n' "$1" | tr ',' ' '; }
 
@@ -99,16 +102,35 @@ run_one() {
     executable=$1; implementation=$2; implementation_version=$3; implementation_revision=$4
     item_count=$5; workload=$6; warmups=$7; warmup_ms=$8; samples=$9; process_index=${10}
     echo "$implementation $workload items=$item_count process=$process_index" >&2
-    WGPU_BACKEND=$backend \
-    MASSIVELY_BENCH_ITEMS=$item_count \
-    MASSIVELY_BENCH_WORKLOAD=$workload \
-    MASSIVELY_BENCH_WARMUPS=$warmups \
-    MASSIVELY_BENCH_WARMUP_MS=$warmup_ms \
-    MASSIVELY_BENCH_SAMPLES=$samples \
-    MASSIVELY_BENCH_PROCESS_INDEX=$process_index \
-    MASSIVELY_BENCH_IMPLEMENTATION_VERSION=$implementation_version \
-    MASSIVELY_BENCH_IMPLEMENTATION_REVISION=$implementation_revision \
-    "$executable" >> "$runs_path"
+    runner_output=$temp_root/runner-output.log
+    if WGPU_BACKEND=$backend \
+        MASSIVELY_BENCH_ITEMS=$item_count \
+        MASSIVELY_BENCH_WORKLOAD=$workload \
+        MASSIVELY_BENCH_WARMUPS=$warmups \
+        MASSIVELY_BENCH_WARMUP_MS=$warmup_ms \
+        MASSIVELY_BENCH_SAMPLES=$samples \
+        MASSIVELY_BENCH_PROCESS_INDEX=$process_index \
+        MASSIVELY_BENCH_IMPLEMENTATION_VERSION=$implementation_version \
+        MASSIVELY_BENCH_IMPLEMENTATION_REVISION=$implementation_revision \
+        "$executable" > "$runner_output" 2>&1
+    then
+        json_line=$(awk '/^[[:space:]]*\{/{line=$0} END{if(line != "") print line}' "$runner_output")
+        if [ -n "$json_line" ]; then
+            printf '%s\n' "$json_line" >> "$runs_path"
+            rm -f "$runner_output"
+            return
+        fi
+        printf '%s\n' 'Runner completed without emitting a JSON result.' >> "$runner_output"
+    fi
+
+    failure_count=$((failure_count + 1))
+    failure_output=$temp_root/failure-$failure_count.log
+    mv "$runner_output" "$failure_output"
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$implementation" "$workload" "$item_count" "$process_index" "$failure_output" \
+        >> "$failures_path"
+    echo "$implementation failed for $workload/$item_count/process $process_index" >&2
+    cat "$failure_output" >&2
 }
 
 for item_count in $(csv_words "$items_csv"); do
@@ -132,8 +154,13 @@ for item_count in $(csv_words "$items_csv"); do
     done
 done
 
+if [ ! -s "$runs_path" ]; then
+    echo "all benchmark runs failed" >&2
+    exit 1
+fi
+
 set -- \
-    --runs "$runs_path" --output "$output_path" \
+    --runs "$runs_path" --failures "$failures_path" --output "$output_path" \
     --repository-revision "$repo_revision" --repository-dirty "$repo_dirty" \
     --package-version "$package_version" --backend "$backend" \
     --items "$items_csv" --workloads "$workloads_csv" --processes "$processes" \

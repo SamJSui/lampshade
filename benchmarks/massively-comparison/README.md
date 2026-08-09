@@ -53,9 +53,11 @@ Linux full matrix:
 ./benchmarks/massively-comparison/run.sh
 ```
 
-Both scripts write machine-readable output to `results/latest.json` by default. PowerShell records
-individual workload failures (including out-of-memory failures) and continues the remaining
-matrix; the POSIX runner currently fails fast.
+Both scripts write machine-readable output to `results/latest.json` by default. PowerShell and
+POSIX record individual workload failures (including unsupported pipeline layouts and
+out-of-memory failures) and continue the remaining matrix. Aggregates and speedups include only
+successful runs; a failed implementation remains an explicit failure rather than being assigned
+an invented duration.
 
 The first three-GPU result and the original 100M scan correctness finding are published in the
 [2026-08-08 report](../2026-08-08-massively-comparison.md) with a compact
