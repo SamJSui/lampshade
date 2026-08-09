@@ -98,6 +98,13 @@ Formal 10M controls stayed within 0.12% of the published baseline:
 
 ## Decision
 
+> **Compaction strengthened:** the subsequent
+> [fused compaction-prefix follow-up](2026-08-08-fused-compaction-prefix.md)
+> removes level zero's full-size prefix-add pass. It improves compaction by
+> 19.9%-27.3% across RTX and both Jetsons while leaving scan and sort controls
+> effectively unchanged. The text below is retained as the decision at this
+> scan-optimization checkpoint.
+
 The scan-performance item is complete for the measured NVIDIA Vulkan adapters:
 wgpu-primitives now beats Massively on stable sort, exclusive scan, and stable
 compaction at both 10M and 100M. The subgroup path is feature-gated rather than

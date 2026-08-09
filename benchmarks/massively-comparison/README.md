@@ -66,3 +66,7 @@ The exact-range fix and the now-valid 100M scan and compaction results are in th
 The subsequent [direct subgroup scan](../2026-08-08-direct-subgroup-scan.md)
 reverses the remaining deficit on all three GPUs; its process medians are in the
 [optimization snapshot](../2026-08-08-direct-subgroup-scan.json).
+The [fused compaction-prefix follow-up](../2026-08-08-fused-compaction-prefix.md)
+removes the full-size compaction prefix-add pass and publishes a fresh RTX
+all-fronts matrix plus current Jetson controls. Exact compaction process medians
+are in its [machine-readable snapshot](../2026-08-08-fused-compaction-prefix.json).

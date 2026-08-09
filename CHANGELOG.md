@@ -30,6 +30,8 @@ All notable changes to `wgpu-primitives` are documented here.
 - The top scan pass reads caller input and writes caller output directly instead
   of copying the full buffer first. Devices with enabled subgroups use a
   coalesced one-item-per-lane scan; other devices retain the portable fallback.
+- Stable compaction keeps level-zero offsets block-local and combines them with
+  scanned block totals during scatter, removing the full-size prefix-add pass.
 
 ### Performance
 
@@ -37,6 +39,10 @@ All notable changes to `wgpu-primitives` are documented here.
   1.09x faster at 100M on an RTX 4070 Ti SUPER. On 8-TPC and 4-TPC Jetson Orin
   Nano configurations it is 1.49x-1.53x faster at 10M and 1.18x-1.19x at
   100M. Scan-derived 50% compaction leads by 1.09x-1.65x across the same cases.
+- Fusing compaction's block prefix improves the PR #17 compaction baseline by
+  19.9%-27.3% across RTX and both Jetsons. Against pinned Massively 0.96,
+  50%-selective compaction is 2.06x/1.52x faster at 10M/100M on RTX,
+  1.66x/1.52x on the 8-TPC Jetson, and 1.63x/1.49x on the 4-TPC Jetson.
 
 - On an RTX 4070 Ti SUPER, resident predicate-mask wall time measured 0.218 ms
   for 10 million values and 1.379 ms for 100 million values, 4.80x and 17.28x
