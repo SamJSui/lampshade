@@ -1,5 +1,6 @@
 use crate::{
     Error, common,
+    common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
     scan::Scanner,
@@ -16,8 +17,7 @@ pub(crate) struct CompactCore {
     device: wgpu::Device,
     queue: wgpu::Queue,
     item_size_bytes: u64,
-    offsets: Option<wgpu::Buffer>,
-    offsets_capacity_bytes: u64,
+    offsets: ReusableBuffer,
 }
 
 impl CompactCore {
@@ -32,8 +32,7 @@ impl CompactCore {
             device: device.clone(),
             queue: queue.clone(),
             item_size_bytes: item_kind.size_bytes(),
-            offsets: None,
-            offsets_capacity_bytes: 0,
+            offsets: ReusableBuffer::default(),
         }
     }
 
@@ -98,11 +97,16 @@ impl CompactCore {
         output_count: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.record_compact(&mut encoder, input, mask, output, output_count, num_items)?;
-        self.queue.submit(Some(encoder.finish()));
+        let mut commands = CommandSession::new(&self.device, None);
+        self.record_compact(
+            commands.encoder(),
+            input,
+            mask,
+            output,
+            output_count,
+            num_items,
+        )?;
+        commands.submit(&self.queue);
         Ok(())
     }
 
@@ -126,52 +130,31 @@ impl CompactCore {
         output_count: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<GpuProfile, Error> {
-        if num_items == 0 {
-            let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Profiled Empty Stream Compaction"),
-                });
-            self.record_commands(
-                &mut encoder,
-                input,
-                mask,
-                output,
-                output_count,
-                num_items,
-                None,
-            )?;
-            let submission = self.queue.submit(Some(encoder.finish()));
-            self.device.poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })?;
-            return Ok(GpuProfile::empty());
-        }
-
-        let span_count = self
-            .scanner
-            .compute_block_local_pass_count(num_items)
-            .checked_add(1)
-            .ok_or(Error::SizeOverflow)?;
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Profiled Stream Compaction"),
-            });
+        let span_count = if num_items == 0 {
+            0
+        } else {
+            self.scanner
+                .compute_block_local_pass_count(num_items)
+                .checked_add(1)
+                .ok_or(Error::SizeOverflow)?
+        };
+        let label = if num_items == 0 {
+            "Profiled Empty Stream Compaction"
+        } else {
+            "Profiled Stream Compaction"
+        };
+        let mut profile = ProfileSession::new(&self.device, &self.queue, span_count, label)?;
+        let (encoder, profiler) = profile.recording();
         self.record_commands(
-            &mut encoder,
+            encoder,
             input,
             mask,
             output,
             output_count,
             num_items,
-            Some(&mut profiler),
+            profiler,
         )?;
-        profiler.resolve(&mut encoder);
-        let submission = self.queue.submit(Some(encoder.finish()));
-        profiler.read(&self.device, submission).await
+        profile.finish(&self.device, &self.queue).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -222,7 +205,7 @@ impl CompactCore {
         self.ensure_offsets(mask_bytes)?;
         let offsets = self
             .offsets
-            .as_ref()
+            .get()
             .expect("compaction offsets exist for non-empty inputs");
 
         let scan_items_per_block = self.scanner.record_block_local_exclusive_scan(
@@ -260,15 +243,12 @@ impl CompactCore {
                 limit,
             });
         }
-        if self.offsets.is_none() || size_bytes > self.offsets_capacity_bytes {
-            self.offsets = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Stream Compaction Offsets"),
-                size: size_bytes,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }));
-            self.offsets_capacity_bytes = size_bytes;
-        }
+        self.offsets.ensure(
+            &self.device,
+            size_bytes,
+            "Stream Compaction Offsets",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        );
         Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use crate::common;
+use crate::common::{self, capabilities::AdapterCapabilities};
 
 const EIGHT_BIT_BLOCK_SIZE: u32 = 256;
 const EIGHT_BIT_WORKGROUP_STORAGE_BYTES: u32 = 16_388;
@@ -49,17 +49,6 @@ pub enum RadixVariant {
     NvidiaVulkanSubgroup,
 }
 
-#[derive(Clone, Copy)]
-struct HardwareProfile {
-    backend: wgpu::Backend,
-    vendor: u32,
-    device_type: wgpu::DeviceType,
-    subgroup_min_size: u32,
-    subgroup_max_size: u32,
-    subgroups_enabled: bool,
-    supports_eight_bit_limits: bool,
-}
-
 impl RadixVariant {
     pub fn for_adapter(
         item_kind: SortItemKind,
@@ -67,36 +56,32 @@ impl RadixVariant {
         enabled_features: wgpu::Features,
         device_limits: &wgpu::Limits,
     ) -> Self {
-        Self::for_hardware(
+        Self::for_capabilities(
             item_kind,
-            HardwareProfile {
-                backend: adapter_info.backend,
-                vendor: adapter_info.vendor,
-                device_type: adapter_info.device_type,
-                subgroup_min_size: adapter_info.subgroup_min_size,
-                subgroup_max_size: adapter_info.subgroup_max_size,
-                subgroups_enabled: enabled_features.contains(wgpu::Features::SUBGROUP),
-                supports_eight_bit_limits: supports_eight_bit_limits(device_limits),
-            },
+            AdapterCapabilities::from_adapter(adapter_info, enabled_features, device_limits),
         )
     }
 
-    fn for_hardware(item_kind: SortItemKind, hardware: HardwareProfile) -> Self {
+    fn for_capabilities(item_kind: SortItemKind, capabilities: AdapterCapabilities) -> Self {
         let is_nvidia_vulkan_key_value = item_kind == SortItemKind::KeyValue
-            && hardware.backend == wgpu::Backend::Vulkan
-            && hardware.vendor == 0x10de;
+            && capabilities.backend == wgpu::Backend::Vulkan
+            && capabilities.vendor == 0x10de;
 
         if !is_nvidia_vulkan_key_value {
             return Self::Portable;
         }
 
-        if hardware.subgroups_enabled
-            && hardware.subgroup_min_size == 32
-            && hardware.subgroup_max_size == 32
-            && hardware.supports_eight_bit_limits
+        if capabilities.subgroups_enabled
+            && capabilities.subgroup_min_size == 32
+            && capabilities.subgroup_max_size == 32
+            && capabilities.supports_workgroup(
+                EIGHT_BIT_BLOCK_SIZE,
+                EIGHT_BIT_BLOCK_SIZE,
+                EIGHT_BIT_WORKGROUP_STORAGE_BYTES,
+            )
         {
             Self::NvidiaVulkanSubgroup
-        } else if hardware.device_type == wgpu::DeviceType::DiscreteGpu {
+        } else if capabilities.device_type == wgpu::DeviceType::DiscreteGpu {
             Self::NvidiaVulkanWide
         } else {
             Self::Portable
@@ -126,12 +111,6 @@ impl RadixVariant {
             }
         }
     }
-}
-
-fn supports_eight_bit_limits(limits: &wgpu::Limits) -> bool {
-    limits.max_compute_invocations_per_workgroup >= EIGHT_BIT_BLOCK_SIZE
-        && limits.max_compute_workgroup_size_x >= EIGHT_BIT_BLOCK_SIZE
-        && limits.max_compute_workgroup_storage_size >= EIGHT_BIT_WORKGROUP_STORAGE_BYTES
 }
 
 impl SortPipeline {
@@ -220,21 +199,26 @@ impl SortPipeline {
 
 #[cfg(test)]
 mod tests {
-    use super::{HardwareProfile, RadixVariant, SortItemKind};
+    use crate::common::capabilities::AdapterCapabilities;
+
+    use super::{RadixVariant, SortItemKind};
 
     #[test]
     fn selects_subgroup_radix_only_for_compatible_nvidia_vulkan_key_value_items() {
         let select = |item_kind, backend, vendor, device_type, min, max, feature, limits| {
-            RadixVariant::for_hardware(
+            let workgroup_limit = if limits { u32::MAX } else { 0 };
+            RadixVariant::for_capabilities(
                 item_kind,
-                HardwareProfile {
+                AdapterCapabilities {
                     backend,
                     vendor,
                     device_type,
                     subgroup_min_size: min,
                     subgroup_max_size: max,
                     subgroups_enabled: feature,
-                    supports_eight_bit_limits: limits,
+                    max_compute_invocations_per_workgroup: workgroup_limit,
+                    max_compute_workgroup_size_x: workgroup_limit,
+                    max_compute_workgroup_storage_size: workgroup_limit,
                 },
             )
         };
@@ -330,5 +314,24 @@ mod tests {
             ),
             RadixVariant::Portable
         );
+
+        for (backend, vendor) in [
+            (wgpu::Backend::Vulkan, 0x8086),
+            (wgpu::Backend::Metal, 0x106b),
+        ] {
+            assert_eq!(
+                select(
+                    SortItemKind::KeyValue,
+                    backend,
+                    vendor,
+                    wgpu::DeviceType::IntegratedGpu,
+                    32,
+                    32,
+                    true,
+                    true,
+                ),
+                RadixVariant::Portable
+            );
+        }
     }
 }

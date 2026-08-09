@@ -1,6 +1,7 @@
 use super::pipeline::{ScanDispatch, ScanInputDispatch, ScanPipeline};
 use crate::{
     Error, common,
+    common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
 };
@@ -25,8 +26,7 @@ pub struct Scanner {
     pipeline: ScanPipeline,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    scratch_buffer: Option<wgpu::Buffer>,
-    scratch_size_bytes: u64,
+    scratch: ReusableBuffer,
 }
 
 impl Scanner {
@@ -36,8 +36,7 @@ impl Scanner {
             pipeline: ScanPipeline::new(device),
             device: device.clone(),
             queue: queue.clone(),
-            scratch_buffer: None,
-            scratch_size_bytes: 0,
+            scratch: ReusableBuffer::default(),
         }
     }
 
@@ -98,11 +97,9 @@ impl Scanner {
         num_items: u32,
         mode: ScanMode,
     ) -> Result<(), Error> {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut commands = CommandSession::new(&self.device, None);
         self.record_scan_with_mode(
-            &mut encoder,
+            commands.encoder(),
             ScanRecording {
                 input: input_buf,
                 output: output_buf,
@@ -113,7 +110,7 @@ impl Scanner {
             },
             None,
         )?;
-        self.queue.submit(Some(encoder.finish()));
+        commands.submit(&self.queue);
         Ok(())
     }
 
@@ -147,40 +144,15 @@ impl Scanner {
         mode: ScanMode,
     ) -> Result<GpuProfile, Error> {
         let span_count = self.pipeline.compute_pass_count(num_items);
-        if span_count == 0 {
-            let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Profiled Trivial Scan"),
-                });
-            self.record_scan_with_mode(
-                &mut encoder,
-                ScanRecording {
-                    input: input_buf,
-                    output: output_buf,
-                    num_items,
-                    mode,
-                    profile_prefix: "scan",
-                    propagate_output: true,
-                },
-                None,
-            )?;
-            let submission = self.queue.submit(Some(encoder.finish()));
-            self.device.poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })?;
-            return Ok(GpuProfile::empty());
-        }
-
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Profiled Prefix Scan"),
-            });
+        let label = if span_count == 0 {
+            "Profiled Trivial Scan"
+        } else {
+            "Profiled Prefix Scan"
+        };
+        let mut profile = ProfileSession::new(&self.device, &self.queue, span_count, label)?;
+        let (encoder, profiler) = profile.recording();
         self.record_scan_with_mode(
-            &mut encoder,
+            encoder,
             ScanRecording {
                 input: input_buf,
                 output: output_buf,
@@ -189,11 +161,9 @@ impl Scanner {
                 profile_prefix: "scan",
                 propagate_output: true,
             },
-            Some(&mut profiler),
+            profiler,
         )?;
-        profiler.resolve(&mut encoder);
-        let submission = self.queue.submit(Some(encoder.finish()));
-        profiler.read(&self.device, submission).await
+        profile.finish(&self.device, &self.queue).await
     }
 
     /// Records a GPU prefix scan without submitting or waiting for the work.
@@ -298,7 +268,7 @@ impl Scanner {
     }
 
     pub(crate) fn block_prefix_buffer(&self) -> Option<&wgpu::Buffer> {
-        self.scratch_buffer.as_ref()
+        self.scratch.get()
     }
 
     fn record_scan_with_mode(
@@ -346,8 +316,8 @@ impl Scanner {
         self.prepare_scratch(num_items);
 
         let scratch = self
-            .scratch_buffer
-            .as_ref()
+            .scratch
+            .get()
             .expect("scan scratch exists for multi-element inputs");
 
         struct Level<'a> {
@@ -452,14 +422,11 @@ impl Scanner {
 
     fn prepare_scratch(&mut self, num_items: u32) {
         let needed_bytes = self.pipeline.get_scratch_size(num_items);
-        if self.scratch_buffer.is_none() || needed_bytes > self.scratch_size_bytes {
-            self.scratch_buffer = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Scanner Scratch"),
-                size: needed_bytes,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            }));
-            self.scratch_size_bytes = needed_bytes;
-        }
+        self.scratch.ensure(
+            &self.device,
+            needed_bytes,
+            "Scanner Scratch",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        );
     }
 }

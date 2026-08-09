@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "source": {
+    "baseline_revision": "cc9fe339ac9def0839d16188cb680b34a373197c",
+    "migration_branch": "refactor/runtime-layers",
+    "migration_working_tree_dirty": true,
+    "benchmarked_source_manifest_algorithm": "SHA-256 of ordered sha256sum output for the listed production source files",
+    "benchmarked_source_manifest_sha256": "46d7cb6438901d12d59923de92d490cc6e22ec388f8b3201608e471dc7ec3c13",
+    "benchmarked_source_files": [
+      {"path":"src/common/mod.rs","sha256":"dc67e95eddf9fc33052b53a0cf408b9eaa6f412e20198b8c1042ea5b4df7a8e7"},
+      {"path":"src/common/capabilities.rs","sha256":"b029ed49976b78db4b467811e850376ebb8bc953abdd0736f7c991bb57177ad3"},
+      {"path":"src/common/runtime.rs","sha256":"c0e75be8c7c6058b055847f9b000ed0fefce52ff1f7d99d4f1186fa9b6ad11a3"},
+      {"path":"src/common/workspace.rs","sha256":"5bc2246c2f20f2dbdb3d3e11985a720c228c1d9492b949aefa51ae517c253bb6"},
+      {"path":"src/compact/core.rs","sha256":"fe6f4ed8e283333ccc82e93a64920c55d17d427cb247352ff200bc5e44b6294f"},
+      {"path":"src/predicate/generator.rs","sha256":"19e5166ef28337459227a4e4de93d11b567363592a802e039872f7b574ab9387"},
+      {"path":"src/scan/scanner.rs","sha256":"aa08a016a3361cfa0e1d5e1d781fa3a6bbdc018466e0330394080c75bd44b070"},
+      {"path":"src/sort/core.rs","sha256":"0a0e71442216f8139898a842cfcbd73d6d8cb92faecf7bbe14b11e463af5072b"},
+      {"path":"src/sort/eight_bit.rs","sha256":"59d1d90ee9bcc6d16426c250eb691d1d2ad70891e9e38dfc294d9e6eddcf1da6"},
+      {"path":"src/sort/pipeline.rs","sha256":"1141c096c5861444e5d7bceb860c1ac5b110095fcc254c0aa26ba022e43df2b9"}
+    ],
+    "public_api_changed": false,
+    "wgsl_changed": false,
+    "massively_version": "0.96.0",
+    "massively_revision": "ef9de55190529be98203aca207edab9d560d312e"
+  },
+  "system": {
+    "host": "beehive",
+    "cpu": "Intel N150",
+    "gpu": "Intel(R) Graphics (ADL-N)",
+    "vendor": 32902,
+    "device": 18132,
+    "device_type": "IntegratedGpu",
+    "backend": "Vulkan",
+    "driver": "Intel open-source Mesa driver",
+    "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.2",
+    "power_profile": "balanced",
+    "cpu_governor": "powersave",
+    "clocks": "dynamic, not pinned",
+    "subgroup_min_size": 8,
+    "subgroup_max_size": 32
+  },
+  "method": {
+    "timing": "resident public API call through GPU completion",
+    "excluded": ["host upload", "readback", "correctness validation"],
+    "warmups_minimum": 4,
+    "warmup_ms_minimum": 2000,
+    "samples": 11,
+    "large_warmups": 2,
+    "large_samples": 7,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "validation": "deterministic output checked before timing"
+  },
+  "results": [
+    {"workload":"sort_bounded16","items":1000000,"wgpu_primitives_ms":20.338216,"massively_ms":47.562508,"wgpu_primitives_speedup":2.338578},
+    {"workload":"sort_full_width","items":1000000,"wgpu_primitives_ms":40.644787,"massively_ms":48.212097,"wgpu_primitives_speedup":1.186182},
+    {"workload":"exclusive_scan","items":1000000,"wgpu_primitives_ms":2.543446,"massively_ms":6.049369,"wgpu_primitives_speedup":2.378415},
+    {"workload":"compact_50","items":1000000,"wgpu_primitives_ms":2.582548,"massively_ms":5.248355,"wgpu_primitives_speedup":2.032239},
+    {"workload":"sort_bounded16","items":10000000,"wgpu_primitives_ms":174.815311,"massively_ms":563.335807,"wgpu_primitives_speedup":3.222463},
+    {"workload":"sort_full_width","items":10000000,"wgpu_primitives_ms":352.525017,"massively_ms":588.937393,"wgpu_primitives_speedup":1.670626},
+    {"workload":"exclusive_scan","items":10000000,"wgpu_primitives_ms":13.083580,"massively_ms":33.872138,"wgpu_primitives_speedup":2.588904},
+    {"workload":"compact_50","items":10000000,"wgpu_primitives_ms":17.178738,"massively_ms":41.847890,"wgpu_primitives_speedup":2.436028},
+    {"workload":"sort_bounded16","items":100000000,"wgpu_primitives_ms":1769.832768,"massively_ms":12801.820392,"wgpu_primitives_speedup":7.233350},
+    {"workload":"sort_full_width","items":100000000,"wgpu_primitives_ms":3532.261447,"massively_ms":12547.157326,"wgpu_primitives_speedup":3.552160},
+    {"workload":"exclusive_scan","items":100000000,"wgpu_primitives_ms":129.370293,"massively_ms":315.465610,"wgpu_primitives_speedup":2.438470},
+    {"workload":"compact_50","items":100000000,"wgpu_primitives_ms":160.307475,"massively_ms":404.163914,"wgpu_primitives_speedup":2.521179}
+  ],
+  "regression_controls": [
+    {"system":"intel","workload":"sort_bounded16","items":1000000,"before_ms":20.673104,"after_ms":20.338216,"change_percent":-1.620,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"sort_full_width","items":1000000,"before_ms":41.269287,"after_ms":40.644787,"change_percent":-1.513,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"exclusive_scan","items":1000000,"before_ms":2.842030,"after_ms":2.543446,"change_percent":-10.506,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"compact_50","items":1000000,"before_ms":3.126816,"after_ms":2.582548,"change_percent":-17.406,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"sort_bounded16","items":10000000,"before_ms":177.955707,"after_ms":174.815311,"change_percent":-1.765,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"sort_full_width","items":10000000,"before_ms":353.553881,"after_ms":352.525017,"change_percent":-0.291,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"exclusive_scan","items":10000000,"before_ms":13.462295,"after_ms":13.083580,"change_percent":-2.813,"passes_two_percent_gate":true},
+    {"system":"intel","workload":"compact_50","items":10000000,"before_ms":16.099222,"after_ms":16.095635,"change_percent":-0.022,"processes":5,"reason":"targeted follow-up to resolve a +2.09% three-process outlier","passes_two_percent_gate":true},
+    {"system":"rtx_4070_ti_super","workload":"sort_bounded16","items":10000000,"before_ms":0.9107,"after_ms":0.9159,"change_percent":0.571,"passes_two_percent_gate":true},
+    {"system":"rtx_4070_ti_super","workload":"sort_full_width","items":10000000,"before_ms":1.6101,"after_ms":1.6055,"change_percent":-0.286,"passes_two_percent_gate":true},
+    {"system":"rtx_4070_ti_super","workload":"exclusive_scan","items":10000000,"before_ms":0.3388,"after_ms":0.3399,"change_percent":0.325,"passes_two_percent_gate":true},
+    {"system":"rtx_4070_ti_super","workload":"compact_50","items":10000000,"before_ms":0.4833,"after_ms":0.4827,"change_percent":-0.124,"passes_two_percent_gate":true}
+  ],
+  "correctness": {
+    "intel_release_tests_passed": 64,
+    "benchmark_failures": 0
+  }
+}
