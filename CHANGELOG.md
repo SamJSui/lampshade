@@ -18,9 +18,18 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Changed
 
+- Upgrade the public GPU runtime from wgpu 28 to wgpu 30, requiring downstream
+  users of the GPU-buffer APIs to upgrade their wgpu dependency. This is a
+  breaking pre-1.0 dependency change and advances the crate to 0.6. The
+  migration includes explicit mapped-range error handling and the new instance,
+  adapter, and pipeline-layout descriptor fields.
+- Disable redundant backend workgroup-memory zero fills. Every crate shader
+  initializes each shared value before its first read, and cross-adapter GPU
+  correctness suites cover the affected kernels.
 - Immediate submission, timestamp profiling, reusable buffer ownership, and
-  adapter capability capture now use shared private engine components. Public
-  APIs, WGSL kernels, dispatch sizes, and command order are unchanged.
+  adapter capability capture now use shared private engine components. Apart
+  from the wgpu type-version change above, public method names, WGSL kernels,
+  dispatch sizes, and command order are unchanged.
 - Capable Intel Vulkan adapters now select the existing 4-bit stable key-value
   radix kernels; key-only sort, other backends, and devices below the required
   workgroup limits retain the portable 2-bit path.
@@ -31,18 +40,19 @@ All notable changes to `wgpu-primitives` are documented here.
   100M sum dispatch time by 37.5% on Intel Alder Lake-N and 17.2% on Apple M3
   Pro relative to the initial 256-thread, 8-item implementation, while RTX
   dispatch remains within 1%.
-- At 100M values, end-to-host wrapping sum is 1.39x faster than Massively on RTX
-  and 1.02x faster on Intel. On Apple it is 0.75x as fast because Metal
-  completion/readback adds about 1.6 ms; the GPU-resident operation is 3.065 ms.
+- At 100M values, end-to-host wrapping sum is 1.94x faster than Massively on RTX,
+  1.04x faster on Intel, and 1.11x faster on Apple. The wgpu 30 migration reverses
+  the previous Apple host-boundary loss without adding vendor-specific code.
 - On Intel Alder Lake-N, the 4-bit radix route reduces stable key-value sort
   latency by 24.46%-29.89% across 1M-100M items relative to the portable path.
-- At 10M items, `wgpu-primitives` leads Massively by 4.46x for bounded stable
-  sort, 2.24x for full-width stable sort, 2.62x for exclusive scan, and 2.59x
-  for 50%-selective stable compaction. At 100M, the corresponding speedups are
-  9.78x, 4.79x, 2.44x, and 2.52x.
-- Identical pre/post migration controls pass a 2% regression gate on Intel and
-  RTX 4070 Ti SUPER. The largest RTX increase is 0.57%; a targeted five-process
-  Intel compaction control changes by -0.02%.
+- At 10M items on Intel, `wgpu-primitives` leads Massively by 4.33x for bounded
+  stable sort, 2.24x for full-width stable sort, 2.75x for exclusive scan, and
+  2.67x for 50%-selective stable compaction. The earlier 100M Intel sweep
+  measured corresponding speedups of 9.78x, 4.79x, 2.44x, and 2.52x.
+- Identical wgpu 28/30 controls pass a 2% regression gate on Apple M3 Pro, Intel,
+  and RTX 4070 Ti SUPER. The largest measured increase is 1.55% for RTX bounded
+  sort; stabilized Apple bounded sort improves by 1.74%, and Intel scan and
+  compaction improve by 5.79% and 5.26%.
 
 ## 0.5.0 - 2026-08-09
 

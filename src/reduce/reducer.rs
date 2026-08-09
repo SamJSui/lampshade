@@ -268,9 +268,9 @@ impl Reducer {
 
 fn effective_storage_binding_limit(
     max_buffer_size: u64,
-    max_storage_buffer_binding_size: u32,
+    max_storage_buffer_binding_size: u64,
 ) -> u64 {
-    max_buffer_size.min(max_storage_buffer_binding_size as u64)
+    max_buffer_size.min(max_storage_buffer_binding_size)
 }
 
 #[cfg(test)]

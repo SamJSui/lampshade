@@ -438,7 +438,7 @@ impl ReduceScanSorter {
         let limits = self.device.limits();
         let buffer_limit = limits
             .max_buffer_size
-            .min(u64::from(limits.max_storage_buffer_binding_size));
+            .min(limits.max_storage_buffer_binding_size);
         if capacity > buffer_limit {
             return Err(Error::BufferLimitExceeded {
                 requested: capacity,

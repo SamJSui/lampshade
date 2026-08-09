@@ -2,8 +2,9 @@
 
 This harness compares the overlapping public GPU primitives in wgpu-primitives and
 [Massively 0.96.0](https://crates.io/crates/massively). The two implementations run in
-separate processes because they use different wgpu versions (`28` and `30`). Massively is
-pinned exactly in `Cargo.lock`; its `v0.96` source revision is
+separate processes so dependency graphs, allocators, and GPU runtime state stay
+isolated. Both currently use wgpu 30. Massively is pinned exactly in
+`Cargo.lock`; its `v0.96` source revision is
 `ef9de55190529be98203aca207edab9d560d312e`.
 
 ## Workloads
@@ -36,6 +37,11 @@ Each normal case warms for at least two seconds and four calls, then records 11 
 case uses two warmups and seven samples. The published value is the median of three independent
 process medians. `wgpu_primitives_speedup` is `Massively time / wgpu-primitives time`, so values
 above `1.0x` favor wgpu-primitives.
+
+Setting `MASSIVELY_BENCH_PROFILE_REDUCTION_PHASES=1` when invoking the
+wgpu-primitives runner directly prints median allocation, encoding, submission,
+mapping, completion-wait, and scalar-access times for per-call and reusable
+staging buffers. It also prints GPU timestamp totals. Normal runs are unchanged.
 
 ## Run
 
@@ -79,3 +85,7 @@ are in its [machine-readable snapshot](../2026-08-08-fused-compaction-prefix.jso
 The [reduction report](../2026-08-09-reduction.md) adds wrapping sum to the
 cross-vendor matrix and separates GPU dispatch time from the required host-scalar
 readback. Its compact data is in the [reduction snapshot](../2026-08-09-reduction.json).
+The [wgpu 30 runtime follow-up](../2026-08-09-wgpu30-runtime.md) uses those phase
+measurements to identify the old Metal runtime as the bottleneck and publishes
+the refreshed RTX, Intel, and Apple results in a
+[compact snapshot](../2026-08-09-wgpu30-runtime.json).

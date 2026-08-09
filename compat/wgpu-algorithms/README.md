@@ -6,7 +6,7 @@ Replace the dependency:
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.5"
+wgpu-primitives = "0.6"
 ```
 
 Then update Rust imports from `wgpu_algorithms` to `wgpu_primitives`.

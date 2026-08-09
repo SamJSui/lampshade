@@ -23,11 +23,11 @@ overlapping 100-million-item workload:
 
 | Workload | `wgpu-primitives` | Massively | Speedup |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 8.395 ms | 165.442 ms | 19.71x |
-| Stable sort, full-width keys | 14.990 ms | 165.862 ms | 11.07x |
-| Exclusive scan | 2.836 ms | 3.174 ms | 1.12x |
-| Stable compaction, 50% selected | 3.736 ms | 5.695 ms | 1.52x |
-| Wrapping sum reduction | 0.747 ms | 1.038 ms | 1.39x |
+| Stable sort, 16-bit keys | 7.961 ms | 167.915 ms | 21.09x |
+| Stable sort, full-width keys | 14.559 ms | 168.132 ms | 11.55x |
+| Exclusive scan | 2.837 ms | 3.550 ms | 1.25x |
+| Stable compaction, 50% selected | 3.717 ms | 5.662 ms | 1.52x |
+| Wrapping sum reduction | 0.714 ms | 1.388 ms | 1.94x |
 
 The same comparison at 10 million items also favored `wgpu-primitives` on two
 Jetson Orin Nano systems:
@@ -40,7 +40,7 @@ Jetson Orin Nano systems:
 | Stable compaction, 50% selected | 2.06x | 1.66x | 1.63x |
 
 See the [Massively harness](benchmarks/massively-comparison/README.md) and
-[reduction report](benchmarks/2026-08-09-reduction.md) for the method, exact
+[wgpu 30 report](benchmarks/2026-08-09-wgpu30-runtime.md) for the method, exact
 revisions, complete matrices, and machine-readable results.
 
 ### Intel Vulkan
@@ -51,37 +51,36 @@ capability-gated 4-bit radix path; reduction uses the portable kernel:
 
 | Workload | `wgpu-primitives` | Massively | Speedup |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 130.349 ms | 580.788 ms | 4.46x |
-| Stable sort, full-width keys | 261.765 ms | 587.289 ms | 2.24x |
-| Exclusive scan | 12.820 ms | 33.620 ms | 2.62x |
-| Stable compaction, 50% selected | 15.609 ms | 40.408 ms | 2.59x |
-| Wrapping sum reduction | 3.676 ms | 4.471 ms | 1.22x |
+| Stable sort, 16-bit keys | 129.879 ms | 562.704 ms | 4.33x |
+| Stable sort, full-width keys | 262.103 ms | 587.898 ms | 2.24x |
+| Exclusive scan | 12.450 ms | 34.210 ms | 2.75x |
+| Stable compaction, 50% selected | 15.900 ms | 42.429 ms | 2.67x |
+| Wrapping sum reduction | 3.776 ms | 4.585 ms | 1.21x |
 
-All 74 release tests passed. At 100M, reduction measured 22.326 ms versus
-22.724 ms for Massively, a narrow 1.02x lead. The
+All 74 release tests passed. At 100M, reduction measured 21.983 ms versus
+22.836 ms for Massively, a 1.04x lead. The
 [Intel wide-radix report](benchmarks/2026-08-09-intel-wide-radix.md) includes
 1M-100M results, stage profiles, and measured regression controls. At 100M,
 the same four speedups are 9.78x, 4.79x, 2.44x, and 2.52x respectively.
 
 ### Apple Metal
 
-An M3 Pro completed all 74 release tests and every 100-million-item validator:
+Upgrading from wgpu 28 to wgpu 30 removed the previous host-returning reduction
+deficit on an M3 Pro. These are final-candidate medians of three independent
+process medians:
 
-| Workload | Time | Throughput |
-| --- | ---: | ---: |
-| Stable sort, 16-bit keys | 147.804 ms | 0.68 billion pairs/s |
-| Stable sort, full-width keys | 294.699 ms | 0.34 billion pairs/s |
-| Exclusive scan | 13.736 ms | 7.28 billion items/s |
-| Stable compaction, 50% selected | 18.302 ms | 5.46 billion items/s |
-| Wrapping sum reduction, GPU-resident | 3.065 ms | 32.63 billion items/s |
+| Items | `wgpu-primitives` | Massively | Speedup |
+| ---: | ---: | ---: | ---: |
+| 1M | 0.171 ms | 0.749 ms | 4.37x |
+| 10M | 0.479 ms | 0.844 ms | 1.76x |
+| 100M | 3.260 ms | 3.602 ms | 1.11x |
 
 Massively 0.96 could not initialize these Metal pipelines: its generated layouts
 requested 42 or 47 storage buffers against the adapter limit of 29. The harness
-records this as an unsupported comparison, not an artificial speedup. Its
-reduction does run: the end-to-host scalar boundary measured 3.493 ms versus
-4.643 ms for `wgpu-primitives`, where about 1.6 ms is Metal completion/readback
-overhead. See the
-[reduction report](benchmarks/2026-08-09-reduction.md), the earlier
+records this as an unsupported comparison, not an artificial speedup. Reduction
+does run in both libraries and uses the same end-to-host scalar boundary. All 74
+release GPU tests and every 100M benchmark validator pass on the M3 Pro. See the
+[wgpu 30 report](benchmarks/2026-08-09-wgpu30-runtime.md), the earlier
 [Apple report](benchmarks/2026-08-08-apple-metal-validation.md), and the
 [upstream issue](https://github.com/massively-labs/massively/issues/62).
 
@@ -111,13 +110,26 @@ the pinned baseline and reproduction harness.
 
 ## Installation
 
+Version 0.6 contains reduction and uses wgpu 30. Tokio is listed because the
+executable quick start below uses `#[tokio::main]`; library development
+dependencies do not propagate to applications.
+
 ```toml
 [dependencies]
-wgpu-primitives = "0.5"
+wgpu-primitives = "0.6"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-Version 0.5 uses wgpu 28. The package continues the crate previously published
-as `wgpu-algorithms`.
+If crates.io does not have 0.6 yet, temporarily replace only the
+`wgpu-primitives` line with the current Git API:
+
+```toml
+wgpu-primitives = { git = "https://github.com/SamJSui/wgpu-primitives.git", branch = "main" }
+```
+
+Because wgpu types appear in the public GPU-buffer APIs, upgrading from 0.5 also
+requires upgrading the application's wgpu dependency. The package continues
+the crate previously published as `wgpu-algorithms`.
 
 ## Quick start
 

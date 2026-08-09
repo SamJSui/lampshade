@@ -198,7 +198,7 @@ fn read_buffer<T: bytemuck::Pod>(
         timeout: None,
     })?;
     receiver.recv()??;
-    let values = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+    let values = bytemuck::cast_slice(&slice.get_mapped_range()?).to_vec();
     staging.unmap();
     Ok(values)
 }

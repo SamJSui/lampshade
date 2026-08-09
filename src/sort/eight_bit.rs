@@ -329,7 +329,7 @@ impl EightBitSorter {
         let limits = self.device.limits();
         let buffer_limit = limits
             .max_buffer_size
-            .min(u64::from(limits.max_storage_buffer_binding_size));
+            .min(limits.max_storage_buffer_binding_size);
         for requested in [capacity, partition_bytes] {
             if requested > buffer_limit {
                 return Err(Error::BufferLimitExceeded {
@@ -518,7 +518,7 @@ fn create_pipeline(
 ) -> wgpu::ComputePipeline {
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some(label),
-        bind_group_layouts: &[bind_group_layout],
+        bind_group_layouts: &[Some(bind_group_layout)],
         immediate_size: 0,
     });
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

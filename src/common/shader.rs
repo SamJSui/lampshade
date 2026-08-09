@@ -47,7 +47,7 @@ pub fn create_compute_pipeline_with_constants(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some(label),
-        bind_group_layouts: &[layout],
+        bind_group_layouts: &[Some(layout)],
         immediate_size: 0,
     });
 
@@ -58,7 +58,9 @@ pub fn create_compute_pipeline_with_constants(
         entry_point: Some(entry_point),
         compilation_options: wgpu::PipelineCompilationOptions {
             constants,
-            ..Default::default()
+            // Every crate shader initializes each workgroup value before its
+            // first read. Avoid emitting redundant backend zero-fill work.
+            zero_initialize_workgroup_memory: false,
         },
         cache: None,
     })
