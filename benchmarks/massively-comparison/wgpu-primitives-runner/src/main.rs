@@ -84,23 +84,11 @@ fn run_reduce(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, 
     });
     let mut reducer = Reducer::from_context(context);
 
-    let actual = reduce_to_host(
-        context,
-        &mut reducer,
-        &gpu_input,
-        &gpu_output,
-        config.items,
-    )?;
+    let actual = reduce_to_host(context, &mut reducer, &gpu_input, &gpu_output, config.items)?;
     validate_reduction_sum(&input, actual)?;
 
     let samples = warm_and_sample(config, || {
-        let value = reduce_to_host(
-            context,
-            &mut reducer,
-            &gpu_input,
-            &gpu_output,
-            config.items,
-        )?;
+        let value = reduce_to_host(context, &mut reducer, &gpu_input, &gpu_output, config.items)?;
         black_box(value);
         Ok(())
     })?;
@@ -124,13 +112,7 @@ fn reduce_to_host(
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     reducer.record_reduce(&mut encoder, input, output, items, U32Reduction::Sum)?;
-    encoder.copy_buffer_to_buffer(
-        output,
-        0,
-        &staging,
-        0,
-        Reducer::output_buffer_size(),
-    );
+    encoder.copy_buffer_to_buffer(output, 0, &staging, 0, Reducer::output_buffer_size());
     let submission = context.queue.submit([encoder.finish()]);
     let slice = staging.slice(..);
     let (sender, receiver) = mpsc::channel();
