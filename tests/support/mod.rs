@@ -15,6 +15,46 @@ pub async fn gpu_context() -> Option<Context> {
     }
 }
 
+pub async fn gpu_context_without_optional_features() -> Option<Context> {
+    let descriptor = wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        ..Default::default()
+    }
+    .with_env();
+    let instance = wgpu::Instance::new(&descriptor);
+    let adapter = match instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+    {
+        Ok(adapter) => adapter,
+        Err(error) => {
+            eprintln!("skipping portable GPU test because no adapter is available: {error}");
+            return None;
+        }
+    };
+    let adapter_info = adapter.get_info();
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("Portable Test Device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: adapter.limits(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            ..Default::default()
+        })
+        .await
+        .expect("failed to request portable GPU test device");
+
+    Some(Context {
+        adapter_info,
+        device,
+        queue,
+    })
+}
+
 pub fn random_u32(len: usize, seed: u64) -> Vec<u32> {
     let mut rng = StdRng::seed_from_u64(seed);
     (0..len).map(|_| rng.random()).collect()
