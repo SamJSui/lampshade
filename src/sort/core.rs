@@ -2,6 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 use crate::common;
+use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 use crate::scan::Scanner;
 
@@ -223,13 +224,9 @@ impl ReduceScanSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Radix Sort"),
-            });
-        self.record_sort_with_key_bits(&mut encoder, input, output, num_items, key_bits)?;
-        self.queue.submit(Some(encoder.finish()));
+        let mut commands = CommandSession::new(&self.device, Some("Radix Sort"));
+        self.record_sort_with_key_bits(commands.encoder(), input, output, num_items, key_bits)?;
+        commands.submit(&self.queue);
         Ok(())
     }
 
@@ -272,23 +269,11 @@ impl ReduceScanSorter {
             .checked_mul(spans_per_radix_pass)
             .ok_or(Error::SizeOverflow)?;
 
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, span_count)?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Profiled Radix Sort"),
-            });
-        self.record_radix_passes(
-            &mut encoder,
-            input,
-            output,
-            problem,
-            pass_count,
-            Some(&mut profiler),
-        )?;
-        profiler.resolve(&mut encoder);
-        let submission = self.queue.submit(Some(encoder.finish()));
-        profiler.read(&self.device, submission).await
+        let mut profile =
+            ProfileSession::new(&self.device, &self.queue, span_count, "Profiled Radix Sort")?;
+        let (encoder, profiler) = profile.recording();
+        self.record_radix_passes(encoder, input, output, problem, pass_count, profiler)?;
+        profile.finish(&self.device, &self.queue).await
     }
 
     fn prepare_sort(

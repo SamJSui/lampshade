@@ -2,6 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 use crate::common;
+use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 
 const BLOCK_SIZE: u32 = 256;
@@ -92,13 +93,9 @@ impl EightBitSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("8-bit Radix Sort"),
-            });
-        self.record_sort(&mut encoder, input, output, num_items, key_bits)?;
-        self.queue.submit(Some(encoder.finish()));
+        let mut commands = CommandSession::new(&self.device, Some("8-bit Radix Sort"));
+        self.record_sort(commands.encoder(), input, output, num_items, key_bits)?;
+        commands.submit(&self.queue);
         Ok(())
     }
 
@@ -129,23 +126,15 @@ impl EightBitSorter {
         };
 
         let pass_count = pass_count_for_key_bits(key_bits);
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, pass_count + 2)?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Profiled 8-bit Radix Sort"),
-            });
-        self.record_commands(
-            &mut encoder,
-            input,
-            output,
-            problem,
-            pass_count,
-            Some(&mut profiler),
+        let mut profile = ProfileSession::new(
+            &self.device,
+            &self.queue,
+            pass_count + 2,
+            "Profiled 8-bit Radix Sort",
         )?;
-        profiler.resolve(&mut encoder);
-        let submission = self.queue.submit(Some(encoder.finish()));
-        profiler.read(&self.device, submission).await
+        let (encoder, profiler) = profile.recording();
+        self.record_commands(encoder, input, output, problem, pass_count, profiler)?;
+        profile.finish(&self.device, &self.queue).await
     }
 
     fn prepare_sort(

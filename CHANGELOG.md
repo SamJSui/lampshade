@@ -4,6 +4,31 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ## Unreleased
 
+### Added
+
+- Physical Intel Alder Lake-N Vulkan validation, including all 64 release
+  tests and reproducible 1M/10M comparisons against pinned Massively 0.96.
+- An architecture guide defining the slice convenience, resident composition,
+  and private kernel/runtime layers and the evidence required before a crate
+  split.
+
+### Changed
+
+- Immediate submission, timestamp profiling, reusable buffer ownership, and
+  adapter capability capture now use shared private engine components. Public
+  APIs, WGSL kernels, dispatch sizes, and command order are unchanged.
+
+### Performance
+
+- On Intel Alder Lake-N at 10M items, `wgpu-primitives` leads Massively by
+  3.22x for bounded stable sort, 1.67x for full-width stable sort, 2.59x for
+  exclusive scan, and 2.44x for 50%-selective stable compaction.
+- The same Intel workloads validate at 100M items and lead Massively by 7.23x,
+  3.55x, 2.44x, and 2.52x respectively.
+- Identical pre/post migration controls pass a 2% regression gate on Intel and
+  RTX 4070 Ti SUPER. The largest RTX increase is 0.57%; a targeted five-process
+  Intel compaction control changes by -0.02%.
+
 ## 0.5.0 - 2026-08-09
 
 ### Added

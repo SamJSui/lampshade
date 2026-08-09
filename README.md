@@ -40,6 +40,23 @@ See the [Massively harness](benchmarks/massively-comparison/README.md) and
 [latest NVIDIA report](benchmarks/2026-08-08-fused-compaction-prefix.md) for the
 method, exact revisions, complete matrices, and machine-readable results.
 
+### Intel Vulkan
+
+On Intel Alder Lake-N integrated graphics at 10 million items, the portable
+path also led Massively in every workload:
+
+| Workload | `wgpu-primitives` | Massively | Speedup |
+| --- | ---: | ---: | ---: |
+| Stable sort, 16-bit keys | 174.815 ms | 563.336 ms | 3.22x |
+| Stable sort, full-width keys | 352.525 ms | 588.937 ms | 1.67x |
+| Exclusive scan | 13.084 ms | 33.872 ms | 2.59x |
+| Stable compaction, 50% selected | 17.179 ms | 41.848 ms | 2.44x |
+
+All 64 release tests passed. The
+[Intel report](benchmarks/2026-08-09-intel-alder-lake-n.md) includes 1M results
+and measured pre/post migration controls on both Intel and RTX. At 100M, the
+same four speedups are 7.23x, 3.55x, 2.44x, and 2.52x respectively.
+
 ### Apple Metal
 
 An M3 Pro completed all 64 release tests and every 100-million-item validator:
@@ -157,6 +174,9 @@ key. Sort input and output must be distinct, and buffers must not overlap where 
 write could race with a read. Full usage requirements are documented on each API
 at [docs.rs](https://docs.rs/wgpu-primitives).
 
+See the [architecture guide](docs/architecture.md) for the public convenience,
+resident composition, and private kernel/runtime layers.
+
 ## How it works
 
 - **Predicate mask:** one thread evaluates each value or `KeyValue` field and
@@ -189,10 +209,12 @@ at selectable sizes and selectivities.
 
 ## Roadmap
 
-1. Validate AMD, Intel, more Apple GPUs, and additional driver versions.
-2. Improve portable key-width detection for GPU-resident inputs.
-3. Add derived primitives only when real workloads justify their API and cost.
-4. Revisit full-width scatter when hardware counters or a new algorithm provide
+1. Validate AMD, more Intel and Apple GPUs, and additional driver versions.
+2. Grow the CUB-like private kernel/workspace engine behind the existing safe,
+   Thrust-like Rust APIs; split crates only when usage evidence justifies it.
+3. Improve portable key-width detection for GPU-resident inputs.
+4. Add derived primitives only when real workloads justify their API and cost.
+5. Revisit full-width scatter when hardware counters or a new algorithm provide
    evidence for at least a 5% gain.
 
 New primitives require a resident-buffer API, deterministic boundary tests,

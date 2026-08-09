@@ -1,5 +1,6 @@
 use crate::{
     Error, KeyValue, common,
+    common::runtime::{CommandSession, ProfileSession},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
 };
@@ -230,11 +231,9 @@ impl MaskGenerator {
         predicate: U32Predicate,
         item_kind: PredicateItemKind,
     ) -> Result<(), Error> {
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut commands = CommandSession::new(&self.device, None);
         self.record_commands(
-            &mut encoder,
+            commands.encoder(),
             input,
             mask,
             num_items,
@@ -243,7 +242,7 @@ impl MaskGenerator {
             item_kind,
             None,
         )?;
-        self.queue.submit(Some(encoder.finish()));
+        commands.submit(&self.queue);
         Ok(())
     }
 
@@ -261,25 +260,13 @@ impl MaskGenerator {
             return Ok(GpuProfile::empty());
         }
 
-        let mut profiler = TimestampRecorder::new(&self.device, &self.queue, 1)?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Profiled Predicate Mask"),
-            });
+        let mut profile =
+            ProfileSession::new(&self.device, &self.queue, 1, "Profiled Predicate Mask")?;
+        let (encoder, profiler) = profile.recording();
         self.record_commands(
-            &mut encoder,
-            input,
-            mask,
-            num_items,
-            field,
-            predicate,
-            item_kind,
-            Some(&mut profiler),
+            encoder, input, mask, num_items, field, predicate, item_kind, profiler,
         )?;
-        profiler.resolve(&mut encoder);
-        let submission = self.queue.submit(Some(encoder.finish()));
-        profiler.read(&self.device, submission).await
+        profile.finish(&self.device, &self.queue).await
     }
 
     #[allow(clippy::too_many_arguments)]
