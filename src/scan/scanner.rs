@@ -1,4 +1,4 @@
-use super::pipeline::{ScanDispatch, ScanPipeline};
+use super::pipeline::{ScanDispatch, ScanInputDispatch, ScanPipeline};
 use crate::{
     Error, common,
     context::Context,
@@ -323,8 +323,6 @@ impl Scanner {
             return Ok(());
         }
 
-        encoder.copy_buffer_to_buffer(input, 0, output, 0, size_bytes);
-
         self.prepare_scratch(num_items);
 
         let scratch = self
@@ -359,27 +357,44 @@ impl Scanner {
             let aux_size = (aux_count * 4) as u64;
             let aux_offset = crate::common::math::align_to(current_scratch_offset, 256);
 
-            let scan_pipeline = match (levels.len(), mode) {
-                (1, ScanMode::Exclusive) => &self.pipeline.exclusive_scan_pipeline,
-                _ => &self.pipeline.inclusive_scan_pipeline,
-            };
             let profile_label = profiler
                 .is_some()
                 .then(|| format!("{profile_prefix}.level.{}", levels.len() - 1));
 
-            self.pipeline.dispatch(
-                &self.device,
-                encoder,
-                ScanDispatch {
-                    pipeline: scan_pipeline,
-                    data: (current.buf, current.offset),
-                    auxiliary: (scratch, aux_offset),
-                    num_items: current.count,
-                    pass_label: "Prefix Scan",
-                    profile_label,
-                },
-                profiler.as_deref_mut(),
-            );
+            if levels.len() == 1 {
+                let scan_pipeline = match mode {
+                    ScanMode::Inclusive => &self.pipeline.inclusive_input_scan_pipeline,
+                    ScanMode::Exclusive => &self.pipeline.exclusive_input_scan_pipeline,
+                };
+                self.pipeline.dispatch_input(
+                    &self.device,
+                    encoder,
+                    ScanInputDispatch {
+                        pipeline: scan_pipeline,
+                        input,
+                        data: output,
+                        auxiliary: (scratch, aux_offset),
+                        num_items: current.count,
+                        pass_label: "Prefix Scan",
+                        profile_label,
+                    },
+                    profiler.as_deref_mut(),
+                );
+            } else {
+                self.pipeline.dispatch(
+                    &self.device,
+                    encoder,
+                    ScanDispatch {
+                        pipeline: &self.pipeline.inclusive_scan_pipeline,
+                        data: (current.buf, current.offset),
+                        auxiliary: (scratch, aux_offset),
+                        num_items: current.count,
+                        pass_label: "Prefix Scan",
+                        profile_label,
+                    },
+                    profiler.as_deref_mut(),
+                );
+            }
 
             levels.push(Level {
                 buf: scratch,

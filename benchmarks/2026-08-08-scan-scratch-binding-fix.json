@@ -83,5 +83,10 @@
     {"system":"grumpy","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[10.519837,10.539134,10.531997],"wgpu_primitives_ms":10.531997,"massively_process_medians_ms":[6.929403,7.026846,6.924956],"massively_ms":6.929403,"wgpu_primitives_speedup":0.657938},
     {"system":"grumpy","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[93.299616,93.278622,93.251837],"wgpu_primitives_ms":93.278622,"massively_process_medians_ms":[45.820665,45.875034,45.846041],"massively_ms":45.846041,"wgpu_primitives_speedup":0.491496},
     {"system":"grumpy","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[117.173506,117.185504,117.172158],"wgpu_primitives_ms":117.173506,"massively_process_medians_ms":[68.464668,68.510107,68.595518],"massively_ms":68.510107,"wgpu_primitives_speedup":0.584689}
-  ]
+  ],
+  "optimization_follow_up": {
+    "status": "optimized faster than Massively in every measured scan and compaction row",
+    "report": "2026-08-08-direct-subgroup-scan.md",
+    "snapshot": "2026-08-08-direct-subgroup-scan.json"
+  }
 }

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "optimization": {
+    "production_revision": "b3f53211b600e0f700dfb4bb9e04f69f33cba13b",
+    "clean_test_revision": "46b6e7226a0835f71fba335a5b0c9c9964ed842f",
+    "changes": [
+      "top-level scan reads input and writes output directly",
+      "enabled subgroup devices use one coalesced item per lane",
+      "subgroupExclusiveAdd and two workgroup barriers replace the shared Hillis-Steele block scan",
+      "devices without SUBGROUP retain the portable VT=8/VT=4 fallback"
+    ]
+  },
+  "method": {
+    "timing": "resident public API call through GPU completion",
+    "excluded": ["host upload", "readback", "correctness validation"],
+    "normal_warmups_minimum": 4,
+    "normal_warmup_ms_minimum": 2000,
+    "normal_samples": 11,
+    "large_warmups": 2,
+    "large_samples": 7,
+    "processes": 3,
+    "aggregate": "median of process medians",
+    "massively_version": "0.96.0",
+    "massively_revision": "ef9de55190529be98203aca207edab9d560d312e"
+  },
+  "systems": [
+    {"id":"rtx","gpu":"NVIDIA GeForce RTX 4070 Ti SUPER","backend":"Vulkan","driver":"NVIDIA 591.86","subgroup_size":32,"test_revision":"46b6e7226a0835f71fba335a5b0c9c9964ed842f","working_tree_dirty":false},
+    {"id":"dopey","gpu":"NVIDIA Tegra Orin (nvgpu)","active_gpu_tpcs":8,"backend":"Vulkan","driver":"NVIDIA 595.78","subgroup_size":32,"test_revision":"16c5e549c503a752fa12ef94d4dfe831f030b244","applied_optimization_revision":"b3f5321","power_mode":"MAXN_SUPER","clocks":"pinned during measurement, dynamic settings verified afterward"},
+    {"id":"grumpy","gpu":"NVIDIA Tegra Orin (nvgpu)","active_gpu_tpcs":4,"backend":"Vulkan","driver":"NVIDIA 595.78","subgroup_size":32,"test_revision":"ba4a8a1f84608014f862bc42ba4350cc5ce82ba7","applied_optimization_revision":"b3f5321","power_mode":"MAXN_SUPER","clocks":"pinned during measurement, dynamic settings verified afterward"}
+  ],
+  "results": [
+    {"system":"rtx","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[0.3394,0.3379,0.3514],"wgpu_primitives_ms":0.3394,"massively_process_medians_ms":[0.9472,0.9531,0.9909],"massively_ms":0.9531,"wgpu_primitives_speedup":2.808191},
+    {"system":"rtx","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[0.6003,0.5854,0.6084],"wgpu_primitives_ms":0.6003,"massively_process_medians_ms":[0.9577,0.9954,0.9922],"massively_ms":0.9922,"wgpu_primitives_speedup":1.652840},
+    {"system":"rtx","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[2.8417,2.8276,2.8233],"wgpu_primitives_ms":2.8276,"massively_process_medians_ms":[3.0892,3.1027,3.0756],"massively_ms":3.0892,"wgpu_primitives_speedup":1.092517},
+    {"system":"rtx","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[5.0832,5.0661,5.0815],"wgpu_primitives_ms":5.0815,"massively_process_medians_ms":[5.6340,5.6179,5.7216],"massively_ms":5.6340,"wgpu_primitives_speedup":1.108728},
+
+    {"system":"dopey","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[3.538108,3.526491,3.533019],"wgpu_primitives_ms":3.533019,"massively_process_medians_ms":[5.393836,5.391563,5.352267],"massively_ms":5.391563,"wgpu_primitives_speedup":1.526050},
+    {"system":"dopey","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[5.333706,5.348331,5.350506],"wgpu_primitives_ms":5.348331,"massively_process_medians_ms":[6.838065,6.841905,6.847314],"massively_ms":6.841905,"wgpu_primitives_speedup":1.279260},
+    {"system":"dopey","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[38.459172,38.448963,38.445507],"wgpu_primitives_ms":38.448963,"massively_process_medians_ms":[45.829922,45.781665,45.668062],"massively_ms":45.781665,"wgpu_primitives_speedup":1.190713},
+    {"system":"dopey","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[62.060870,62.069095,62.067879],"wgpu_primitives_ms":62.067879,"massively_process_medians_ms":[68.217638,68.405867,68.529518],"massively_ms":68.405867,"wgpu_primitives_speedup":1.102114},
+
+    {"system":"grumpy","workload":"exclusive_scan","items":10000000,"wgpu_primitives_process_medians_ms":[3.633748,3.633652,3.639540],"wgpu_primitives_ms":3.633748,"massively_process_medians_ms":[5.405229,5.362794,5.405740],"massively_ms":5.405229,"wgpu_primitives_speedup":1.487508},
+    {"system":"grumpy","workload":"compact_50","items":10000000,"wgpu_primitives_process_medians_ms":[5.468589,5.484813,5.453164],"wgpu_primitives_ms":5.468589,"massively_process_medians_ms":[6.804055,6.898938,6.932027],"massively_ms":6.898938,"wgpu_primitives_speedup":1.261557},
+    {"system":"grumpy","workload":"exclusive_scan","items":100000000,"wgpu_primitives_process_medians_ms":[38.983149,38.968425,38.992263],"wgpu_primitives_ms":38.983149,"massively_process_medians_ms":[45.905510,45.991876,45.835450],"massively_ms":45.905510,"wgpu_primitives_speedup":1.177573},
+    {"system":"grumpy","workload":"compact_50","items":100000000,"wgpu_primitives_process_medians_ms":[62.957584,62.925097,62.946050],"wgpu_primitives_ms":62.946050,"massively_process_medians_ms":[68.577147,68.515155,68.477002],"massively_ms":68.515155,"wgpu_primitives_speedup":1.088474}
+  ],
+  "sort_controls": [
+    {"system":"dopey","workload":"sort_bounded16","items":10000000,"baseline_ms":11.255209,"optimized_ms":11.244548,"delta_percent":-0.09},
+    {"system":"dopey","workload":"sort_full_width","items":10000000,"baseline_ms":21.752239,"optimized_ms":21.778452,"delta_percent":0.12},
+    {"system":"grumpy","workload":"sort_bounded16","items":10000000,"baseline_ms":11.442662,"optimized_ms":11.436183,"delta_percent":-0.06},
+    {"system":"grumpy","workload":"sort_full_width","items":10000000,"baseline_ms":22.097976,"optimized_ms":22.085266,"delta_percent":-0.06}
+  ],
+  "correctness": {
+    "all_scan_and_compaction_processes_passed": true,
+    "subgroup_hierarchy_regression_items": 4194305,
+    "portable_fallback_test_items": 4097,
+    "portable_fallback_subgroups_enabled": false
+  }
+}

@@ -217,7 +217,11 @@ comparison, and writes exactly one `0` or `1`. Recording mask generation before
 compaction keeps the flags GPU-resident and lets one queue submission execute
 the predicate, exclusive scan, and stable scatter in order.
 
-The scan recursively computes per-workgroup inclusive prefixes, scans the workgroup totals, and propagates those totals back through the hierarchy.
+The scan writes its top-level prefixes directly from caller input to caller
+output, recursively scans per-workgroup totals, and propagates those totals back
+through the hierarchy. Devices with enabled subgroups use coalesced one-item
+lanes and subgroup prefix operations; other devices retain the portable
+multi-item shared-memory path.
 
 Stream compaction exclusively scans a caller-provided 0/1 mask into stable
 destination indices, scatters selected `u32` values or `KeyValue` records in their original order,
@@ -240,16 +244,18 @@ Criterion measurements from an RTX 4070 Ti SUPER show why the GPU-buffer API is 
 | Primitive | Items | CPU | Best GPU resident | Resident speedup | Best GPU round trip |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Prefix scan | 1M | 0.220 ms | 0.170 ms (Vulkan) | 1.29x | 1.351 ms (DX12) |
-| Prefix scan | 10M | 2.232 ms | 0.717 ms (DX12) | 3.11x | 11.108 ms (DX12) |
-| Prefix scan | 100M | 27.949 ms | 5.568 ms (DX12) | 5.02x | 230.390 ms (DX12) |
-| Exclusive prefix scan | 100M | 28.580 ms | 6.238 ms (DX12) | 4.58x | Not measured |
+| Prefix scan | 10M | 2.232 ms | 0.340 ms (Vulkan) | 6.56x | 11.108 ms (DX12) |
+| Prefix scan | 100M | 27.949 ms | 2.984 ms (Vulkan) | 9.37x | 230.390 ms (DX12) |
+| Exclusive prefix scan | 100M | 28.580 ms | 2.828 ms (Vulkan) | 10.11x | Not measured |
 | Predicate mask | 10M | 1.045 ms | 0.218 ms (Vulkan) | 4.80x | Not measured |
 | Predicate mask | 100M | 23.833 ms | 1.379 ms (Vulkan) | 17.28x | Not measured |
 | Radix sort | 1M | 2.458 ms | 1.331 ms (Vulkan) | 1.85x | 2.453 ms (Vulkan) |
 | Radix sort | 10M | 25.224 ms | 5.511 ms (Vulkan) | 4.58x | 15.783 ms (Vulkan) |
 | Radix sort | 100M | 277.730 ms | 43.724 ms (Vulkan) | 6.35x | 253.760 ms (Vulkan) |
 
-At 100M items, resident throughput reached 17.96 billion elements/s for inclusive scan, 16.03 billion elements/s for exclusive scan, and 2.287 billion elements/s for key-only sort. The version 0.4 key-value path compares as follows:
+At 100M items, resident throughput reached 33.51 billion elements/s for inclusive
+scan, 35.37 billion elements/s for exclusive scan, and 2.287 billion elements/s
+for key-only sort. The version 0.4 key-value path compares as follows:
 
 | Key width | Pairs | `wgpu-primitives` | `wgpu_sort` | Time change |
 | ---: | ---: | ---: | ---: | ---: |
@@ -313,9 +319,13 @@ harness exposed a scheduling-sensitive 100M scratch-binding race in scan and
 scan-derived compaction. The
 [exact-range fix follow-up](benchmarks/2026-08-08-scan-scratch-binding-fix.md)
 closes that correctness gap on RTX and both Jetsons without a 10M regression.
-The now-valid 100M results show Massively ahead on scan and compaction, most
-strongly on the 4-TPC Jetson, so the corrected portable hierarchy remains the
-next measured performance target.
+At that correctness-fix checkpoint, the now-valid 100M results showed Massively
+ahead on scan and compaction, most strongly on the 4-TPC Jetson, making the
+corrected hierarchy the next measured performance target.
+The [direct subgroup scan follow-up](benchmarks/2026-08-08-direct-subgroup-scan.md)
+closes that target. `wgpu-primitives` now wins every measured Massively scan and
+compaction row: 1.09x-2.81x on RTX, 1.10x-1.53x on dopey, and 1.09x-1.49x on
+grumpy. Jetson sort controls remained within 0.12% of their prior baseline.
 
 ## GPU profiling
 
@@ -351,19 +361,19 @@ subgroup fast path, explicit one-to-four-byte scheduling, a reproducible pinned
 Reusable predicate masks and the pinned Massively comparison complete the first
 post-0.4 evidence pass. Exact hierarchical scan binding ranges, a three-level
 regression, and validated 100M scan-derived results close the first correctness
-item. The remaining work is ordered by measured impact:
+item. Direct output and the feature-gated subgroup scan now also close the
+measured scan-performance gap without regressing Jetson sort. The remaining work
+is ordered by measured impact:
 
-1. **Improve integrated scan performance:** profile the corrected portable scan
-   on the 4-TPC Jetson, where Massively leads by 1.69x at 10M and 2.03x at 100M;
-   carry any win into compaction without regressing RTX.
-2. **Validate more hardware:** measure the specialized path on additional NVIDIA Vulkan devices and driver versions beyond the qualified discrete RTX and integrated Orin systems.
-3. **Improve portability:** build on the explicit non-subgroup key-width path
+1. **Validate more hardware:** measure scan, compaction, and the specialized sort
+   paths on AMD, Intel, and Apple adapters plus additional driver versions.
+2. **Improve portability:** build on the explicit non-subgroup key-width path
    with GPU-side identity-pass detection for resident inputs whose bounds are
    not already known by the application.
-4. **Extend derived primitives from evidence:** use real workloads and predicate
+3. **Extend derived primitives from evidence:** use real workloads and predicate
    benchmarks to decide whether logical composition or fused predicate-compaction
    kernels justify their API and maintenance cost.
-5. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
+4. **Revisit full-width scatter only with new evidence:** use hardware shader counters or a different stable-scatter algorithm; the measured local variants did not clear the 5% gate.
 
 New primitives should land with a GPU-buffer API, deterministic boundary tests, CPU-reference validation, and benchmark coverage.
 

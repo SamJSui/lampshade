@@ -100,8 +100,8 @@ async fn exclusive_scan_matches_cpu_across_multiple_hierarchy_levels() {
     };
     let mut scanner = Scanner::from_context(&context);
 
-    // The high-end path scans 2,048 items per workgroup. One item beyond
-    // 2,048 squared forces a third hierarchy level in the scratch buffer.
+    // This crosses at least three hierarchy levels on both the portable
+    // 2,048-item blocks and the subgroup path's 256-item blocks.
     let input = scan_input(2, 4_194_305);
     let expected = cpu_exclusive_scan(&input);
     let actual = scanner
@@ -119,6 +119,24 @@ async fn exclusive_scan_matches_cpu_across_multiple_hierarchy_levels() {
             expected[index], actual[index]
         );
     }
+}
+
+#[tokio::test]
+async fn portable_scan_fallback_matches_cpu_without_subgroups() {
+    let Some(context) = support::gpu_context_without_optional_features().await else {
+        return;
+    };
+    assert!(!context.device.features().contains(wgpu::Features::SUBGROUP));
+    let mut scanner = Scanner::from_context(&context);
+    let input = scan_input(1, 4_097);
+
+    assert_eq!(
+        scanner
+            .scan_exclusive(&input)
+            .await
+            .expect("portable GPU exclusive scan failed"),
+        cpu_exclusive_scan(&input)
+    );
 }
 
 #[tokio::test]

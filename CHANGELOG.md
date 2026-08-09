@@ -27,8 +27,16 @@ All notable changes to `wgpu-primitives` are documented here.
 - Hierarchical scan dispatches bind exact logical data and auxiliary ranges,
   preventing deeper scratch levels from overlapping. A regression now covers
   the first three-level high-end hierarchy size.
+- The top scan pass reads caller input and writes caller output directly instead
+  of copying the full buffer first. Devices with enabled subgroups use a
+  coalesced one-item-per-lane scan; other devices retain the portable fallback.
 
 ### Performance
+
+- Against pinned Massively 0.96, exclusive scan is 2.81x faster at 10M and
+  1.09x faster at 100M on an RTX 4070 Ti SUPER. On 8-TPC and 4-TPC Jetson Orin
+  Nano configurations it is 1.49x-1.53x faster at 10M and 1.18x-1.19x at
+  100M. Scan-derived 50% compaction leads by 1.09x-1.65x across the same cases.
 
 - On an RTX 4070 Ti SUPER, resident predicate-mask wall time measured 0.218 ms
   for 10 million values and 1.379 ms for 100 million values, 4.80x and 17.28x

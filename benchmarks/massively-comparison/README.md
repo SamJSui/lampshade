@@ -63,3 +63,6 @@ The first three-GPU result and the original 100M scan correctness finding are pu
 The exact-range fix and the now-valid 100M scan and compaction results are in the
 [fix follow-up](../2026-08-08-scan-scratch-binding-fix.md) and its compact
 [machine-readable snapshot](../2026-08-08-scan-scratch-binding-fix.json).
+The subsequent [direct subgroup scan](../2026-08-08-direct-subgroup-scan.md)
+reverses the remaining deficit on all three GPUs; its process medians are in the
+[optimization snapshot](../2026-08-08-direct-subgroup-scan.json).

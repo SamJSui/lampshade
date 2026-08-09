@@ -73,6 +73,12 @@ regression.
 
 ## Decision
 
+> **Optimized:** the subsequent
+> [direct subgroup scan](2026-08-08-direct-subgroup-scan.md) removes the top-level
+> copy and adds a feature-gated coalesced subgroup path. It now beats Massively in
+> every measured 10M and 100M scan/compaction row on RTX, dopey, and grumpy. The
+> text below is retained as the decision at the correctness-fix checkpoint.
+
 The correctness blocker is closed, but the valid 100M data sharpens the next target.
 Massively is 1.95x faster for scan and 1.49x for compaction on RTX; on the integrated
 Jetsons it is 1.42x/1.30x faster on dopey and 2.03x/1.71x faster on grumpy. The next
