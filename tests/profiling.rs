@@ -96,6 +96,13 @@ async fn profiles_stream_compaction_scan_and_scatter() {
             .iter()
             .any(|span| span.label == "compact.scatter")
     );
+    assert!(
+        profile
+            .spans
+            .iter()
+            .all(|span| span.label != "compact.scan.add.0"),
+        "compaction scatter should consume block prefixes without a full-size add pass"
+    );
     assert!(profile.gpu_elapsed >= profile.dispatch_time);
 }
 
