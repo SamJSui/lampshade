@@ -1,0 +1,81 @@
+import importlib.util
+import unittest
+from pathlib import Path
+
+
+def load_module():
+    path = Path(__file__).with_name("run.py")
+    spec = importlib.util.spec_from_file_location("release_regression", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+release_regression = load_module()
+
+
+class ReleaseRegressionTests(unittest.TestCase):
+    def test_aggregates_process_medians_and_applies_threshold(self):
+        adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
+        runs = [
+            {"source": "published", "result": {"adapter": adapter, "config": {"workload": "exclusive_scan", "items": 10}, "median_ms": 10.0}},
+            {"source": "published", "result": {"adapter": adapter, "config": {"workload": "exclusive_scan", "items": 10}, "median_ms": 12.0}},
+            {"source": "checkout", "result": {"adapter": adapter, "config": {"workload": "exclusive_scan", "items": 10}, "median_ms": 11.0}},
+            {"source": "checkout", "result": {"adapter": adapter, "config": {"workload": "exclusive_scan", "items": 10}, "median_ms": 11.2}},
+        ]
+        aggregates = release_regression.aggregate_runs(runs)
+        comparisons = release_regression.compare_aggregates(aggregates, 2.0)
+
+        self.assertEqual(len(comparisons), 1)
+        self.assertAlmostEqual(comparisons[0]["published_ms"], 11.0)
+        self.assertAlmostEqual(comparisons[0]["checkout_ms"], 11.1)
+        self.assertTrue(comparisons[0]["passed"])
+
+    def test_marks_regressions_above_the_budget(self):
+        adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
+        aggregates = [
+            {"source": "published", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 1.0, "adapter": adapter, "adapter_consistent": True},
+            {"source": "checkout", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 1.03, "adapter": adapter, "adapter_consistent": True},
+        ]
+
+        comparison = release_regression.compare_aggregates(aggregates, 2.0)[0]
+
+        self.assertAlmostEqual(comparison["change_percent"], 3.0)
+        self.assertFalse(comparison["passed"])
+
+    def test_accepts_the_exact_regression_boundary(self):
+        adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
+        aggregates = [
+            {"source": "published", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 1.0, "adapter": adapter, "adapter_consistent": True},
+            {"source": "checkout", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 1.02, "adapter": adapter, "adapter_consistent": True},
+        ]
+
+        comparison = release_regression.compare_aggregates(aggregates, 2.0)[0]
+
+        self.assertAlmostEqual(comparison["change_percent"], 2.0)
+        self.assertTrue(comparison["passed"])
+
+    def test_rejects_different_adapters(self):
+        published = {"name": "GPU A", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
+        checkout = {**published, "name": "GPU B"}
+        aggregates = [
+            {"source": "published", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 1.0, "adapter": published, "adapter_consistent": True},
+            {"source": "checkout", "workload": "reduce_sum", "items": 10, "median_of_process_medians_ms": 0.5, "adapter": checkout, "adapter_consistent": True},
+        ]
+
+        comparison = release_regression.compare_aggregates(aggregates, 2.0)[0]
+
+        self.assertFalse(comparison["adapter_match"])
+        self.assertFalse(comparison["passed"])
+
+    def test_quick_gate_ignores_timing_but_requires_the_same_adapter(self):
+        slow_same_adapter = {"adapter_match": True, "passed": False}
+        different_adapter = {"adapter_match": False, "passed": False}
+
+        self.assertTrue(release_regression.passes_gate([], [slow_same_adapter], 1, True))
+        self.assertFalse(release_regression.passes_gate([], [different_adapter], 1, True))
+
+
+if __name__ == "__main__":
+    unittest.main()

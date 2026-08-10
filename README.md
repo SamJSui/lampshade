@@ -5,8 +5,9 @@
 [![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Fast, composable GPU reduction, predicate masks, prefix scan, stream compaction,
-and unsigned integer radix sort for Rust applications using wgpu.
+Fast, composable GPU histograms, reduction, predicate masks, prefix scan,
+stream compaction, and unsigned integer radix sort for Rust applications using
+wgpu.
 
 ## Benchmarks
 
@@ -15,6 +16,10 @@ and reusable workspace management. They exclude host upload and validation
 readback. Reduction comparisons include the required four-byte scalar readback
 for both libraries. Inputs are deterministic, outputs are validated, and reported
 comparisons are medians of independent process medians.
+
+The [published-release regression harness](benchmarks/release-regression/README.md)
+runs identical resident workloads against crates.io 0.6 and the current checkout,
+writes raw runs and process medians to JSON, and enforces a 2% regression budget.
 
 ### Against Massively 0.96
 
@@ -98,6 +103,7 @@ the pinned baseline and reproduction harness.
 
 ## Features
 
+- Portable 1-256-bin `u32` histograms with workgroup-private counters.
 - Wrapping sum, minimum, and maximum reduction for `u32` values.
 - Inclusive and exclusive `u32` prefix scan.
 - Reusable comparison predicates that produce compaction-ready masks.
@@ -110,21 +116,15 @@ the pinned baseline and reproduction harness.
 
 ## Installation
 
-Version 0.6 contains reduction and uses wgpu 30. Tokio is listed because the
-executable quick start below uses `#[tokio::main]`; library development
-dependencies do not propagate to applications.
+Published version 0.6 contains reduction and uses wgpu 30. The histogram API is
+currently unreleased. Tokio is listed because the executable quick start below
+uses `#[tokio::main]`; library development dependencies do not propagate to
+applications.
 
 ```toml
 [dependencies]
 wgpu-primitives = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-```
-
-If crates.io does not have 0.6 yet, temporarily replace only the
-`wgpu-primitives` line with the current Git API:
-
-```toml
-wgpu-primitives = { git = "https://github.com/SamJSui/wgpu-primitives.git", branch = "main" }
 ```
 
 Because wgpu types appear in the public GPU-buffer APIs, upgrading from 0.5 also
@@ -161,8 +161,9 @@ async fn main() -> Result<(), wgpu_primitives::Error> {
 }
 ```
 
-See [`examples/`](examples/) for key/value sorting, structured compaction, and
-standalone examples for every primitive.
+See [`examples/`](examples/) for the composed resident pipeline, histograms,
+key/value sorting, structured compaction, and standalone examples for every
+primitive.
 
 ## GPU-resident composition
 
@@ -191,6 +192,10 @@ compactor.record_compact(
 queue.submit(Some(encoder.finish()));
 ```
 
+[`resident_pipeline.rs`](examples/resident_pipeline.rs) extends this pattern
+through predicate, compaction, sort, and reduction in one submission and maps
+one final readback buffer.
+
 The command encoder preserves GPU execution order. Rust borrows the encoder and
 buffers only while recording; no input is cloned or read back. Use
 `KeyValueSorter::new_for_adapter` when adapter metadata is available so compatible
@@ -207,6 +212,9 @@ resident composition, and private kernel/runtime layers.
 
 ## How it works
 
+- **Histogram:** each workgroup accumulates up to 256 counters in shared memory,
+  then merges at most one count per bin into the global output. Values outside
+  the requested range are ignored.
 - **Reduction:** each workgroup combines a coalesced input range into one
   partial value; later passes repeat over the partials until one value remains.
 - **Predicate mask:** one thread evaluates each value or `KeyValue` field and
@@ -235,8 +243,8 @@ $env:WGPU_PRIMITIVES_PROFILE_VALIDATE = '1'
 cargo run --release --example profile_primitives
 ```
 
-Cases include reduction, scan, sort, predicate, value compaction, and key/value
-compaction at selectable sizes and selectivities.
+Cases include histogram, reduction, scan, sort, predicate, value compaction,
+and key/value compaction at selectable sizes and selectivities.
 
 ## Roadmap
 
@@ -261,9 +269,10 @@ cargo check --examples --benches
 cargo package
 ```
 
-Criterion benches cover `reduce`, `scan`, `compact`, `key_value_compact`,
-`predicate`, `sort`, and `key_value_sort`. GPU integration tests skip when no
-compatible adapter is available; CI uses Mesa's Vulkan software adapter.
+Criterion benches cover `histogram`, `reduce`, `scan`, `compact`,
+`key_value_compact`, `predicate`, `sort`, and `key_value_sort`. GPU integration
+tests skip when no compatible adapter is available; CI uses Mesa's Vulkan
+software adapter.
 
 ## License
 

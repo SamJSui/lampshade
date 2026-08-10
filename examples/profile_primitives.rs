@@ -3,15 +3,16 @@ use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
-    Compactor, Context, GpuProfile, KeyValue, KeyValueCompactor, KeyValueSorter, MaskGenerator,
-    Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
+    Compactor, Context, GpuProfile, Histogram, KeyValue, KeyValueCompactor, KeyValueSorter,
+    MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 8] = [
+const DEFAULT_CASES: [ProfileCase; 9] = [
     ProfileCase::Predicate(50),
+    ProfileCase::Histogram256,
     ProfileCase::ReductionSum,
     ProfileCase::Scan,
     ProfileCase::Compact(50),
@@ -24,6 +25,7 @@ const DEFAULT_CASES: [ProfileCase; 8] = [
 #[derive(Clone, Copy)]
 enum ProfileCase {
     Predicate(u32),
+    Histogram256,
     ReductionSum,
     Scan,
     Compact(u32),
@@ -76,6 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ProfileCase::Predicate(selectivity) => {
                     profile_predicate(&context, item_count, *selectivity, &config).await?
                 }
+                ProfileCase::Histogram256 => {
+                    profile_histogram(&context, item_count, &config).await?
+                }
                 ProfileCase::ReductionSum => {
                     profile_reduction_sum(&context, item_count, &config).await?
                 }
@@ -98,6 +103,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+async fn profile_histogram(
+    context: &Context,
+    item_count: usize,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    const BIN_COUNT: u32 = 256;
+
+    let input: Vec<_> = deterministic_keys(item_count)
+        .into_iter()
+        .map(|value| value & 0xff)
+        .collect();
+    let gpu_input = create_input(context, "Profile Histogram Input", &input);
+    let gpu_output = create_output(
+        context,
+        "Profile Histogram Output",
+        Histogram::output_buffer_size(BIN_COUNT)?,
+    );
+    let histogram = Histogram::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || histogram.histogram_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32, BIN_COUNT),
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || histogram.histogram_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32, BIN_COUNT),
+        context,
+    )?;
+    let _ = histogram
+        .profile_histogram_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32, BIN_COUNT)
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            histogram
+                .profile_histogram_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32, BIN_COUNT)
+                .await?,
+        );
+    }
+    if profile_validation_enabled() {
+        let actual = histogram.histogram(&input, BIN_COUNT).await?;
+        let mut expected = vec![0_u32; BIN_COUNT as usize];
+        for value in &input {
+            expected[*value as usize] += 1;
+        }
+        if actual != expected {
+            return Err("histogram_256 validation failed".into());
+        }
+        println!("validation,histogram_256,{item_count},passed,{BIN_COUNT}");
+    }
+    report("histogram_256", item_count, wall, &profiles);
     Ok(())
 }
 
@@ -659,7 +719,7 @@ fn report(primitive: &str, item_count: usize, wall: Duration, profiles: &[GpuPro
 fn stage(label: &str) -> &'static str {
     if label == "predicate.mask" {
         "predicate"
-    } else if label.ends_with(".histogram") {
+    } else if label == "histogram.count" || label.ends_with(".histogram") {
         "histogram"
     } else if label.ends_with(".prefix") {
         "prefix"
@@ -777,6 +837,7 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
         .map(|value| {
             let value = value.trim();
             match value {
+                "histogram_256" => Ok(ProfileCase::Histogram256),
                 "reduction_sum" => Ok(ProfileCase::ReductionSum),
                 "scan" => Ok(ProfileCase::Scan),
                 "key_sort" => Ok(ProfileCase::KeySort),

@@ -6,6 +6,24 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Added
 
+- Portable 1-256-bin `u32` histogram counting with slice, immediate
+  resident-buffer, command-recording, and timestamp-profiling APIs. Values
+  outside the requested bin range are ignored.
+- A composed `predicate -> compact -> sort -> reduce` example using one command
+  encoder, one submission, and one final readback allocation.
+- A cross-platform published-release regression harness that compares identical
+  checkout and crates.io workloads, emits machine-readable evidence, and fails
+  above a configurable 2% budget.
+
+### Changed
+
+- Installation documentation now points directly to the published 0.6 release
+  instead of retaining the temporary pre-release Git fallback.
+
+## 0.6.0 - 2026-08-09
+
+### Added
+
 - Portable hierarchical `u32` sum, minimum, and maximum reduction, with slice,
   immediate resident-buffer, command-recording, and timestamp-profiling APIs.
 - Deterministic reduction correctness coverage across workgroup and hierarchy

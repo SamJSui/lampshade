@@ -2,8 +2,8 @@ mod support;
 
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
-    Compactor, Error, GpuProfile, KeyValue, KeyValueField, KeyValueSorter, MaskGenerator, Reducer,
-    Scanner, Sorter, U32Predicate, U32Reduction,
+    Compactor, Error, GpuProfile, Histogram, KeyValue, KeyValueField, KeyValueSorter,
+    MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
 
 fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
@@ -126,6 +126,45 @@ fn cpu_compact(input: &[u32], mask: &[u32]) -> Vec<u32> {
         .zip(mask)
         .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
         .collect()
+}
+
+#[tokio::test]
+async fn profiles_histogram_counting() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping histogram profile test because the adapter lacks timestamp queries");
+        return;
+    }
+
+    let input: Vec<_> = support::random_u32(8_193, 0xA11C_E5ED)
+        .into_iter()
+        .map(|value| value & 0xff)
+        .collect();
+    let gpu_input = storage_buffer(&context.device, "Profile Histogram Input", &input);
+    let gpu_output = output_buffer(
+        &context.device,
+        "Profile Histogram Output",
+        Histogram::output_buffer_size(256).expect("histogram output size overflow"),
+    );
+    let histogram = Histogram::from_context(&context);
+    let profile = histogram
+        .profile_histogram_gpu_to_gpu(&gpu_input, &gpu_output, input.len() as u32, 256)
+        .await
+        .expect("profiled histogram failed");
+    let mut expected = vec![0_u32; 256];
+    for value in input {
+        expected[value as usize] += 1;
+    }
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_output, 256).await,
+        expected
+    );
+    assert_eq!(profile.spans.len(), 1);
+    assert_eq!(profile.spans[0].label, "histogram.count");
+    assert_timestamps_contain_dispatches(&profile);
 }
 
 #[tokio::test]

@@ -52,6 +52,12 @@ jobs:
           cargo clippy --locked --manifest-path benchmarks/massively-comparison/common/Cargo.toml -- -D warnings
           cargo clippy --locked --manifest-path benchmarks/massively-comparison/wgpu-primitives-runner/Cargo.toml -- -D warnings
           cargo clippy --locked --manifest-path benchmarks/massively-comparison/massively-runner/Cargo.toml -- -D warnings
+      - name: Check published-release regression harness
+        run: |
+          cargo fmt --manifest-path benchmarks/release-regression/published-runner/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path benchmarks/release-regression/published-runner/Cargo.toml -- -D warnings
+          python3 -m unittest discover -s benchmarks/release-regression -p test_run.py
+          python3 benchmarks/release-regression/run.py --quick --backend vulkan --output target/release-regression/ci.json
       - name: Check documentation
         run: cargo test --doc
       - name: Verify package contents
