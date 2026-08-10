@@ -17,8 +17,9 @@ there is evidence that users need independent release cycles.
 
 Methods such as `Sorter::sort(&mut self, input: &[u32])` and
 `Reducer::sum(&mut self, input: &[u32])` accept borrowed CPU data, upload it,
-run the primitive, and return an owned result. They are the smallest path from
-ordinary Rust code to a correct GPU result.
+run the primitive, and return an owned result. `Histogram::histogram` likewise
+returns an owned bin vector while ignoring values outside its requested range.
+These are the smallest paths from ordinary Rust code to a correct GPU result.
 
 The input borrow lasts across `.await` because the async function may still
 need the slice before it finishes. The returned `Vec` owns its allocation,
@@ -44,6 +45,11 @@ compactor.record_compact(
 queue.submit(Some(encoder.finish()));
 ```
 
+The `resident_pipeline` example records predicate, compaction, sort, and
+reduction before one submission. Its input construction makes the selected
+count known to the CPU; fully data-dependent compaction-to-sort composition
+will require a future indirect-dispatch boundary rather than a hidden readback.
+
 `&mut encoder` means this call has exclusive CPU-side permission to mutate the
 command list. It does not mutate the generator or clone GPU data. The buffer
 borrows describe which handles must remain valid while commands are recorded;
@@ -61,7 +67,9 @@ Private code owns the mechanisms that public methods share:
 - `ProfileSession` adds optional timestamp queries and waits for completion.
 - `ReusableBuffer` owns a lazily allocated buffer and its capacity.
 - `AdapterCapabilities` records hardware facts separately from kernel policy.
-- primitive-specific pipelines select and dispatch WGSL implementations.
+- primitive-specific pipelines select and dispatch WGSL implementations. The
+  portable histogram privatizes 256 counters per workgroup before merging into
+  global atomics.
 
 The reusable state explains why reduction, scan, compaction, and sort generally
 take `&mut self`: a call may grow scratch storage or refresh cached bindings.

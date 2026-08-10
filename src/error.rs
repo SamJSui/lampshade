@@ -32,6 +32,10 @@ pub enum Error {
         index: usize,
         value: u32,
     },
+    InvalidHistogramBinCount {
+        bins: u32,
+        max: u32,
+    },
     SizeOverflow,
     BufferLimitExceeded {
         requested: u64,
@@ -91,6 +95,10 @@ impl fmt::Display for Error {
             Self::InvalidCompactionFlag { index, value } => write!(
                 f,
                 "compaction mask value at index {index} must be 0 or 1, got {value}"
+            ),
+            Self::InvalidHistogramBinCount { bins, max } => write!(
+                f,
+                "histogram bin count must be between 1 and {max}, got {bins}"
             ),
             Self::SizeOverflow => f.write_str("buffer size calculation overflowed"),
             Self::BufferLimitExceeded { requested, limit } => write!(
