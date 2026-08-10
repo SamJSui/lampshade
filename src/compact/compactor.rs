@@ -1,4 +1,4 @@
-use crate::{Error, context::Context, profiling::GpuProfile};
+use crate::{Error, common::buffers::BufferRange, context::Context, profiling::GpuProfile};
 
 use super::{core::CompactCore, pipeline::CompactItemKind};
 
@@ -61,6 +61,23 @@ impl Compactor {
     ) -> Result<(), Error> {
         self.core
             .record_compact(encoder, input, mask, output, output_count, num_items)
+    }
+
+    pub(crate) fn record_compact_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
+        output: BufferRange<'_>,
+        output_count: BufferRange<'_>,
+        num_items: u32,
+    ) -> Result<(), Error> {
+        self.core
+            .record_compact_ranges(encoder, input, mask, output, output_count, num_items)
+    }
+
+    pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        self.core.reserve(capacity)
     }
 
     /// Profiles GPU-buffer compaction using hardware timestamp queries.

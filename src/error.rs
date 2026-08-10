@@ -46,6 +46,20 @@ pub enum Error {
         required: u64,
         actual: u64,
     },
+    BufferRangeOutOfBounds {
+        name: &'static str,
+        offset: u64,
+        size: u64,
+        buffer_size: u64,
+    },
+    MisalignedBufferOffset {
+        name: &'static str,
+        offset: u64,
+        alignment: u64,
+    },
+    UnsupportedDynamicExtent {
+        operation: &'static str,
+    },
     MissingBufferUsage {
         name: &'static str,
         required: wgpu::BufferUsages,
@@ -113,6 +127,26 @@ impl fmt::Display for Error {
                 f,
                 "{name} buffer is too small: requires {required} bytes, has {actual} bytes"
             ),
+            Self::BufferRangeOutOfBounds {
+                name,
+                offset,
+                size,
+                buffer_size,
+            } => write!(
+                f,
+                "{name} range at byte offset {offset} with size {size} exceeds buffer size {buffer_size}"
+            ),
+            Self::MisalignedBufferOffset {
+                name,
+                offset,
+                alignment,
+            } => write!(
+                f,
+                "{name} byte offset {offset} is not aligned to {alignment} bytes"
+            ),
+            Self::UnsupportedDynamicExtent { operation } => {
+                write!(f, "{operation} currently requires a CPU-known input extent")
+            }
             Self::MissingBufferUsage {
                 name,
                 required,

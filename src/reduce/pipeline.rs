@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{common, profiling};
+use crate::{common, common::buffers::BufferRange, profiling};
 
 use super::U32Reduction;
 
@@ -18,8 +18,8 @@ pub(crate) struct ReductionPipeline {
 }
 
 pub(crate) struct ReductionDispatch<'a> {
-    pub(crate) input: &'a wgpu::Buffer,
-    pub(crate) output: &'a wgpu::Buffer,
+    pub(crate) input: BufferRange<'a>,
+    pub(crate) output: BufferRange<'a>,
     pub(crate) input_items: u32,
     pub(crate) output_items: u32,
     pub(crate) operation: U32Reduction,
@@ -75,14 +75,14 @@ impl ReductionPipeline {
     pub(crate) fn record_identity(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::Buffer,
+        output: BufferRange<'_>,
         operation: U32Reduction,
     ) {
         encoder.copy_buffer_to_buffer(
             &self.identities,
             operation.identity_offset(),
-            output,
-            0,
+            output.buffer,
+            output.offset,
             VALUE_SIZE_BYTES,
         );
     }
@@ -106,16 +106,16 @@ impl ReductionPipeline {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: dispatch.input,
-                        offset: 0,
+                        buffer: dispatch.input.buffer,
+                        offset: dispatch.input.offset,
                         size: Some(input_size),
                     }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: dispatch.output,
-                        offset: 0,
+                        buffer: dispatch.output.buffer,
+                        offset: dispatch.output.offset,
                         size: Some(output_size),
                     }),
                 },

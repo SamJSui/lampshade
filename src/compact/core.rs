@@ -1,5 +1,6 @@
 use crate::{
     Error, common,
+    common::buffers::BufferRange,
     common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
@@ -119,7 +120,37 @@ impl CompactCore {
         output_count: &wgpu::Buffer,
         num_items: u32,
     ) -> Result<(), Error> {
+        self.record_compact_ranges(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
+            BufferRange::whole(output),
+            BufferRange::whole(output_count),
+            num_items,
+        )
+    }
+
+    pub(crate) fn record_compact_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
+        output: BufferRange<'_>,
+        output_count: BufferRange<'_>,
+        num_items: u32,
+    ) -> Result<(), Error> {
         self.record_commands(encoder, input, mask, output, output_count, num_items, None)
+    }
+
+    pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        if capacity == 0 {
+            return Ok(());
+        }
+        let mask_bytes =
+            common::math::checked_byte_size(u64::from(capacity), MASK_ITEM_SIZE_BYTES)?;
+        self.ensure_offsets(mask_bytes)?;
+        self.scanner.reserve(capacity);
+        Ok(())
     }
 
     pub(crate) async fn profile_compact_gpu_to_gpu(
@@ -147,10 +178,10 @@ impl CompactCore {
         let (encoder, profiler) = profile.recording();
         self.record_commands(
             encoder,
-            input,
-            mask,
-            output,
-            output_count,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
+            BufferRange::whole(output),
+            BufferRange::whole(output_count),
             num_items,
             profiler,
         )?;
@@ -161,22 +192,26 @@ impl CompactCore {
     fn record_commands(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Buffer,
-        mask: &wgpu::Buffer,
-        output: &wgpu::Buffer,
-        output_count: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
+        output: BufferRange<'_>,
+        output_count: BufferRange<'_>,
         num_items: u32,
         mut profiler: Option<&mut TimestampRecorder>,
     ) -> Result<(), Error> {
         validate_distinct_buffers(input, mask, output, output_count)?;
-        common::buffers::validate_buffer(
-            output_count,
+        output_count.validate(
             "compaction output count",
             COUNT_SIZE_BYTES,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
+        output_count.validate_storage_offset(&self.device, "compaction output count")?;
         if num_items == 0 {
-            encoder.clear_buffer(output_count, 0, Some(COUNT_SIZE_BYTES));
+            encoder.clear_buffer(
+                output_count.buffer,
+                output_count.offset,
+                Some(COUNT_SIZE_BYTES),
+            );
             return Ok(());
         }
 
@@ -184,34 +219,49 @@ impl CompactCore {
             common::math::checked_byte_size(u64::from(num_items), self.item_size_bytes)?;
         let mask_bytes =
             common::math::checked_byte_size(u64::from(num_items), MASK_ITEM_SIZE_BYTES)?;
-        common::buffers::validate_buffer(
-            input,
-            "compaction input",
-            item_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
-        common::buffers::validate_buffer(
-            mask,
+        self.validate_storage_binding_size(item_bytes)?;
+        self.validate_storage_binding_size(mask_bytes)?;
+        input.validate("compaction input", item_bytes, wgpu::BufferUsages::STORAGE)?;
+        mask.validate(
             "compaction mask",
             mask_bytes,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         )?;
-        common::buffers::validate_buffer(
-            output,
-            "compaction output",
-            item_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
+        output.validate("compaction output", item_bytes, wgpu::BufferUsages::STORAGE)?;
+        input.validate_storage_offset(&self.device, "compaction input")?;
+        mask.validate_storage_offset(&self.device, "compaction mask")?;
+        output.validate_storage_offset(&self.device, "compaction output")?;
+        let input = BufferRange {
+            size: item_bytes,
+            ..input
+        };
+        let mask = BufferRange {
+            size: mask_bytes,
+            ..mask
+        };
+        let output = BufferRange {
+            size: item_bytes,
+            ..output
+        };
+        let output_count = BufferRange {
+            size: COUNT_SIZE_BYTES,
+            ..output_count
+        };
         self.ensure_offsets(mask_bytes)?;
         let offsets = self
             .offsets
             .get()
             .expect("compaction offsets exist for non-empty inputs");
 
-        let scan_items_per_block = self.scanner.record_block_local_exclusive_scan(
+        let offsets_range = BufferRange {
+            buffer: offsets,
+            offset: 0,
+            size: mask_bytes,
+        };
+        let scan_items_per_block = self.scanner.record_block_local_exclusive_scan_ranges(
             encoder,
             mask,
-            offsets,
+            offsets_range,
             num_items,
             "compact.scan",
             profiler.as_deref_mut(),
@@ -223,8 +273,8 @@ impl CompactCore {
             CompactDispatch {
                 input,
                 mask,
-                offsets,
-                block_prefixes,
+                offsets: offsets_range,
+                block_prefixes: BufferRange::whole(block_prefixes),
                 output,
                 output_count,
                 num_items,
@@ -236,13 +286,7 @@ impl CompactCore {
     }
 
     fn ensure_offsets(&mut self, size_bytes: u64) -> Result<(), Error> {
-        let limit = self.device.limits().max_buffer_size;
-        if size_bytes > limit {
-            return Err(Error::BufferLimitExceeded {
-                requested: size_bytes,
-                limit,
-            });
-        }
+        self.validate_storage_binding_size(size_bytes)?;
         self.offsets.ensure(
             &self.device,
             size_bytes,
@@ -251,13 +295,25 @@ impl CompactCore {
         );
         Ok(())
     }
+
+    fn validate_storage_binding_size(&self, requested: u64) -> Result<(), Error> {
+        let limits = self.device.limits();
+        let limit = limits
+            .max_buffer_size
+            .min(limits.max_storage_buffer_binding_size);
+        if requested > limit {
+            Err(Error::BufferLimitExceeded { requested, limit })
+        } else {
+            Ok(())
+        }
+    }
 }
 
 fn validate_distinct_buffers(
-    input: &wgpu::Buffer,
-    mask: &wgpu::Buffer,
-    output: &wgpu::Buffer,
-    output_count: &wgpu::Buffer,
+    input: BufferRange<'_>,
+    mask: BufferRange<'_>,
+    output: BufferRange<'_>,
+    output_count: BufferRange<'_>,
 ) -> Result<(), Error> {
     for (first, first_name, second, second_name) in [
         (input, "compaction input", output, "compaction output"),
@@ -281,7 +337,7 @@ fn validate_distinct_buffers(
             "compaction output count",
         ),
     ] {
-        if first == second {
+        if first.buffer == second.buffer {
             return Err(Error::BufferAlias {
                 first: first_name,
                 second: second_name,

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-BASELINE_VERSION = "0.6.0"
+BASELINE_VERSION = "0.7.0"
 DEFAULT_ITEMS = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_WORKLOADS = (
     "reduce_sum",

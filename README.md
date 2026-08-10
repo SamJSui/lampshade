@@ -18,8 +18,11 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.6 and the current checkout,
+runs identical resident workloads against crates.io 0.7 and the current checkout,
 writes raw runs and process medians to JSON, and enforces a 2% regression budget.
+The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
+separates isolated scheduling cost from full compaction-to-sort/reduction
+results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
 
 ### Against Massively 0.96
 
@@ -112,6 +115,9 @@ the pinned baseline and reproduction harness.
 - Explicit key-width bounds that skip unnecessary radix passes.
 - Slice APIs for simple upload/execute/readback workflows.
 - GPU-buffer APIs for composing work in one command encoder.
+- Capacity-bounded sort and reduction driven by GPU-resident item counts.
+- Experimental typed buffer views and an ordered recorder that prepares shared
+  GPU-count metadata automatically.
 - Reusable scratch storage and no `unsafe` blocks in library code.
 
 ## Installation
@@ -167,47 +173,78 @@ primitive.
 ## GPU-resident composition
 
 Applications that already own a wgpu device should reuse it and record multiple
-primitives before submitting once:
+primitives before submitting once. The experimental `v2` facade carries buffer
+ranges, capacities, and fixed or GPU-resident extents between operations:
 
 ```rust,ignore
 let generator = MaskGenerator::new(&device, &queue);
-let mut compactor = Compactor::new(&device, &queue);
+let mut primitives = v2::Primitives::new(&device, &queue);
+let input_view = v2::GpuSlice::from_range(&input_buffer, 0..item_count)?;
+let mask_view = v2::GpuSlice::from_range(&mask_buffer, 0..item_count)?;
+let compacted = v2::GpuSliceMut::from_range(&compacted_buffer, 0..item_count)?;
+let sorted = v2::GpuSliceMut::from_range(&sorted_buffer, 0..item_count)?;
+let sum = v2::GpuSliceMut::from_range(&sum_buffer, 0..1)?;
+let count = v2::GpuCount::new(&output_count)?;
+
+primitives.reserve_workspace(
+    v2::WorkspaceRequirements::new(item_count)
+        .compact()
+        .counted_sort()
+        .counted_reduce(),
+)?;
+primitives.reserve_count(count, item_count)?;
 
 generator.record_mask(
     &mut encoder,
-    &input,
-    &mask,
+    &input_buffer,
+    &mask_buffer,
     item_count,
     U32Predicate::GreaterThanOrEqual(10),
 )?;
-compactor.record_compact(
-    &mut encoder,
-    &input,
-    &mask,
-    &output,
-    &output_count,
-    item_count,
-)?;
+let mut recorder = primitives.record(&mut encoder);
+let compacted = recorder.compact(input_view, mask_view, compacted, count)?;
+let sorted = recorder.sort(compacted, sorted, v2::SortOptions::default())?;
+recorder.reduce(sorted, sum, U32Reduction::Sum)?;
+drop(recorder);
 queue.submit(Some(encoder.finish()));
 ```
 
 [`resident_pipeline.rs`](examples/resident_pipeline.rs) extends this pattern
 through predicate, compaction, sort, and reduction in one submission and maps
-one final readback buffer.
+one final readback buffer. Compaction writes the selected count; sort and
+reduction consume it without a CPU synchronization point. The recorder caches
+a `GpuCountPlan` internally and schedules its preparation once after the count
+producer. The existing raw-buffer and explicit-plan APIs remain available.
+
+`GpuSlice` ranges use element indices and may start at aligned nonzero offsets.
+Different read/write roles in one primitive must still use distinct underlying
+buffer handles: WebGPU treats writable storage use as exclusive even for
+disjoint static binding ranges. `reserve_workspace` grows only the requested
+capacity-dependent workspaces ahead of recording; bind groups and small uniform
+buffers may still be created while commands are recorded.
+
+Plans default to `CountedSortDispatch::Indirect`, which sizes radix
+reduce/scatter launches to the GPU-selected prefix and is the portable choice
+for unknown or sparse counts. Its histogram scan remains capacity-sized.
+`CountedSortDispatch::Capacity` trades inactive workgroups for lower dispatch
+overhead and should be selected only with workload-specific benchmark evidence.
 
 The command encoder preserves GPU execution order. Rust borrows the encoder and
 buffers only while recording; no input is cloned or read back. Use
 `KeyValueSorter::new_for_adapter` when adapter metadata is available so compatible
 fast paths can be selected.
 
-The resident methods validate sizes and usages, but do not inspect GPU data.
+The resident methods validate sizes, ranges, alignment, and usages, but do not
+inspect GPU data.
 Masks must contain only `0` or `1`; declared key-width bounds must contain every
-key. Sort input and output must be distinct, and buffers must not overlap where a
-write could race with a read. Full usage requirements are documented on each API
+key. Primitive participants that read and write must use distinct buffer handles.
+Full usage requirements are documented on each API
 at [docs.rs](https://docs.rs/wgpu-primitives).
 
 See the [architecture guide](docs/architecture.md) for the public convenience,
-resident composition, and private kernel/runtime layers.
+resident composition, and private kernel/runtime layers. The
+[typed-recorder note](docs/v2-api.md) records the experiment's current limits
+and unresolved key/payload design.
 
 ## How it works
 
@@ -216,6 +253,8 @@ resident composition, and private kernel/runtime layers.
   the requested range are ignored.
 - **Reduction:** each workgroup combines a coalesced input range into one
   partial value; later passes repeat over the partials until one value remains.
+  A count plan builds the hierarchy and indirect dispatch arguments from a
+  GPU-resident length.
 - **Predicate mask:** one thread evaluates each value or `KeyValue` field and
   writes a `0` or `1`.
 - **Scan:** workgroups scan local ranges, recursively scan block totals, then add
@@ -227,7 +266,9 @@ resident composition, and private kernel/runtime layers.
 - **Radix sort:** stable least-significant-digit passes ping-pong between buffers.
   Known key-width bounds reduce the pass count. Compatible NVIDIA Vulkan
   devices use 8-bit or 4-bit paths, capable Intel Vulkan devices use a 4-bit
-  path, and other adapters retain the portable 2-bit path.
+  path, and other adapters retain the portable 2-bit path. GPU-counted sorting
+  uses the portable kernel with either count-proportional indirect dispatch or
+  explicit capacity dispatch while preserving the same stable ordering contract.
 
 ## Profiling
 

@@ -4,6 +4,37 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ## Unreleased
 
+### Added
+
+- Capacity-bounded `u32` sort and reduction APIs driven by a GPU-resident item
+  count, including immediate submission, command recording, and timestamp
+  profiling. Preparation kernels clamp the count and build indirect dispatch
+  arguments without a host readback.
+- End-to-end GPU coverage for zero counts, hierarchy boundaries, oversized
+  count clamping, invalid buffer contracts, and one-submission predicate,
+  compaction, sort, and reduction composition.
+- Criterion cases comparing fixed-length and GPU-counted resident sort and
+  reduction at the same capacity.
+- A reusable `GpuCountPlan` that binds one resident count, prepares sort and
+  reduction metadata once, and exposes explicit indirect or capacity-based
+  counted-sort scheduling.
+- An end-to-end Criterion comparison of one-submission GPU-counted composition
+  against CPU count readback followed by fixed-length sort and reduction.
+- An experimental `v2` recording facade with typed `u32` buffer ranges,
+  CPU-fixed or GPU-resident extents, automatic shared-count preparation, and
+  operation-specific workspace and count-metadata reservation.
+- Nonzero buffer-offset coverage for compaction, fixed and GPU-counted sort,
+  and fixed and GPU-counted reduction, including alignment and alias errors.
+- A typed-recorder design note that keeps key/payload layout explicitly
+  unresolved until a downstream workload provides evidence.
+
+### Changed
+
+- The resident pipeline example now uses the compactor's actual GPU-produced
+  count through the typed recorder for downstream sort and reduction instead
+  of manual count-plan ordering or a CPU-known selected length.
+- The published-release regression baseline now targets crates.io 0.7.0.
+
 ## 0.7.0 - 2026-08-09
 
 ### Added

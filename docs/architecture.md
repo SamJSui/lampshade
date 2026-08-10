@@ -46,9 +46,26 @@ queue.submit(Some(encoder.finish()));
 ```
 
 The `resident_pipeline` example records predicate, compaction, sort, and
-reduction before one submission. Its input construction makes the selected
-count known to the CPU; fully data-dependent compaction-to-sort composition
-will require a future indirect-dispatch boundary rather than a hidden readback.
+reduction before one submission. Compaction writes its selected count to a
+four-byte storage buffer. One `GpuCountPlan` borrows that buffer during
+construction, clones its ref-counted wgpu handle, and prepares metadata shared
+by sort and reduction, so the data-dependent pipeline needs no hidden readback
+or CPU wait.
+
+The CPU still provides a `capacity`. This is the memory-safety and allocation
+contract: input, output, and private workspace are sized for at most that many
+items. A preparation kernel clamps the GPU count to capacity and writes WebGPU
+indirect-dispatch arguments. Later kernels read those arguments only when the
+submitted command list executes:
+
+```text
+CPU capacity ──> validate buffers / allocate workspace
+GPU count ─────> clamp + build dispatch arguments ──> sort ──> reduce
+```
+
+This separates two facts that are often conflated: capacity is CPU-known
+storage, while count is GPU-known work. The fixed-length APIs remain available
+when the CPU already knows both.
 
 `&mut encoder` means this call has exclusive CPU-side permission to mutate the
 command list. It does not mutate the generator or clone GPU data. The buffer
@@ -58,6 +75,24 @@ actual reads and writes happen later on the GPU in submission order.
 This layer is the stable composition boundary. Applications can keep data on
 the GPU, combine primitives in one submission, and manage synchronization at
 the wgpu level.
+
+The additive `v2` module prototypes a smaller recording-first vocabulary over
+that boundary. `GpuSlice<T>` combines a typed buffer range, capacity, and either
+a CPU-fixed or GPU-resident extent. `GpuSliceMut<T>` marks shader-writable use,
+and `Recorder` transfers the resulting extent from compaction to sort and
+reduction while preparing shared count metadata at most once per command
+stream. The views borrow caller-owned buffers; they do not own allocations or
+submit work.
+
+Ranges support aligned nonzero offsets, but one primitive still requires
+separate underlying handles for read and write roles. wgpu tracks writable
+storage use at buffer-handle granularity within a dispatch, so disjoint static
+bindings into one arena do not make simultaneous read/write use legal.
+`Primitives::reserve_workspace` takes explicit operation and extent-mode
+requirements, avoiding unused fixed/counting scratch, while `reserve_count`
+creates count-specific metadata before recording. Bind groups and small uniform
+buffers are still created during recording, so this is not yet an
+allocation-free command-plan API.
 
 ### 3. Private runtime, workspace, and kernels
 
@@ -70,6 +105,10 @@ Private code owns the mechanisms that public methods share:
 - primitive-specific pipelines select and dispatch WGSL implementations. The
   portable histogram privatizes 256 counters per workgroup before merging into
   global atomics.
+- `GpuCountPlan` owns a cached preparation binding and bounded reduction/sort
+  metadata for one count buffer and capacity. Counted sort defaults to indirect
+  dispatch, while an explicit capacity strategy is available when benchmarks
+  justify trading inactive workgroups for lower launch overhead.
 
 The reusable state explains why reduction, scan, compaction, and sort generally
 take `&mut self`: a call may grow scratch storage or refresh cached bindings.
@@ -99,6 +138,10 @@ claims use resident buffers. That boundary includes command recording,
 submission, GPU execution, completion, and reusable-workspace management while
 excluding upload, validation readback, and result download.
 
+New counted paths must also keep the fixed-length gate green. Their extra
+preparation dispatch buys data-dependent composition; it is not inserted into
+the established fixed-length command stream.
+
 ## Migration direction
 
 The project will remain one crate while these boundaries mature. New work
@@ -108,10 +151,12 @@ should follow this order:
    private engine layer;
 2. keep existing public APIs source-compatible while adding physical GPU
    coverage;
-3. add device-specialized kernels only behind measured capability gates;
-4. add higher-level algorithms only when a real workload demonstrates the API
+3. validate the experimental typed recorder against real applications before
+   promoting or replacing the explicit raw-buffer methods;
+4. add device-specialized kernels only behind measured capability gates;
+5. add higher-level algorithms only when a real workload demonstrates the API
    and performance value;
-5. consider separate low-level and high-level crates only when downstream use,
+6. consider separate low-level and high-level crates only when downstream use,
    compile time, or independent versioning provides concrete evidence for it.
 
 This gives Rust users one obvious dependency now while preserving a path toward

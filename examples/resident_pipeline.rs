@@ -1,7 +1,8 @@
 use futures::channel::oneshot;
 use wgpu::util::DeviceExt;
 use wgpu_primitives::{
-    Compactor, Context, MaskGenerator, Reducer, Sorter, U32Predicate, U32Reduction,
+    Context, MaskGenerator, Reducer, U32Predicate, U32Reduction,
+    v2::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
 };
 
 fn main() {
@@ -14,16 +15,13 @@ async fn run() {
         .await
         .expect("failed to create wgpu context");
     let generator = MaskGenerator::from_context(&context);
-    let mut compactor = Compactor::from_context(&context);
-    let mut sorter = Sorter::from_context(&context);
-    let mut reducer = Reducer::from_context(&context);
+    let mut primitives = Primitives::from_context(&context);
 
-    // This input contains every value from 0 through 15 exactly once. That
-    // construction lets the CPU know that `>= 8` selects eight values without
-    // reading the GPU-resident compaction count between stages.
+    // The predicate determines the selected length at GPU execution time. The
+    // CPU supplies only the allocation capacity; it never reads the count
+    // between compaction, sorting, and reduction.
     let input = [15_u32, 2, 11, 4, 8, 1, 14, 6, 10, 3, 12, 0, 9, 7, 13, 5];
     let item_count = input.len() as u32;
-    let selected_count = 8_u32;
     let input_buffer = context
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -52,7 +50,7 @@ async fn run() {
     let sorted_buffer = storage_buffer(
         &context.device,
         "Pipeline Sorted Values",
-        u64::from(selected_count) * size_of::<u32>() as u64,
+        u64::from(item_count) * size_of::<u32>() as u64,
         wgpu::BufferUsages::COPY_SRC,
     );
     let sum_buffer = storage_buffer(
@@ -63,10 +61,30 @@ async fn run() {
     );
     let readback = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Pipeline Final Readback"),
-        size: u64::from(2 + selected_count) * size_of::<u32>() as u64,
+        size: u64::from(2 + item_count) * size_of::<u32>() as u64,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+
+    let input = GpuSlice::from_range(&input_buffer, 0..item_count).expect("invalid input view");
+    let mask = GpuSlice::from_range(&mask_buffer, 0..item_count).expect("invalid mask view");
+    let compacted = GpuSliceMut::from_range(&compacted_buffer, 0..item_count)
+        .expect("invalid compaction output view");
+    let sorted =
+        GpuSliceMut::from_range(&sorted_buffer, 0..item_count).expect("invalid sort output view");
+    let sum = GpuSliceMut::from_range(&sum_buffer, 0..1).expect("invalid sum output view");
+    let selected_count = GpuCount::new(&count_buffer).expect("invalid count view");
+    primitives
+        .reserve_workspace(
+            WorkspaceRequirements::new(item_count)
+                .compact()
+                .counted_sort()
+                .counted_reduce(),
+        )
+        .expect("failed to reserve primitive workspaces");
+    primitives
+        .reserve_count(selected_count, item_count)
+        .expect("failed to reserve count metadata");
 
     let mut encoder = context
         .device
@@ -82,33 +100,18 @@ async fn run() {
             U32Predicate::GreaterThanOrEqual(8),
         )
         .expect("failed to record predicate mask");
-    compactor
-        .record_compact(
-            &mut encoder,
-            &input_buffer,
-            &mask_buffer,
-            &compacted_buffer,
-            &count_buffer,
-            item_count,
-        )
-        .expect("failed to record compaction");
-    sorter
-        .record_sort(
-            &mut encoder,
-            &compacted_buffer,
-            &sorted_buffer,
-            selected_count,
-        )
-        .expect("failed to record sort");
-    reducer
-        .record_reduce(
-            &mut encoder,
-            &sorted_buffer,
-            &sum_buffer,
-            selected_count,
-            U32Reduction::Sum,
-        )
-        .expect("failed to record reduction");
+    {
+        let mut recorder = primitives.record(&mut encoder);
+        let compacted = recorder
+            .compact(input, mask, compacted, selected_count)
+            .expect("failed to record compaction");
+        let sorted = recorder
+            .sort(compacted, sorted, SortOptions::default())
+            .expect("failed to record sort");
+        recorder
+            .reduce(sorted, sum, U32Reduction::Sum)
+            .expect("failed to record reduction");
+    }
 
     // The count, reduced sum, and sorted values enter one staging allocation,
     // so the program has one submission and one final map/readback rather than
@@ -126,7 +129,7 @@ async fn run() {
         0,
         &readback,
         2 * size_of::<u32>() as u64,
-        u64::from(selected_count) * size_of::<u32>() as u64,
+        u64::from(item_count) * size_of::<u32>() as u64,
     );
     let submission = context.queue.submit(Some(encoder.finish()));
     let slice = readback.slice(..);
@@ -151,11 +154,17 @@ async fn run() {
     };
     readback.unmap();
 
-    assert_eq!(result, [selected_count, 92, 8, 9, 10, 11, 12, 13, 14, 15]);
+    let selected_count = result[0] as usize;
+    assert_eq!(selected_count, 8);
+    assert_eq!(result[1], 92);
+    assert_eq!(
+        &result[2..2 + selected_count],
+        &[8, 9, 10, 11, 12, 13, 14, 15]
+    );
     println!(
         "selected={} sorted={:?} sorted_sum={}",
         result[0],
-        &result[2..],
+        &result[2..2 + selected_count],
         result[1]
     );
 }

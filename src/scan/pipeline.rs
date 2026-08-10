@@ -11,8 +11,8 @@ pub struct ScanDispatch<'a> {
 
 pub struct ScanInputDispatch<'a> {
     pub pipeline: &'a wgpu::ComputePipeline,
-    pub input: &'a wgpu::Buffer,
-    pub data: &'a wgpu::Buffer,
+    pub input: (&'a wgpu::Buffer, u64),
+    pub data: (&'a wgpu::Buffer, u64),
     pub auxiliary: (&'a wgpu::Buffer, u64),
     pub num_items: u32,
     pub pass_label: &'static str,
@@ -227,6 +227,8 @@ impl ScanPipeline {
         dispatch: ScanInputDispatch<'_>,
         profiler: Option<&mut profiling::TimestampRecorder>,
     ) {
+        let (input, input_offset) = dispatch.input;
+        let (data, data_offset) = dispatch.data;
         let (auxiliary, auxiliary_offset) = dispatch.auxiliary;
         let items_per_block = self.vt * self.block_size;
         let workgroups = common::math::calc_groups(dispatch.num_items, items_per_block);
@@ -241,16 +243,16 @@ impl ScanPipeline {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: dispatch.input,
-                        offset: 0,
+                        buffer: input,
+                        offset: input_offset,
                         size: Some(data_size),
                     }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: dispatch.data,
-                        offset: 0,
+                        buffer: data,
+                        offset: data_offset,
                         size: Some(data_size),
                     }),
                 },

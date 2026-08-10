@@ -1,6 +1,7 @@
 use super::pipeline::{ScanDispatch, ScanInputDispatch, ScanPipeline};
 use crate::{
     Error, common,
+    common::buffers::BufferRange,
     common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
@@ -13,8 +14,8 @@ enum ScanMode {
 }
 
 struct ScanRecording<'a> {
-    input: &'a wgpu::Buffer,
-    output: &'a wgpu::Buffer,
+    input: BufferRange<'a>,
+    output: BufferRange<'a>,
     num_items: u32,
     mode: ScanMode,
     profile_prefix: &'a str,
@@ -101,8 +102,8 @@ impl Scanner {
         self.record_scan_with_mode(
             commands.encoder(),
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
                 num_items,
                 mode,
                 profile_prefix: "scan",
@@ -154,8 +155,8 @@ impl Scanner {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
                 num_items,
                 mode,
                 profile_prefix: "scan",
@@ -177,8 +178,8 @@ impl Scanner {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
                 num_items,
                 mode: ScanMode::Inclusive,
                 profile_prefix: "scan",
@@ -199,8 +200,8 @@ impl Scanner {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
                 num_items,
                 mode: ScanMode::Exclusive,
                 profile_prefix: "scan",
@@ -222,8 +223,8 @@ impl Scanner {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
                 num_items,
                 mode: ScanMode::Inclusive,
                 profile_prefix,
@@ -243,11 +244,11 @@ impl Scanner {
             .saturating_sub(u32::from(num_items > 1))
     }
 
-    pub(crate) fn record_block_local_exclusive_scan(
+    pub(crate) fn record_block_local_exclusive_scan_ranges(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        input_buf: &wgpu::Buffer,
-        output_buf: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         num_items: u32,
         profile_prefix: &str,
         profiler: Option<&mut TimestampRecorder>,
@@ -255,8 +256,8 @@ impl Scanner {
         self.record_scan_with_mode(
             encoder,
             ScanRecording {
-                input: input_buf,
-                output: output_buf,
+                input,
+                output,
                 num_items,
                 mode: ScanMode::Exclusive,
                 profile_prefix,
@@ -269,6 +270,12 @@ impl Scanner {
 
     pub(crate) fn block_prefix_buffer(&self) -> Option<&wgpu::Buffer> {
         self.scratch.get()
+    }
+
+    pub(crate) fn reserve(&mut self, num_items: u32) {
+        if num_items > 1 {
+            self.prepare_scratch(num_items);
+        }
     }
 
     fn record_scan_with_mode(
@@ -290,25 +297,33 @@ impl Scanner {
         }
 
         let size_bytes = common::math::checked_byte_size(u64::from(num_items), 4)?;
-        common::buffers::validate_buffer(
-            input,
+        input.validate(
             "scan input",
             size_bytes,
-            wgpu::BufferUsages::COPY_SRC,
+            wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
         )?;
-        common::buffers::validate_buffer(
-            output,
+        output.validate(
             "scan output",
             size_bytes,
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
         )?;
+        input.validate_storage_offset(&self.device, "scan input")?;
+        output.validate_storage_offset(&self.device, "scan output")?;
 
         if num_items == 1 {
             match mode {
                 ScanMode::Inclusive => {
-                    encoder.copy_buffer_to_buffer(input, 0, output, 0, size_bytes);
+                    encoder.copy_buffer_to_buffer(
+                        input.buffer,
+                        input.offset,
+                        output.buffer,
+                        output.offset,
+                        size_bytes,
+                    );
                 }
-                ScanMode::Exclusive => encoder.clear_buffer(output, 0, Some(size_bytes)),
+                ScanMode::Exclusive => {
+                    encoder.clear_buffer(output.buffer, output.offset, Some(size_bytes))
+                }
             }
             return Ok(());
         }
@@ -328,8 +343,8 @@ impl Scanner {
 
         let mut levels = Vec::new();
         levels.push(Level {
-            buf: output,
-            offset: 0,
+            buf: output.buffer,
+            offset: output.offset,
             count: num_items,
         });
 
@@ -361,8 +376,8 @@ impl Scanner {
                     encoder,
                     ScanInputDispatch {
                         pipeline: scan_pipeline,
-                        input,
-                        data: output,
+                        input: (input.buffer, input.offset),
+                        data: (output.buffer, output.offset),
                         auxiliary: (scratch, aux_offset),
                         num_items: current.count,
                         pass_label: "Prefix Scan",

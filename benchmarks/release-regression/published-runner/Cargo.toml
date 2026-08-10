@@ -10,4 +10,4 @@ massively-benchmark-common = { path = "../../massively-comparison/common" }
 pollster = "0.4"
 serde_json = "1"
 wgpu = "30.0.0"
-wgpu-primitives = "=0.6.0"
+wgpu-primitives = "=0.7.0"
