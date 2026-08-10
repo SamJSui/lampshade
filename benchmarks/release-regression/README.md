@@ -7,7 +7,7 @@ crates are not.
 This harness compares the current checkout against the last published
 `wgpu-primitives` release using the same deterministic inputs, public resident
 APIs, completion boundary, correctness checks, and process-median aggregation.
-The baseline runner depends on crates.io `wgpu-primitives = "=0.6.0"`; the
+The baseline runner depends on crates.io `wgpu-primitives = "=0.7.0"`; the
 candidate runner depends on the repository checkout.
 
 Quick build, correctness, and artifact validation (timings are informational):

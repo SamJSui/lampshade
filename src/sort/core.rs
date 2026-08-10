@@ -2,6 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 use crate::common;
+use crate::common::buffers::BufferRange;
 use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 use crate::scan::Scanner;
@@ -155,6 +156,32 @@ impl RadixSorter {
             }
         }
     }
+
+    pub(crate) fn record_sort_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        validate_key_bits(key_bits)?;
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => {
+                sorter.record_sort_ranges(encoder, input, output, num_items, key_bits)
+            }
+            SortImplementation::EightBit(_) => {
+                unreachable!("typed u32 views use the key-only reduce/scan sorter")
+            }
+        }
+    }
+
+    pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        match &mut self.implementation {
+            SortImplementation::ReduceScan(sorter) => sorter.reserve(capacity),
+            SortImplementation::EightBit(_) => Ok(()),
+        }
+    }
 }
 
 struct SortWorkspace {
@@ -238,11 +265,42 @@ impl ReduceScanSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
+        self.record_sort_ranges(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(output),
+            num_items,
+            key_bits,
+        )
+    }
+
+    fn record_sort_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(());
         };
         let pass_count = self.pass_count_for_key_bits(key_bits);
         self.record_radix_passes(encoder, input, output, problem, pass_count, None)
+    }
+
+    fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        if capacity == 0 {
+            return Ok(());
+        }
+        let problem = self.describe_sort(capacity)?;
+        self.ensure_workspace(problem.size_bytes)?;
+        let histogram_items = problem
+            .num_blocks
+            .checked_mul(self.pipeline.bucket_count)
+            .ok_or(Error::SizeOverflow)?;
+        self.scanner.reserve(histogram_items);
+        Ok(())
     }
 
     pub async fn profile_sort_gpu_to_gpu_with_key_bits(
@@ -252,6 +310,8 @@ impl ReduceScanSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<GpuProfile, Error> {
+        let input = BufferRange::whole(input);
+        let output = BufferRange::whole(output);
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(GpuProfile::empty());
         };
@@ -278,14 +338,14 @@ impl ReduceScanSorter {
 
     fn prepare_sort(
         &mut self,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         num_items: u32,
     ) -> Result<Option<PreparedSort>, Error> {
         if num_items == 0 {
             return Ok(None);
         }
-        if input == output {
+        if input.buffer == output.buffer {
             return Err(Error::BufferAlias {
                 first: "sort input",
                 second: "sort output",
@@ -293,18 +353,18 @@ impl ReduceScanSorter {
         }
 
         let problem = self.describe_sort(num_items)?;
-        common::buffers::validate_buffer(
-            input,
+        input.validate(
             "sort input",
             problem.size_bytes,
             wgpu::BufferUsages::STORAGE,
         )?;
-        common::buffers::validate_buffer(
-            output,
+        output.validate(
             "sort output",
             problem.size_bytes,
             wgpu::BufferUsages::STORAGE,
         )?;
+        input.validate_storage_offset(&self.device, "sort input")?;
+        output.validate_storage_offset(&self.device, "sort output")?;
 
         self.ensure_workspace(problem.size_bytes)?;
         Ok(Some(problem))
@@ -340,8 +400,8 @@ impl ReduceScanSorter {
     fn record_radix_passes(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         problem: PreparedSort,
         pass_count: u32,
         mut profiler: Option<&mut TimestampRecorder>,
@@ -363,8 +423,14 @@ impl ReduceScanSorter {
         );
 
         for radix_pass in 0..pass_count {
-            let (source, destination) =
-                pass_buffers(radix_pass, pass_count, input, output, &workspace.scratch);
+            let (source, destination) = pass_buffers(
+                radix_pass,
+                pass_count,
+                input,
+                output,
+                &workspace.scratch,
+                problem.size_bytes,
+            );
             let uniform_offset = u64::from(radix_pass) * uniform_stride;
             let reduce_bind_group = create_sort_bind_group(
                 &self.device,
@@ -485,23 +551,41 @@ fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
 fn pass_buffers<'a>(
     radix_pass: u32,
     pass_count: u32,
-    input: &'a wgpu::Buffer,
-    output: &'a wgpu::Buffer,
+    input: BufferRange<'a>,
+    output: BufferRange<'a>,
     scratch: &'a wgpu::Buffer,
-) -> (&'a wgpu::Buffer, &'a wgpu::Buffer) {
+    size_bytes: u64,
+) -> (BufferRange<'a>, BufferRange<'a>) {
     debug_assert!(radix_pass < pass_count);
     let source = if radix_pass == 0 {
-        input
+        BufferRange {
+            size: size_bytes,
+            ..input
+        }
     } else if (pass_count - radix_pass).is_multiple_of(2) {
-        output
+        BufferRange {
+            size: size_bytes,
+            ..output
+        }
     } else {
-        scratch
+        BufferRange {
+            buffer: scratch,
+            offset: 0,
+            size: size_bytes,
+        }
     };
     let passes_after = pass_count - radix_pass - 1;
     let destination = if passes_after.is_multiple_of(2) {
-        output
+        BufferRange {
+            size: size_bytes,
+            ..output
+        }
     } else {
-        scratch
+        BufferRange {
+            buffer: scratch,
+            offset: 0,
+            size: size_bytes,
+        }
     };
     (source, destination)
 }
@@ -560,7 +644,7 @@ fn create_sort_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     label: &'static str,
-    buffers: (&wgpu::Buffer, &wgpu::Buffer, &wgpu::Buffer),
+    buffers: (BufferRange<'_>, &wgpu::Buffer, BufferRange<'_>),
     uniform: &wgpu::Buffer,
     uniform_offset: u64,
 ) -> wgpu::BindGroup {
@@ -571,7 +655,7 @@ fn create_sort_bind_group(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: source.as_entire_binding(),
+                resource: source.binding(source.size),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -579,7 +663,7 @@ fn create_sort_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: destination.as_entire_binding(),
+                resource: destination.binding(destination.size),
             },
             wgpu::BindGroupEntry {
                 binding: 3,

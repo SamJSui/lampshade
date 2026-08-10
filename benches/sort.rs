@@ -33,6 +33,13 @@ fn benchmark_sort(c: &mut Criterion) {
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
+        let gpu_count = context
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Counted Sort Benchmark Length"),
+                contents: bytemuck::cast_slice(&[item_count as u32]),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         group.bench_with_input(
             BenchmarkId::new("cpu_rayon", item_count),
@@ -68,6 +75,23 @@ fn benchmark_sort(c: &mut Criterion) {
                     sorter
                         .sort_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
                         .expect("GPU-resident sort failed");
+                    support::wait_for_gpu(&context.device);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("gpu_resident_counted", item_count),
+            &item_count,
+            |b, &_| {
+                b.iter(|| {
+                    sorter
+                        .sort_counted_gpu_to_gpu(
+                            &gpu_input,
+                            &gpu_output,
+                            &gpu_count,
+                            item_count as u32,
+                        )
+                        .expect("GPU-counted resident sort failed");
                     support::wait_for_gpu(&context.device);
                 });
             },

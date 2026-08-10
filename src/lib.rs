@@ -2,6 +2,7 @@ mod common;
 
 pub mod compact;
 pub mod context;
+pub mod count;
 pub mod error;
 pub mod histogram;
 pub mod predicate;
@@ -9,9 +10,11 @@ pub mod profiling;
 pub mod reduce;
 pub mod scan;
 pub mod sort;
+pub mod v2;
 
 pub use compact::{Compactor, KeyValueCompactor};
 pub use context::Context;
+pub use count::{CountedSortDispatch, GpuCountPlan};
 pub use error::Error;
 pub use histogram::Histogram;
 pub use predicate::{KeyValueField, MaskGenerator, U32Predicate};

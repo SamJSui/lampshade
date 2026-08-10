@@ -3,6 +3,100 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 
+#[derive(Clone, Copy)]
+pub(crate) struct BufferRange<'a> {
+    pub(crate) buffer: &'a wgpu::Buffer,
+    pub(crate) offset: u64,
+    pub(crate) size: u64,
+}
+
+impl<'a> BufferRange<'a> {
+    pub(crate) fn whole(buffer: &'a wgpu::Buffer) -> Self {
+        Self {
+            buffer,
+            offset: 0,
+            size: buffer.size(),
+        }
+    }
+
+    pub(crate) fn new(
+        buffer: &'a wgpu::Buffer,
+        offset: u64,
+        size: u64,
+        name: &'static str,
+    ) -> Result<Self, Error> {
+        let end = offset
+            .checked_add(size)
+            .ok_or(Error::BufferRangeOutOfBounds {
+                name,
+                offset,
+                size,
+                buffer_size: buffer.size(),
+            })?;
+        if end > buffer.size() {
+            return Err(Error::BufferRangeOutOfBounds {
+                name,
+                offset,
+                size,
+                buffer_size: buffer.size(),
+            });
+        }
+        Ok(Self {
+            buffer,
+            offset,
+            size,
+        })
+    }
+
+    pub(crate) fn validate(
+        self,
+        name: &'static str,
+        required_bytes: u64,
+        required_usage: wgpu::BufferUsages,
+    ) -> Result<(), Error> {
+        if self.size < required_bytes {
+            return Err(Error::BufferTooSmall {
+                name,
+                required: required_bytes,
+                actual: self.size,
+            });
+        }
+        let actual_usage = self.buffer.usage();
+        if !actual_usage.contains(required_usage) {
+            return Err(Error::MissingBufferUsage {
+                name,
+                required: required_usage,
+                actual: actual_usage,
+            });
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_storage_offset(
+        self,
+        device: &wgpu::Device,
+        name: &'static str,
+    ) -> Result<(), Error> {
+        let alignment = u64::from(device.limits().min_storage_buffer_offset_alignment);
+        if !self.offset.is_multiple_of(alignment) {
+            return Err(Error::MisalignedBufferOffset {
+                name,
+                offset: self.offset,
+                alignment,
+            });
+        }
+        Ok(())
+    }
+
+    pub(crate) fn binding(self, size: u64) -> wgpu::BindingResource<'a> {
+        wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: self.buffer,
+            offset: self.offset,
+            size: wgpu::BufferSize::new(size),
+        })
+    }
+}
+
 // --- Allocation ---
 
 pub fn create_storage_buffer<T: bytemuck::Pod>(device: &wgpu::Device, data: &[T]) -> wgpu::Buffer {

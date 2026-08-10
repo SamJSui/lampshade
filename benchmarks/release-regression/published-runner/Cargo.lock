@@ -1142,9 +1142,9 @@ dependencies = [
 
 [[package]]
 name = "wgpu-primitives"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ec846f3edfff9dbd6d745050a37d6d4f69691351147c96035e95e485d9b0f0"
+checksum = "09e9c44def5cb8a4b41bddddb97b696bee73f20f12c1ca689c8c10ef8850f87a"
 dependencies = [
  "bytemuck",
  "futures",

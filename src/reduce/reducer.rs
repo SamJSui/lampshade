@@ -1,12 +1,16 @@
 use crate::{
-    Error, common,
-    common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
+    Error, GpuCountPlan, common,
+    common::{
+        buffers::BufferRange, runtime::CommandSession, runtime::ProfileSession,
+        workspace::ReusableBuffer,
+    },
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
 };
 
 use super::{
     U32Reduction,
+    counted::CountedReducer,
     pipeline::{ReductionDispatch, ReductionPipeline},
 };
 
@@ -18,6 +22,7 @@ const VALUE_SIZE_BYTES: u64 = size_of::<u32>() as u64;
 /// identity: `0` for sum and maximum, and [`u32::MAX`] for minimum.
 pub struct Reducer {
     pipeline: ReductionPipeline,
+    counted: Option<CountedReducer>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     scratch_a: ReusableBuffer,
@@ -29,6 +34,7 @@ impl Reducer {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             pipeline: ReductionPipeline::new(device),
+            counted: None,
             device: device.clone(),
             queue: queue.clone(),
             scratch_a: ReusableBuffer::default(),
@@ -98,6 +104,23 @@ impl Reducer {
         Ok(())
     }
 
+    /// Reduces a prefix whose actual length is stored in a GPU buffer.
+    ///
+    /// `capacity` bounds all reads from `input`. The GPU count is clamped to
+    /// that capacity before indirect dispatch arguments are produced. `count`
+    /// requires `STORAGE`; all three buffers must be distinct.
+    pub fn reduce_counted_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        capacity: u32,
+        operation: U32Reduction,
+    ) -> Result<(), Error> {
+        self.counted()
+            .reduce_gpu_to_gpu(input, output, count, capacity, operation)
+    }
+
     /// Records a reduction without submitting or waiting for the work.
     ///
     /// Buffer requirements match [`Self::reduce_gpu_to_gpu`].
@@ -112,7 +135,81 @@ impl Reducer {
         num_items: u32,
         operation: U32Reduction,
     ) -> Result<(), Error> {
+        self.record_reduce_ranges(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(output),
+            num_items,
+            operation,
+        )
+    }
+
+    pub(crate) fn record_reduce_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        num_items: u32,
+        operation: U32Reduction,
+    ) -> Result<(), Error> {
         self.record_commands(encoder, input, output, num_items, operation, None)
+    }
+
+    pub(crate) fn reserve_fixed(&mut self, capacity: u32) -> Result<(), Error> {
+        if capacity > 0 {
+            self.prepare_scratch(capacity)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn reserve_counted(&mut self, capacity: u32) -> Result<(), Error> {
+        self.counted().reserve(capacity)
+    }
+
+    /// Records a capacity-bounded reduction whose actual length remains on the GPU.
+    ///
+    /// Buffer requirements match [`Self::reduce_counted_gpu_to_gpu`]. Empty
+    /// prefixes write the selected operation's identity.
+    pub fn record_reduce_counted(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        capacity: u32,
+        operation: U32Reduction,
+    ) -> Result<(), Error> {
+        self.counted()
+            .record_reduce(encoder, input, output, count, capacity, operation)
+    }
+
+    /// Records a GPU-counted reduction using metadata shared by several primitives.
+    ///
+    /// Record [`GpuCountPlan::record_prepare`] after the count producer and
+    /// before this method in the same encoder. Empty prefixes write the
+    /// operation identity.
+    pub fn record_reduce_with_count_plan(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        plan: &GpuCountPlan,
+        operation: U32Reduction,
+    ) -> Result<(), Error> {
+        self.counted()
+            .record_reduce_with_plan(encoder, input, output, plan, operation)
+    }
+
+    pub(crate) fn record_reduce_ranges_with_count_plan(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        plan: &GpuCountPlan,
+        operation: U32Reduction,
+    ) -> Result<(), Error> {
+        self.counted()
+            .record_reduce_ranges_with_plan(encoder, input, output, plan, operation)
     }
 
     /// Profiles a caller-owned GPU reduction using GPU timestamps.
@@ -131,31 +228,61 @@ impl Reducer {
         };
         let mut profile = ProfileSession::new(&self.device, &self.queue, span_count, label)?;
         let (encoder, profiler) = profile.recording();
-        self.record_commands(encoder, input, output, num_items, operation, profiler)?;
+        self.record_commands(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(output),
+            num_items,
+            operation,
+            profiler,
+        )?;
         profile.finish(&self.device, &self.queue).await
+    }
+
+    /// Profiles a capacity-bounded reduction whose actual length is GPU-resident.
+    pub async fn profile_reduce_counted_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        capacity: u32,
+        operation: U32Reduction,
+    ) -> Result<GpuProfile, Error> {
+        self.counted()
+            .profile_reduce(input, output, count, capacity, operation)
+            .await
+    }
+
+    fn counted(&mut self) -> &mut CountedReducer {
+        if self.counted.is_none() {
+            self.counted = Some(CountedReducer::new(&self.device, &self.queue));
+        }
+        self.counted
+            .as_mut()
+            .expect("counted reducer is initialized")
     }
 
     fn record_commands(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         num_items: u32,
         operation: U32Reduction,
         mut profiler: Option<&mut TimestampRecorder>,
     ) -> Result<(), Error> {
-        if input == output {
+        if input.buffer == output.buffer {
             return Err(Error::BufferAlias {
                 first: "reduction input",
                 second: "reduction output",
             });
         }
-        common::buffers::validate_buffer(
-            output,
+        output.validate(
             "reduction output",
             VALUE_SIZE_BYTES,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
+        output.validate_storage_offset(&self.device, "reduction output")?;
         if num_items == 0 {
             self.pipeline.record_identity(encoder, output, operation);
             return Ok(());
@@ -163,12 +290,8 @@ impl Reducer {
 
         let input_bytes = common::math::checked_byte_size(u64::from(num_items), VALUE_SIZE_BYTES)?;
         self.validate_storage_binding_size(input_bytes)?;
-        common::buffers::validate_buffer(
-            input,
-            "reduction input",
-            input_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
+        input.validate("reduction input", input_bytes, wgpu::BufferUsages::STORAGE)?;
+        input.validate_storage_offset(&self.device, "reduction input")?;
         self.prepare_scratch(num_items)?;
 
         let scratch_a = self.scratch_a.get();
@@ -183,9 +306,9 @@ impl Reducer {
             let current_output = if output_items == 1 {
                 output
             } else if write_to_a {
-                scratch_a.expect("first reduction scratch exists")
+                BufferRange::whole(scratch_a.expect("first reduction scratch exists"))
             } else {
-                scratch_b.expect("second reduction scratch exists")
+                BufferRange::whole(scratch_b.expect("second reduction scratch exists"))
             };
             self.pipeline.dispatch(
                 &self.device,

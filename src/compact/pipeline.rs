@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{common, profiling};
+use crate::{common, common::buffers::BufferRange, profiling};
 
 const BLOCK_SIZE: u32 = 256;
 const PARAMS_SIZE_BYTES: u64 = 16;
@@ -34,12 +34,12 @@ pub struct CompactPipeline {
 }
 
 pub struct CompactDispatch<'a> {
-    pub input: &'a wgpu::Buffer,
-    pub mask: &'a wgpu::Buffer,
-    pub offsets: &'a wgpu::Buffer,
-    pub block_prefixes: &'a wgpu::Buffer,
-    pub output: &'a wgpu::Buffer,
-    pub output_count: &'a wgpu::Buffer,
+    pub input: BufferRange<'a>,
+    pub mask: BufferRange<'a>,
+    pub offsets: BufferRange<'a>,
+    pub block_prefixes: BufferRange<'a>,
+    pub output: BufferRange<'a>,
+    pub output_count: BufferRange<'a>,
     pub num_items: u32,
     pub scan_items_per_block: u32,
 }
@@ -102,27 +102,29 @@ impl CompactPipeline {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: dispatch.input.as_entire_binding(),
+                    resource: dispatch.input.binding(dispatch.input.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: dispatch.mask.as_entire_binding(),
+                    resource: dispatch.mask.binding(dispatch.mask.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: dispatch.offsets.as_entire_binding(),
+                    resource: dispatch.offsets.binding(dispatch.offsets.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: dispatch.output.as_entire_binding(),
+                    resource: dispatch.output.binding(dispatch.output.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: dispatch.output_count.as_entire_binding(),
+                    resource: dispatch.output_count.binding(dispatch.output_count.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: dispatch.block_prefixes.as_entire_binding(),
+                    resource: dispatch
+                        .block_prefixes
+                        .binding(dispatch.block_prefixes.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,

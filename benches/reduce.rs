@@ -31,6 +31,13 @@ fn benchmark_reduction(c: &mut Criterion) {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let gpu_count = context
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Counted Reduction Benchmark Length"),
+                contents: bytemuck::cast_slice(&[item_count as u32]),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
 
         group.bench_with_input(
             BenchmarkId::new("cpu_scalar_sum", item_count),
@@ -75,6 +82,27 @@ fn benchmark_reduction(c: &mut Criterion) {
                                 operation,
                             )
                             .expect("GPU-resident reduction failed");
+                        support::wait_for_gpu(&context.device);
+                    });
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new(
+                    format!("gpu_resident_counted_{}", operation_name(operation)),
+                    item_count,
+                ),
+                &item_count,
+                |b, &_| {
+                    b.iter(|| {
+                        reducer
+                            .reduce_counted_gpu_to_gpu(
+                                &gpu_input,
+                                &gpu_output,
+                                &gpu_count,
+                                item_count as u32,
+                                operation,
+                            )
+                            .expect("GPU-counted resident reduction failed");
                         support::wait_for_gpu(&context.device);
                     });
                 },

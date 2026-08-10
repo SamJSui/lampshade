@@ -1,4 +1,5 @@
 mod core;
+pub(crate) mod counted;
 mod eight_bit;
 mod key_value_sorter;
 mod pipeline;

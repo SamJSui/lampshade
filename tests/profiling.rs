@@ -321,6 +321,105 @@ async fn profiles_reduction_hierarchy() {
 }
 
 #[tokio::test]
+async fn profiles_gpu_count_preparation_and_indirect_work() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping timestamp profile test because the adapter lacks timestamp queries");
+        return;
+    }
+
+    let capacity = 8_193_u32;
+    let selected = 4_097_usize;
+    let input: Vec<_> = support::random_u32(capacity as usize, 0x00C0_1DED)
+        .into_iter()
+        .map(|value| value & 0xffff)
+        .collect();
+    let gpu_input = storage_buffer(&context.device, "Profile Counted Input", &input);
+    let gpu_count = storage_buffer(&context.device, "Profile GPU Count", &[selected as u32]);
+    let gpu_sorted = output_buffer(
+        &context.device,
+        "Profile Counted Sort Output",
+        gpu_input.size(),
+    );
+    let gpu_sum = output_buffer(
+        &context.device,
+        "Profile Counted Reduction Output",
+        Reducer::output_buffer_size(),
+    );
+    let mut sorter = Sorter::from_context(&context);
+    let sort_profile = sorter
+        .profile_sort_counted_gpu_to_gpu_with_key_bits(
+            &gpu_input,
+            &gpu_sorted,
+            &gpu_count,
+            capacity,
+            16,
+        )
+        .await
+        .expect("profiled counted sort failed");
+    let mut expected = input[..selected].to_vec();
+    expected.sort_unstable();
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_sorted, selected).await,
+        expected
+    );
+    assert_eq!(sort_profile.spans[0].label, "counted.radix.prepare");
+    assert_eq!(
+        sort_profile
+            .spans
+            .iter()
+            .filter(|span| span.label.ends_with(".reduce"))
+            .count(),
+        8
+    );
+    assert_eq!(
+        sort_profile
+            .spans
+            .iter()
+            .filter(|span| span.label.ends_with(".scatter"))
+            .count(),
+        8
+    );
+    assert_timestamps_contain_dispatches(&sort_profile);
+
+    let mut reducer = Reducer::from_context(&context);
+    let reduction_profile = reducer
+        .profile_reduce_counted_gpu_to_gpu(
+            &gpu_sorted,
+            &gpu_sum,
+            &gpu_count,
+            capacity,
+            U32Reduction::Sum,
+        )
+        .await
+        .expect("profiled counted reduction failed");
+    let expected_sum = expected
+        .iter()
+        .fold(0_u32, |sum, value| sum.wrapping_add(*value));
+
+    assert_eq!(
+        support::read_u32(&context, &gpu_sum, 1).await,
+        [expected_sum]
+    );
+    assert_eq!(
+        reduction_profile.spans[0].label,
+        "counted.reduction.prepare"
+    );
+    assert_eq!(
+        reduction_profile.spans[1].label,
+        "counted.reduction.sum.level.0"
+    );
+    assert_eq!(
+        reduction_profile.spans[2].label,
+        "counted.reduction.sum.level.1"
+    );
+    assert_timestamps_contain_dispatches(&reduction_profile);
+}
+
+#[tokio::test]
 async fn profiles_key_and_key_value_radix_stages() {
     const PORTABLE_RADIX_PASS_COUNT: usize = 16;
 
