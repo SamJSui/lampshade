@@ -4,6 +4,8 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ## Unreleased
 
+## 0.7.0 - 2026-08-09
+
 ### Added
 
 - Portable 1-256-bin `u32` histogram counting with slice, immediate
@@ -17,8 +19,8 @@ All notable changes to `wgpu-primitives` are documented here.
 
 ### Changed
 
-- Installation documentation now points directly to the published 0.6 release
-  instead of retaining the temporary pre-release Git fallback.
+- Installation documentation now points to 0.7 and documents histogram as a
+  published API.
 
 ## 0.6.0 - 2026-08-09
 

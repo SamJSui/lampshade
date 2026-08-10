@@ -116,14 +116,13 @@ the pinned baseline and reproduction harness.
 
 ## Installation
 
-Published version 0.6 contains reduction and uses wgpu 30. The histogram API is
-currently unreleased. Tokio is listed because the executable quick start below
-uses `#[tokio::main]`; library development dependencies do not propagate to
-applications.
+Published version 0.7 contains histogram and reduction and uses wgpu 30. Tokio
+is listed because the executable quick start below uses `#[tokio::main]`;
+library development dependencies do not propagate to applications.
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.6"
+wgpu-primitives = "0.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
