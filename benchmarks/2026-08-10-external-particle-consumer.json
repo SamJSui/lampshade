@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-10",
+  "experiment": "standalone public-API particle consumer",
+  "source": {
+    "revision": "db9aa3dc41748e926ad28381ab2f525f97b42c20",
+    "dirty": false,
+    "branch": "feat/external-particle-demo"
+  },
+  "methodology": {
+    "processes": 3,
+    "warmups_per_process": 3,
+    "iterations_per_process": 10,
+    "ordering": "raw/typed alternates by process",
+    "aggregation": "median of independent process medians",
+    "threshold_percent": 2.0,
+    "timing": "CPU command recording and submission-through-device-completion measured separately",
+    "validation": "every process validates selected count, predicate, ascending keys, and stable payload order"
+  },
+  "adapters": [
+    {
+      "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "vendor": 4318,
+      "device": 9989,
+      "device_type": "DiscreteGpu",
+      "backend": "Vulkan",
+      "driver": "NVIDIA",
+      "driver_info": "591.86",
+      "host": "DESKTOP-IMC2LBD",
+      "source_artifact": "target/particle-consumer-rtx-db9aa3d.json",
+      "generated_at_utc": "2026-08-11T01:57:31.847985+00:00",
+      "rows": [
+        {
+          "items": 1000000,
+          "raw": {
+            "construction_process_ms": [14.7721, 11.7699, 12.1545],
+            "reservation_process_ms": [0.0, 0.0, 0.0],
+            "record_process_medians_ms": [0.31035, 0.30885, 0.3078],
+            "submit_wait_process_medians_ms": [0.73675, 0.70785, 0.7378],
+            "total_process_medians_ms": [1.0475, 1.0229, 1.05095]
+          },
+          "typed": {
+            "construction_process_ms": [12.3251, 4.8682, 12.4141],
+            "reservation_process_ms": [6.0239, 5.9161, 6.1415],
+            "record_process_medians_ms": [0.3179, 0.3055, 0.30865],
+            "submit_wait_process_medians_ms": [0.7434, 0.7126, 0.7406],
+            "total_process_medians_ms": [1.06135, 1.02125, 1.05045]
+          },
+          "change_percent": {
+            "record": -0.06475635421725467,
+            "submit_wait": 0.5225653206650804,
+            "total": 0.28162291169451237
+          },
+          "passed": true
+        },
+        {
+          "items": 10000000,
+          "raw": {
+            "construction_process_ms": [5.0635, 4.9729, 5.1828],
+            "reservation_process_ms": [0.0, 0.0, 0.0],
+            "record_process_medians_ms": [0.3155, 0.32945, 0.3618],
+            "submit_wait_process_medians_ms": [3.88345, 3.7167, 3.88175],
+            "total_process_medians_ms": [4.2026, 4.05985, 4.2604]
+          },
+          "typed": {
+            "construction_process_ms": [5.1078, 5.0624, 5.3193],
+            "reservation_process_ms": [6.3977, 6.6014, 7.0565],
+            "record_process_medians_ms": [0.40775, 0.3101, 0.31845],
+            "submit_wait_process_medians_ms": [3.8876, 3.70725, 3.87365],
+            "total_process_medians_ms": [4.30545, 4.02275, 4.2004]
+          },
+          "change_percent": {
+            "record": -3.3388981636060078,
+            "submit_wait": -0.20866877052876376,
+            "total": -0.05234854613811457
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "Intel(R) Graphics (ADL-N)",
+      "vendor": 32902,
+      "device": 18132,
+      "device_type": "IntegratedGpu",
+      "backend": "Vulkan",
+      "driver": "Intel open-source Mesa driver",
+      "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.2",
+      "host": "beehive",
+      "source_artifact": "target/particle-consumer-intel.json",
+      "generated_at_utc": "2026-08-11T01:56:52.658592+00:00",
+      "rows": [
+        {
+          "items": 1000000,
+          "raw": {
+            "construction_process_ms": [6.083112, 6.355174, 6.268692],
+            "reservation_process_ms": [0.0, 0.0, 0.0],
+            "record_process_medians_ms": [2.7111965, 3.591359, 3.41748],
+            "submit_wait_process_medians_ms": [13.791527, 13.4124325, 12.9190305],
+            "total_process_medians_ms": [17.20235, 17.029817, 16.39201]
+          },
+          "typed": {
+            "construction_process_ms": [5.48833, 5.486763, 5.469343],
+            "reservation_process_ms": [7.863377, 7.859018, 7.884423],
+            "record_process_medians_ms": [3.4015175, 3.315658, 3.4226645],
+            "submit_wait_process_medians_ms": [13.7632995, 12.946263, 12.9175245],
+            "total_process_medians_ms": [17.1730105, 16.2168315, 16.342664]
+          },
+          "change_percent": {
+            "record": -0.46708393319054853,
+            "submit_wait": -3.4756521607843927,
+            "total": -4.034999319135391
+          },
+          "passed": true
+        },
+        {
+          "items": 10000000,
+          "raw": {
+            "construction_process_ms": [6.126166, 5.981047, 6.005713],
+            "reservation_process_ms": [0.0, 0.0, 0.0],
+            "record_process_medians_ms": [3.584645, 3.4235465, 3.7426415],
+            "submit_wait_process_medians_ms": [107.185173, 107.0402785, 107.188364],
+            "total_process_medians_ms": [110.922844, 110.4207095, 110.9447475]
+          },
+          "typed": {
+            "construction_process_ms": [5.34091, 5.365953, 5.450495],
+            "reservation_process_ms": [7.90377, 8.144881, 7.957736],
+            "record_process_medians_ms": [3.630642, 3.6656585, 3.4158335],
+            "submit_wait_process_medians_ms": [107.292891, 107.132815, 107.062515],
+            "total_process_medians_ms": [110.764593, 110.837623, 110.5682935]
+          },
+          "change_percent": {
+            "record": 1.283167510311345,
+            "submit_wait": -0.04884817417797338,
+            "total": -0.1426676366141466
+          },
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "memory": {
+    "1000000": {
+      "resident_application_buffers": 28000004,
+      "validation_readback": 8000008
+    },
+    "10000000": {
+      "resident_application_buffers": 280000004,
+      "validation_readback": 80000008
+    },
+    "internal_primitive_workspace": null,
+    "note": "wgpu does not expose portable physical-allocation or peak-driver-memory telemetry"
+  },
+  "gate_passed": true,
+  "unmeasured_adapters": ["Apple Metal", "Jetson Vulkan"]
+}
