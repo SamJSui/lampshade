@@ -26,9 +26,28 @@ impl Sorter {
         }
     }
 
+    /// Creates a sorter specialized for the supplied adapter when a measured
+    /// fixed-length fast path is available.
+    ///
+    /// Compatible discrete NVIDIA Vulkan adapters use the 8-bit radix kernel.
+    /// Other adapters retain the portable 2-bit implementation. GPU-counted
+    /// sorting remains portable on every adapter.
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        Self {
+            core: RadixSorter::new_for_adapter(device, queue, SortItemKind::Key, adapter_info),
+            counted: None,
+            device: device.clone(),
+            queue: queue.clone(),
+        }
+    }
+
     /// Creates a sorter from the crate's optional convenience context.
     pub fn from_context(ctx: &Context) -> Self {
-        Self::new(&ctx.device, &ctx.queue)
+        Self::new_for_adapter(&ctx.device, &ctx.queue, &ctx.adapter_info)
     }
 
     /// Uploads values, sorts them on the GPU, and downloads the sorted result.

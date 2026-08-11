@@ -44,7 +44,7 @@ impl RadixSorter {
         let variant =
             RadixVariant::for_adapter(item_kind, adapter_info, device.features(), &device.limits());
         let implementation = if variant.uses_eight_bit_pipeline() {
-            SortImplementation::EightBit(EightBitSorter::new(device, queue))
+            SortImplementation::EightBit(EightBitSorter::new(device, queue, item_kind))
         } else {
             SortImplementation::ReduceScan(ReduceScanSorter::new(device, queue, item_kind, variant))
         };

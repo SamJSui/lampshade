@@ -14,7 +14,7 @@ struct Uniforms {
     _padding_2: u32,
 }
 
-@group(0) @binding(0) var<storage, read> input: array<KeyValue>;
+@group(0) @binding(0) var<storage, read> input: array<{{ITEM_TYPE}}>;
 @group(0) @binding(1) var<storage, read_write> histogram: array<atomic<u32>>;
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
 
@@ -40,7 +40,7 @@ fn main_histogram(
     let stride = workgroup_count.x * BLOCK_SIZE;
     var index = group_id.x * BLOCK_SIZE + tid;
     while (index < uniforms.num_items) {
-        let key = input[index].key;
+        let key = input[index]{{KEY_MEMBER}};
         for (var digit_index = 0u; digit_index < uniforms.pass_count; digit_index++) {
             let digit = (key >> (digit_index * 8u)) & 0xffu;
             atomicAdd(&local_histogram[digit_index * BUCKET_COUNT + digit], 1u);

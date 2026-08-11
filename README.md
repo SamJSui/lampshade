@@ -6,8 +6,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Lampshade provides fast, composable GPU histograms, reduction, predicate masks,
-prefix scan, stream compaction, and unsigned integer radix sort for Rust
-applications using wgpu and WGSL.
+prefix scan, stream compaction, run-length encoding, and unsigned integer radix
+sort for Rust applications using wgpu and WGSL.
 
 ## Benchmarks
 
@@ -24,6 +24,9 @@ The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeli
 records the final fixed-path gate and targeted rechecks.
 The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
 verifies the renamed final source against the published 0.7 predecessor.
+The [key-only sort report](benchmarks/2026-08-11-key-only-sort.md) records the
+fixed-length `u32` 8-bit path, large-input validation, and its unchanged
+key/value control.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
@@ -35,8 +38,8 @@ overlapping 100-million-item workload:
 
 | Workload | Lampshade | Massively | Speedup |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 7.961 ms | 167.915 ms | 21.09x |
-| Stable sort, full-width keys | 14.559 ms | 168.132 ms | 11.55x |
+| Stable key/value sort, 16-bit keys | 7.961 ms | 167.915 ms | 21.09x |
+| Stable key/value sort, full-width keys | 14.559 ms | 168.132 ms | 11.55x |
 | Exclusive scan | 2.837 ms | 3.550 ms | 1.25x |
 | Stable compaction, 50% selected | 3.717 ms | 5.662 ms | 1.52x |
 | Wrapping sum reduction | 0.714 ms | 1.388 ms | 1.94x |
@@ -46,8 +49,8 @@ Jetson Orin Nano systems:
 
 | Workload | RTX 4070 Ti SUPER | Jetson, 8 TPC | Jetson, 4 TPC |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 7.98x | 8.48x | 8.55x |
-| Stable sort, full-width keys | 4.51x | 4.53x | 4.55x |
+| Stable key/value sort, 16-bit keys | 7.98x | 8.48x | 8.55x |
+| Stable key/value sort, full-width keys | 4.51x | 4.53x | 4.55x |
 | Exclusive scan | 2.81x | 1.53x | 1.48x |
 | Stable compaction, 50% selected | 2.06x | 1.66x | 1.63x |
 
@@ -63,14 +66,15 @@ capability-gated 4-bit radix path; reduction uses the portable kernel:
 
 | Workload | Lampshade | Massively | Speedup |
 | --- | ---: | ---: | ---: |
-| Stable sort, 16-bit keys | 129.879 ms | 562.704 ms | 4.33x |
-| Stable sort, full-width keys | 262.103 ms | 587.898 ms | 2.24x |
+| Stable key/value sort, 16-bit keys | 129.879 ms | 562.704 ms | 4.33x |
+| Stable key/value sort, full-width keys | 262.103 ms | 587.898 ms | 2.24x |
 | Exclusive scan | 12.450 ms | 34.210 ms | 2.75x |
 | Stable compaction, 50% selected | 15.900 ms | 42.429 ms | 2.67x |
 | Wrapping sum reduction | 3.776 ms | 4.585 ms | 1.21x |
 
-All 74 release tests passed. At 100M, reduction measured 21.983 ms versus
-22.836 ms for Massively, a 1.04x lead. The
+All 74 tests in the historical 0.6 release-candidate suite passed; the counted
+and typed APIs added later in 0.8 were not part of that Intel run. At 100M,
+reduction measured 21.983 ms versus 22.836 ms for Massively, a 1.04x lead. The
 [Intel wide-radix report](benchmarks/2026-08-09-intel-wide-radix.md) includes
 1M-100M results, stage profiles, and measured regression controls. At 100M,
 the same four speedups are 9.78x, 4.79x, 2.44x, and 2.52x respectively.
@@ -91,7 +95,9 @@ Massively 0.96 could not initialize these Metal pipelines: its generated layouts
 requested 42 or 47 storage buffers against the adapter limit of 29. The harness
 records this as an unsupported comparison, not an artificial speedup. Reduction
 does run in both libraries and uses the same end-to-host scalar boundary. All 74
-release GPU tests and every 100M benchmark validator pass on the M3 Pro. See the
+tests in the historical 0.6 release-candidate suite and every then-current 100M
+benchmark validator passed on the M3 Pro; the later 0.8 counted and typed APIs
+were not rerun there. See the
 [wgpu 30 report](benchmarks/2026-08-09-wgpu30-runtime.md), the earlier
 [Apple report](benchmarks/2026-08-08-apple-metal-validation.md), and the
 [upstream issue](https://github.com/massively-labs/massively/issues/62).
@@ -115,6 +121,7 @@ the pinned baseline and reproduction harness.
 - Inclusive and exclusive `u32` prefix scan.
 - Reusable comparison predicates that produce compaction-ready masks.
 - Stable compaction of `u32` values and `KeyValue` records.
+- Adjacent `u32` run-length encoding with a GPU-resident run count.
 - Stable radix sort for `u32` values and `(u32 key, u32 value)` pairs.
 - Explicit key-width bounds that skip unnecessary radix passes.
 - Slice APIs for simple upload/execute/readback workflows.
@@ -149,7 +156,8 @@ from versions before 0.6 also requires wgpu 30.
 
 ```rust
 use lampshade::{
-    Compactor, Context, MaskGenerator, Reducer, Scanner, Sorter, U32Predicate,
+    Compactor, Context, MaskGenerator, Reducer, RunLengthEncoder, Scanner, Sorter,
+    U32Predicate,
 };
 
 #[tokio::main]
@@ -159,6 +167,7 @@ async fn main() -> Result<(), lampshade::Error> {
     let mut reducer = Reducer::from_context(&context);
     let mut scanner = Scanner::from_context(&context);
     let mut compactor = Compactor::from_context(&context);
+    let mut run_length = RunLengthEncoder::from_context(&context);
     let mut sorter = Sorter::from_context(&context);
 
     let input = [4, 17, 9, 22, 11, 3];
@@ -170,6 +179,10 @@ async fn main() -> Result<(), lampshade::Error> {
     assert_eq!(reducer.sum(&input).await?, 66);
     assert_eq!(scanner.scan_exclusive(&[3, 1, 4, 1]).await?, [0, 3, 4, 8]);
     assert_eq!(compactor.compact(&input, &mask).await?, [17, 22, 11]);
+    assert_eq!(
+        run_length.encode(&[3, 3, 7, 7, 7, 3]).await?,
+        (vec![3, 7, 3], vec![2, 3, 1]),
+    );
     assert_eq!(sorter.sort(&input).await?, [3, 4, 9, 11, 17, 22]);
     Ok(())
 }
@@ -283,6 +296,12 @@ stabilization evidence.
 - **Compaction:** an exclusive mask scan gives stable destination indices.
   Scatter combines block-local offsets with scanned block totals without
   materializing another full-size prefix pass.
+- **Run-length encoding:** head flags and an exclusive scan assign each
+  adjacent run an index. Ordered scatter/finalize dispatches write its value,
+  length, and GPU-resident run count. Counted input is clamped to capacity and
+  inactive scan lanes are zeroed without a host readback. Only
+  `unique_values[..run_count]` and `run_lengths[..run_count]` are initialized;
+  reused output-buffer tails are unspecified.
 - **Radix sort:** stable least-significant-digit passes ping-pong between buffers.
   Known key-width bounds reduce the pass count. Compatible NVIDIA Vulkan
   devices use 8-bit or 4-bit paths, capable Intel Vulkan devices use a 4-bit
@@ -304,7 +323,13 @@ cargo run --release --example profile_primitives
 ```
 
 Cases include histogram, reduction, scan, sort, predicate, value compaction,
-and key/value compaction at selectable sizes and selectivities.
+and key/value compaction at selectable sizes and selectivities. Run-length
+encoding exposes the same timestamp-span API and has a dedicated Criterion
+bench across multiple average run lengths. Its dense GPU-counted control is
+reported against capacity, because counted RLE deliberately scans that full
+capacity even when the resident count is sparse. See the
+[RTX RLE benchmark](benchmarks/2026-08-11-run-length-encoding.md) for the
+source-pinned 1M-100M result.
 
 ## Roadmap
 
@@ -324,14 +349,17 @@ CPU-reference validation, and reproducible benchmarks.
 ```sh
 cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --release --all-targets
-cargo check --examples --benches
+cargo test --release --lib --tests
+cargo check --release --examples --benches
+cargo test --doc
 cargo package
 ```
 
 Criterion benches cover each primitive plus `counted_pipeline` and the
 raw-versus-typed `particle_pipeline`. GPU integration tests skip when no
-compatible adapter is available; CI uses Mesa's Vulkan software adapter.
+compatible adapter is available. Set `LAMPSHADE_REQUIRE_GPU_TESTS=1` to turn an
+adapter miss into a test failure; CI sets it while using Mesa's Vulkan software
+adapter.
 
 ## License
 

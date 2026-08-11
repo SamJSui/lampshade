@@ -2,7 +2,8 @@ mod support;
 
 use lampshade::{
     Compactor, Error, GpuProfile, Histogram, KeyValue, KeyValueField, KeyValueSorter,
-    MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
+    MaskGenerator, Reducer, RunLengthEncoder, RunLengthOutputBuffers, Scanner, Sorter,
+    U32Predicate, U32Reduction,
 };
 use wgpu::util::DeviceExt;
 
@@ -126,6 +127,75 @@ fn cpu_compact(input: &[u32], mask: &[u32]) -> Vec<u32> {
         .zip(mask)
         .filter_map(|(&value, &keep)| (keep == 1).then_some(value))
         .collect()
+}
+
+#[tokio::test]
+async fn profiles_run_length_encoding_stages() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping RLE profile test because the adapter lacks timestamp queries");
+        return;
+    }
+    let input: Vec<_> = (0..8_193_u32).map(|index| index / 7).collect();
+    let gpu_input = storage_buffer(&context.device, "Profile RLE Input", &input);
+    let values = output_buffer(&context.device, "Profile RLE Values", gpu_input.size());
+    let lengths = output_buffer(&context.device, "Profile RLE Lengths", gpu_input.size());
+    let count = output_buffer(&context.device, "Profile RLE Count", 4);
+    let mut rle = RunLengthEncoder::from_context(&context);
+
+    let profile = rle
+        .profile_encode_gpu_to_gpu(
+            &gpu_input,
+            RunLengthOutputBuffers::new(&values, &lengths, &count),
+            input.len() as u32,
+        )
+        .await
+        .expect("profiled RLE failed");
+    let labels: Vec<_> = profile
+        .spans
+        .iter()
+        .map(|span| span.label.as_str())
+        .collect();
+    let mark = labels
+        .iter()
+        .position(|label| *label == "run_length.mark")
+        .unwrap();
+    let scatter = labels
+        .iter()
+        .position(|label| *label == "run_length.scatter")
+        .unwrap();
+    let finalize = labels
+        .iter()
+        .position(|label| *label == "run_length.finalize")
+        .unwrap();
+    assert!(
+        labels[mark + 1..scatter]
+            .iter()
+            .all(|label| label.starts_with("run_length.scan."))
+    );
+    assert!(mark < scatter && scatter < finalize);
+    assert_eq!(support::read_u32(&context, &count, 1).await, [1_171]);
+    assert_timestamps_contain_dispatches(&profile);
+
+    let input_count = storage_buffer(
+        &context.device,
+        "Profile Counted RLE Input Count",
+        &[4_097_u32],
+    );
+    let counted_profile = rle
+        .profile_encode_counted_gpu_to_gpu(
+            &gpu_input,
+            &input_count,
+            RunLengthOutputBuffers::new(&values, &lengths, &count),
+            input.len() as u32,
+        )
+        .await
+        .expect("profiled counted RLE failed");
+    assert_eq!(support::read_u32(&context, &count, 1).await, [586]);
+    assert_eq!(counted_profile.spans.len(), profile.spans.len());
+    assert_timestamps_contain_dispatches(&counted_profile);
 }
 
 #[tokio::test]
@@ -444,28 +514,41 @@ async fn profiles_key_and_key_value_radix_stages() {
     expected.sort_unstable();
 
     assert_eq!(actual, expected);
-    assert_eq!(
-        profile
-            .spans
-            .iter()
-            .filter(|span| span.label.ends_with(".reduce"))
-            .count(),
-        PORTABLE_RADIX_PASS_COUNT
-    );
-    assert_eq!(
-        profile
-            .spans
-            .iter()
-            .filter(|span| span.label.ends_with(".scatter"))
-            .count(),
-        PORTABLE_RADIX_PASS_COUNT
-    );
-    assert!(
-        profile
-            .spans
-            .iter()
-            .any(|span| span.label == "radix.00.scan.level.0")
-    );
+    let key_reduce_passes = profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".reduce"))
+        .count();
+    let key_scatter_passes = profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".scatter"))
+        .count();
+    let key_histogram_passes = profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".histogram"))
+        .count();
+    let key_prefix_passes = profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".prefix"))
+        .count();
+    if key_histogram_passes == 1 {
+        assert_eq!(key_prefix_passes, 1);
+        assert_eq!(key_reduce_passes, 0);
+        assert_eq!(key_scatter_passes, 4);
+    } else {
+        assert_eq!(key_prefix_passes, 0);
+        assert_eq!(key_reduce_passes, PORTABLE_RADIX_PASS_COUNT);
+        assert_eq!(key_scatter_passes, PORTABLE_RADIX_PASS_COUNT);
+        assert!(
+            profile
+                .spans
+                .iter()
+                .any(|span| span.label == "radix.00.scan.level.0")
+        );
+    }
 
     let bounded_input: Vec<_> = input.iter().map(|key| key & 0x1f).collect();
     let bounded_gpu_input = storage_buffer(
@@ -494,22 +577,60 @@ async fn profiles_key_and_key_value_radix_stages() {
         support::read_u32(&context, &bounded_gpu_output, bounded_input.len()).await,
         bounded_expected
     );
+    let bounded_reduce_passes = bounded_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".reduce"))
+        .count();
+    let bounded_scatter_passes = bounded_profile
+        .spans
+        .iter()
+        .filter(|span| span.label.ends_with(".scatter"))
+        .count();
+    let expected_bounded_passes = if key_histogram_passes == 1 { 1 } else { 3 };
     assert_eq!(
-        bounded_profile
-            .spans
-            .iter()
-            .filter(|span| span.label.ends_with(".reduce"))
-            .count(),
-        3
+        bounded_reduce_passes,
+        usize::from(key_histogram_passes == 0) * 3
     );
-    assert_eq!(
-        bounded_profile
-            .spans
-            .iter()
-            .filter(|span| span.label.ends_with(".scatter"))
-            .count(),
-        3
-    );
+    assert_eq!(bounded_scatter_passes, expected_bounded_passes);
+
+    if key_histogram_passes == 1 {
+        for (key_bits, expected_scatter_passes) in [(8, 1), (16, 2), (24, 3), (32, 4)] {
+            let bounded_profile = sorter
+                .profile_sort_gpu_to_gpu_with_key_bits(
+                    &bounded_gpu_input,
+                    &bounded_gpu_output,
+                    bounded_input.len() as u32,
+                    key_bits,
+                )
+                .await
+                .expect("profiled bounded key sort failed");
+            assert_eq!(
+                bounded_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".histogram"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                bounded_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".prefix"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                bounded_profile
+                    .spans
+                    .iter()
+                    .filter(|span| span.label.ends_with(".scatter"))
+                    .count(),
+                expected_scatter_passes
+            );
+        }
+    }
 
     let pairs: Vec<_> = input
         .iter()
@@ -630,5 +751,20 @@ async fn trivial_profiles_complete_without_timestamp_dispatches() -> Result<(), 
     assert!(profile.spans.is_empty());
     assert!(profile.gpu_elapsed.is_zero());
     assert_eq!(support::read_u32(&context, &count, 1).await, [0]);
+
+    let values = output_buffer(&context.device, "Empty RLE Values", 4);
+    let lengths = output_buffer(&context.device, "Empty RLE Lengths", 4);
+    let rle_count = output_buffer(&context.device, "Empty RLE Count", 4);
+    let mut rle = RunLengthEncoder::from_context(&context);
+    let profile = rle
+        .profile_encode_gpu_to_gpu(
+            &input,
+            RunLengthOutputBuffers::new(&values, &lengths, &rle_count),
+            0,
+        )
+        .await?;
+    assert!(profile.spans.is_empty());
+    assert!(profile.gpu_elapsed.is_zero());
+    assert_eq!(support::read_u32(&context, &rle_count, 1).await, [0]);
     Ok(())
 }
