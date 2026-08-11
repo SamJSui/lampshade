@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-11",
+  "experiment": "fixed-length key-only 8-bit radix routing",
+  "source": {
+    "baseline_revision": "063e5452c8dcd50b3a04022bb51fab365316466d",
+    "candidate_parent_revision": "063e5452c8dcd50b3a04022bb51fab365316466d",
+    "candidate_identity": "working tree pinned by the normalized source manifest",
+    "candidate_branch": "fix/audit-validation-gates",
+    "candidate_manifest_normalization": "UTF-8 text with CRLF normalized to LF",
+    "candidate_manifest": [
+      {
+        "path": "src/sort/core.rs",
+        "sha256": "849df752f565240cb583a6e67d09b7b6d5e6ff98c1c4405e599f6359a89abc65"
+      },
+      {
+        "path": "src/sort/eight_bit.rs",
+        "sha256": "4d1363f699f4e60b9f47b17e3792b3cd8c76336df565320639cf1bb0bbaf792c"
+      },
+      {
+        "path": "src/sort/pipeline.rs",
+        "sha256": "c452ccf88e7ba51e6db8284f56ddaad3671c4fb8a1da2d0eb1d80945676d8a19"
+      },
+      {
+        "path": "src/sort/sorter.rs",
+        "sha256": "24a697ebcc7ae84d5aac9b9554dfecd6bb4ba23d2913b5465218c47f31e53a6e"
+      },
+      {
+        "path": "src/sort/histogram_8bit.wgsl",
+        "sha256": "322ebd666d3e5d4339acf72f8fd2c957d46e8d4dc7b5594f6e276d7df83ddc1d"
+      },
+      {
+        "path": "src/sort/scatter_8bit.wgsl",
+        "sha256": "c238355c4df15a9a0c8aa0ca1df0ff7173619030f50c2fa218752cefe1eadf47"
+      },
+      {
+        "path": "examples/profile_primitives.rs",
+        "sha256": "d710d093bd56805fc246822828904fdfd27dd82ea79490ce2051aae51b7eb956"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "vendor": 4318,
+    "device": 9989,
+    "device_type": "DiscreteGpu",
+    "backend": "Vulkan",
+    "driver": "NVIDIA",
+    "driver_info": "591.86"
+  },
+  "methodology": {
+    "processes_per_source": 5,
+    "samples_per_process": 5,
+    "warmup_ms": 250,
+    "ordering": "all baseline processes, then all candidate processes",
+    "aggregation": "median of independent process medians",
+    "timing": "resident wall time including recording, submission, execution, and completion",
+    "control": "full-width key/value sort",
+    "correctness": "1,000,003 random keys, 8/16/24/32-bit paths, and ignored 100M descending-input validator"
+  },
+  "rows": [
+    {
+      "workload": "key_sort",
+      "items": 1000000,
+      "baseline_process_medians_ms": [1.408, 1.384, 1.383, 1.401, 1.386],
+      "candidate_process_medians_ms": [0.362, 0.358, 0.351, 0.341, 0.339],
+      "baseline_median_ms": 1.386,
+      "candidate_median_ms": 0.351,
+      "change_percent": -74.6753246753247,
+      "speedup": 3.94871794871795
+    },
+    {
+      "workload": "key_sort",
+      "items": 10000000,
+      "baseline_process_medians_ms": [4.286, 4.273, 4.360, 4.250, 4.209],
+      "candidate_process_medians_ms": [1.436, 1.443, 1.485, 1.421, 1.456],
+      "baseline_median_ms": 4.273,
+      "candidate_median_ms": 1.443,
+      "change_percent": -66.229815118184,
+      "speedup": 2.96119196119196
+    },
+    {
+      "workload": "key_sort",
+      "items": 100000000,
+      "baseline_process_medians_ms": [35.233, 35.614, 35.140, 35.042, 35.153],
+      "candidate_process_medians_ms": [12.258, 12.288, 12.309, 12.323, 12.340],
+      "baseline_median_ms": 35.153,
+      "candidate_median_ms": 12.309,
+      "change_percent": -64.984496344551,
+      "speedup": 2.85587781298237
+    },
+    {
+      "workload": "key_value_sort_full_width_control",
+      "items": 1000000,
+      "baseline_process_medians_ms": [0.288, 0.290, 0.298, 0.324, 0.294],
+      "candidate_process_medians_ms": [0.285, 0.286, 0.289, 0.287, 0.301],
+      "baseline_median_ms": 0.294,
+      "candidate_median_ms": 0.287,
+      "change_percent": -2.38095238095238,
+      "speedup": 1.02439024390244
+    },
+    {
+      "workload": "key_value_sort_full_width_control",
+      "items": 10000000,
+      "baseline_process_medians_ms": [1.607, 1.616, 1.608, 1.623, 1.652],
+      "candidate_process_medians_ms": [1.611, 1.625, 1.609, 1.608, 1.614],
+      "baseline_median_ms": 1.616,
+      "candidate_median_ms": 1.611,
+      "change_percent": -0.309405940594065,
+      "speedup": 1.00310366232154
+    },
+    {
+      "workload": "key_value_sort_full_width_control",
+      "items": 100000000,
+      "baseline_process_medians_ms": [14.600, 14.487, 14.459, 14.623, 14.463],
+      "candidate_process_medians_ms": [14.606, 27.819, 14.475, 14.415, 14.453],
+      "baseline_median_ms": 14.487,
+      "candidate_median_ms": 14.475,
+      "change_percent": -0.0828328846552151,
+      "speedup": 1.00082901554404
+    }
+  ]
+}

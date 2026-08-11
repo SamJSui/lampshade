@@ -6,6 +6,8 @@ use crate::common::buffers::BufferRange;
 use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 
+use super::pipeline::SortItemKind;
+
 const BLOCK_SIZE: u32 = 256;
 const ITEMS_PER_THREAD: u32 = 7;
 const ITEMS_PER_TILE: u32 = BLOCK_SIZE * ITEMS_PER_THREAD;
@@ -15,7 +17,6 @@ const MAX_PASS_COUNT: u32 = u32::BITS / RADIX_BITS;
 const TILE_COUNTER_COUNT: u64 = MAX_PASS_COUNT as u64;
 const MAX_HISTOGRAM_GROUPS: u32 = 2048;
 const MAX_PACKED_COUNT: u32 = 0x0fff_ffff;
-const ITEM_SIZE_BYTES: u64 = 8;
 const UNIFORM_SIZE_BYTES: u64 = 32;
 const DISPATCH_ARGS_SIZE_BYTES: u64 = MAX_PASS_COUNT as u64 * 3 * 4;
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
@@ -54,17 +55,19 @@ pub struct EightBitSorter {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: EightBitPipelines,
+    item_size_bytes: u64,
     workspace: Option<EightBitWorkspace>,
     cached_bindings: Option<CachedBindings>,
 }
 
 impl EightBitSorter {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
         debug_assert!(device.features().contains(wgpu::Features::SUBGROUP));
         Self {
             device: device.clone(),
             queue: queue.clone(),
-            pipelines: EightBitPipelines::new(device),
+            pipelines: EightBitPipelines::new(device, item_kind),
+            item_size_bytes: item_kind.size_bytes(),
             workspace: None,
             cached_bindings: None,
         }
@@ -79,9 +82,9 @@ impl EightBitSorter {
             return Ok(Vec::new());
         }
 
-        assert_eq!(size_of::<T>() as u64, ITEM_SIZE_BYTES);
+        assert_eq!(size_of::<T>() as u64, self.item_size_bytes);
         let num_items = common::math::checked_u32(input.len() as u64)?;
-        let size_bytes = common::math::checked_byte_size(input.len() as u64, ITEM_SIZE_BYTES)?;
+        let size_bytes = common::math::checked_byte_size(input.len() as u64, self.item_size_bytes)?;
         let input_buffer = common::buffers::create_storage_buffer(&self.device, input);
         let output_buffer = common::buffers::create_empty_storage_buffer(&self.device, size_bytes);
 
@@ -200,7 +203,8 @@ impl EightBitSorter {
             });
         }
 
-        let size_bytes = common::math::checked_byte_size(u64::from(num_items), ITEM_SIZE_BYTES)?;
+        let size_bytes =
+            common::math::checked_byte_size(u64::from(num_items), self.item_size_bytes)?;
         input.validate("sort input", size_bytes, wgpu::BufferUsages::STORAGE)?;
         output.validate("sort output", size_bytes, wgpu::BufferUsages::STORAGE)?;
         input.validate_storage_offset(&self.device, "sort input")?;
@@ -351,8 +355,8 @@ impl EightBitSorter {
             return Ok(());
         }
 
-        let capacity = workspace_capacity(requested_size)?;
-        let max_items = capacity / ITEM_SIZE_BYTES;
+        let capacity = workspace_capacity(requested_size, self.item_size_bytes)?;
+        let max_items = capacity / self.item_size_bytes;
         let max_tiles = max_items.div_ceil(u64::from(ITEMS_PER_TILE));
         let partition_entries = max_tiles
             .checked_mul(u64::from(BUCKET_COUNT))
@@ -403,7 +407,8 @@ impl EightBitSorter {
         if capacity == 0 {
             return Ok(());
         }
-        let size_bytes = common::math::checked_byte_size(u64::from(capacity), ITEM_SIZE_BYTES)?;
+        let size_bytes =
+            common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
         self.ensure_workspace(size_bytes)
     }
 }
@@ -418,7 +423,7 @@ struct EightBitPipelines {
 }
 
 impl EightBitPipelines {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device, item_kind: SortItemKind) -> Self {
         let histogram_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("8-bit Histogram Layout"),
             entries: &[
@@ -447,9 +452,11 @@ impl EightBitPipelines {
             ],
         });
 
+        let histogram_source = item_shader(include_str!("histogram_8bit.wgsl"), item_kind);
+        let scatter_source = item_shader(include_str!("scatter_8bit.wgsl"), item_kind);
         let histogram_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("8-bit Histogram Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("histogram_8bit.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(histogram_source.into()),
         });
         let prefix_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("8-bit Prefix Shader"),
@@ -457,7 +464,7 @@ impl EightBitPipelines {
         });
         let scatter_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("8-bit Scatter Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("scatter_8bit.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(scatter_source.into()),
         });
 
         Self {
@@ -702,10 +709,10 @@ fn element_count_limit(max_compute_workgroups_per_dimension: u32) -> u32 {
         .min(MAX_PACKED_COUNT)
 }
 
-fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
+fn workspace_capacity(requested_size: u64, item_size_bytes: u64) -> Result<u64, Error> {
     if requested_size < WORKSPACE_GROWTH_BYTES {
         requested_size
-            .max(ITEM_SIZE_BYTES)
+            .max(item_size_bytes)
             .checked_next_power_of_two()
             .ok_or(Error::SizeOverflow)
     } else {
@@ -713,9 +720,32 @@ fn workspace_capacity(requested_size: u64) -> Result<u64, Error> {
     }
 }
 
+fn item_shader(source: &str, item_kind: SortItemKind) -> String {
+    source
+        .replace("{{ITEM_TYPE}}", item_kind.shader_item_type())
+        .replace("{{KEY_MEMBER}}", item_kind.shader_key_member())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{BufferSlot, element_count_limit, pass_buffer_slots, pass_count_for_key_bits};
+    use super::{
+        BufferSlot, SortItemKind, element_count_limit, item_shader, pass_buffer_slots,
+        pass_count_for_key_bits,
+    };
+
+    #[test]
+    fn specializes_eight_bit_item_shaders_without_leaving_placeholders() {
+        let template = include_str!("scatter_8bit.wgsl");
+        let key_shader = item_shader(template, SortItemKind::Key);
+        assert!(key_shader.contains("var<storage, read> input: array<u32>;"));
+        assert!(key_shader.contains("sorted_items[subgroup_id] = lane_prefix + count;"));
+        assert!(!key_shader.contains("{{"));
+
+        let key_value_shader = item_shader(template, SortItemKind::KeyValue);
+        assert!(key_value_shader.contains("var<storage, read> input: array<KeyValue>;"));
+        assert!(key_value_shader.contains("sorted_items[subgroup_id].key = lane_prefix + count;"));
+        assert!(!key_value_shader.contains("{{"));
+    }
 
     #[test]
     fn maps_key_widths_to_active_byte_passes() {

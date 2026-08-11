@@ -55,6 +55,59 @@ async fn sorter_reuses_workspace_for_growing_and_shrinking_inputs() {
 }
 
 #[tokio::test]
+async fn adapter_selected_sort_handles_many_tiles() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let input = support::random_u32(1_000_003, 0x8B17_50A7);
+    let expected = cpu_sort(&input);
+    let actual = Sorter::from_context(&context)
+        .sort(&input)
+        .await
+        .expect("large adapter-selected radix sort failed");
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn adapter_selected_bounded_sort_handles_every_byte_pass() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = Sorter::from_context(&context);
+    for (case, (key_bits, mask)) in [(8, 0xff), (16, 0xffff), (24, 0x00ff_ffff), (32, u32::MAX)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut input = support::random_u32(100_003, 0x8B17_0000 + case as u64);
+        for key in &mut input {
+            *key &= mask;
+        }
+        input[0] = mask;
+        let expected = cpu_sort(&input);
+        let actual = sorter
+            .sort_with_key_bits(&input, key_bits)
+            .await
+            .expect("adapter-selected bounded radix sort failed");
+        assert_eq!(actual, expected, "mismatch for {key_bits} key bits");
+    }
+}
+
+#[tokio::test]
+#[ignore = "100M physical-GPU release validator"]
+async fn adapter_selected_sort_validates_100m_items() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    const ITEMS: u32 = 100_000_000;
+    let input: Vec<_> = (0..ITEMS).rev().collect();
+    let actual = Sorter::from_context(&context)
+        .sort(&input)
+        .await
+        .expect("100M adapter-selected radix sort failed");
+    assert!(actual.into_iter().eq(0..ITEMS));
+}
+
+#[tokio::test]
 async fn bounded_sort_handles_odd_and_even_portable_pass_counts() {
     let Some(context) = support::gpu_context().await else {
         return;

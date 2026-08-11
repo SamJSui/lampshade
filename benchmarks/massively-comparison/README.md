@@ -60,7 +60,7 @@ Windows full matrix:
 Linux full matrix:
 
 ```sh
-./benchmarks/massively-comparison/run.sh
+sh ./benchmarks/massively-comparison/run.sh
 ```
 
 Both scripts write machine-readable output to `results/latest.json` by default. PowerShell and

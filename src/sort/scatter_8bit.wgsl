@@ -14,8 +14,8 @@ struct Uniforms {
     _padding_2: u32,
 }
 
-@group(0) @binding(0) var<storage, read> input: array<KeyValue>;
-@group(0) @binding(1) var<storage, read_write> output: array<KeyValue>;
+@group(0) @binding(0) var<storage, read> input: array<{{ITEM_TYPE}}>;
+@group(0) @binding(1) var<storage, read_write> output: array<{{ITEM_TYPE}}>;
 @group(0) @binding(2) var<storage, read> digit_offsets: array<u32>;
 @group(0) @binding(3) var<storage, read_write> partition_state: array<atomic<u32>>;
 @group(0) @binding(4) var<uniform> uniforms: Uniforms;
@@ -32,7 +32,7 @@ const COUNT_MASK: u32 = 0x0fffffffu;
 const PREFIX_BIT: u32 = 0x10000000u;
 const GENERATION_SHIFT: u32 = 29u;
 
-var<workgroup> sorted_items: array<KeyValue, 1792>;
+var<workgroup> sorted_items: array<{{ITEM_TYPE}}, 1792>;
 var<workgroup> bucket_counts: array<atomic<u32>, 256>;
 var<workgroup> tile_offsets: array<u32, 256>;
 var<workgroup> assigned_tile: u32;
@@ -110,13 +110,13 @@ fn exclusive_scan_bucket_counts(tid: u32, subgroup_id: u32, lane: u32) {
     let count = atomicLoad(&bucket_counts[tid]);
     let lane_prefix = subgroupExclusiveAdd(count);
     if (lane == SUBGROUP_SIZE - 1u) {
-        sorted_items[subgroup_id].key = lane_prefix + count;
+        sorted_items[subgroup_id]{{KEY_MEMBER}} = lane_prefix + count;
     }
     workgroupBarrier();
 
     var subgroup_prefix = 0u;
     for (var group = 0u; group < subgroup_id; group++) {
-        subgroup_prefix += sorted_items[group].key;
+        subgroup_prefix += sorted_items[group]{{KEY_MEMBER}};
     }
     atomicStore(&bucket_counts[tid], subgroup_prefix + lane_prefix);
     workgroupBarrier();
@@ -129,7 +129,7 @@ fn main_scatter(
     @builtin(subgroup_invocation_id) lane: u32,
 ) {
     let tid = local_id.x;
-    var items: array<KeyValue, 7>;
+    var items: array<{{ITEM_TYPE}}, 7>;
     var ranks: array<u32, 7>;
 
     if (tid == 0u) {
@@ -150,7 +150,7 @@ fn main_scatter(
         var digit = 0u;
         if (is_valid) {
             items[item_index] = input[source_index];
-            digit = (items[item_index].key >> uniforms.bit_index) & 0xffu;
+            digit = (items[item_index]{{KEY_MEMBER}} >> uniforms.bit_index) & 0xffu;
         }
         ranks[item_index] = subgroup_rank(is_valid, digit, lane);
     }
@@ -163,7 +163,7 @@ fn main_scatter(
                     + item_index * SUBGROUP_SIZE
                     + lane;
                 if (source_index < uniforms.num_items) {
-                    let digit = (items[item_index].key >> uniforms.bit_index) & 0xffu;
+                    let digit = (items[item_index]{{KEY_MEMBER}} >> uniforms.bit_index) & 0xffu;
                     let rank = ranks[item_index] & 0xffffu;
                     let count = ranks[item_index] >> 16u;
                     let preceding = atomicLoad(&bucket_counts[digit]);
@@ -191,7 +191,7 @@ fn main_scatter(
             + lane;
         if (source_index < uniforms.num_items) {
             let item = items[item_index];
-            let digit = (item.key >> uniforms.bit_index) & 0xffu;
+            let digit = (item{{KEY_MEMBER}} >> uniforms.bit_index) & 0xffu;
             let local_index = atomicLoad(&bucket_counts[digit]) + ranks[item_index];
             sorted_items[local_index] = item;
         }
@@ -203,7 +203,7 @@ fn main_scatter(
         let local_index = item_index * BLOCK_SIZE + tid;
         if (local_index < tile_items) {
             let item = sorted_items[local_index];
-            let digit = (item.key >> uniforms.bit_index) & 0xffu;
+            let digit = (item{{KEY_MEMBER}} >> uniforms.bit_index) & 0xffu;
             let bucket_start = atomicLoad(&bucket_counts[digit]);
             output[tile_offsets[digit] + local_index - bucket_start] = item;
         }

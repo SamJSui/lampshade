@@ -32,6 +32,13 @@ impl SortItemKind {
             Self::KeyValue => "item.key",
         }
     }
+
+    pub(super) fn shader_key_member(self) -> &'static str {
+        match self {
+            Self::Key => "",
+            Self::KeyValue => ".key",
+        }
+    }
 }
 
 pub struct SortPipeline {
@@ -66,13 +73,14 @@ impl RadixVariant {
     }
 
     fn for_capabilities(item_kind: SortItemKind, capabilities: AdapterCapabilities) -> Self {
-        let is_vulkan_key_value =
-            item_kind == SortItemKind::KeyValue && capabilities.backend == wgpu::Backend::Vulkan;
-        if !is_vulkan_key_value {
+        if capabilities.backend != wgpu::Backend::Vulkan {
             return Self::Portable;
         }
 
+        let subgroup_item_supported = item_kind == SortItemKind::KeyValue
+            || capabilities.device_type == wgpu::DeviceType::DiscreteGpu;
         if capabilities.vendor == 0x10de
+            && subgroup_item_supported
             && capabilities.subgroups_enabled
             && capabilities.subgroup_min_size == 32
             && capabilities.subgroup_max_size == 32
@@ -83,11 +91,15 @@ impl RadixVariant {
             )
         {
             Self::NvidiaVulkanSubgroup
-        } else if capabilities.vendor == 0x10de
+        } else if item_kind == SortItemKind::KeyValue
+            && capabilities.vendor == 0x10de
             && capabilities.device_type == wgpu::DeviceType::DiscreteGpu
         {
             Self::NvidiaVulkanWide
-        } else if capabilities.vendor == 0x8086 && supports_wide_radix(capabilities) {
+        } else if item_kind == SortItemKind::KeyValue
+            && capabilities.vendor == 0x8086
+            && supports_wide_radix(capabilities)
+        {
             Self::IntelVulkanWide
         } else {
             Self::Portable
@@ -300,8 +312,59 @@ mod tests {
                 true,
                 true,
             ),
-            RadixVariant::Portable
+            RadixVariant::NvidiaVulkanSubgroup
         );
+        for (backend, vendor, device_type, feature, limits) in [
+            (
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::IntegratedGpu,
+                true,
+                true,
+            ),
+            (
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+                false,
+                true,
+            ),
+            (
+                wgpu::Backend::Vulkan,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+                true,
+                false,
+            ),
+            (
+                wgpu::Backend::Dx12,
+                0x10de,
+                wgpu::DeviceType::DiscreteGpu,
+                true,
+                true,
+            ),
+            (
+                wgpu::Backend::Vulkan,
+                0x1002,
+                wgpu::DeviceType::DiscreteGpu,
+                true,
+                true,
+            ),
+        ] {
+            assert_eq!(
+                select(
+                    SortItemKind::Key,
+                    backend,
+                    vendor,
+                    device_type,
+                    32,
+                    32,
+                    feature,
+                    limits,
+                ),
+                RadixVariant::Portable
+            );
+        }
         assert_eq!(
             select(
                 SortItemKind::Key,

@@ -2,6 +2,7 @@
 name = "wgpu-primitives"
 version = "0.8.0"
 edition = "2024"
+rust-version = "1.87.0"
 description = "Deprecated compatibility package for Lampshade."
 authors = ["samjsui"]
 license = "MIT"

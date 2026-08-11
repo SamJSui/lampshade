@@ -17,8 +17,9 @@ there is evidence that users need independent release cycles.
 
 Methods such as `Sorter::sort(&mut self, input: &[u32])` and
 `Reducer::sum(&mut self, input: &[u32])` accept borrowed CPU data, upload it,
-run the primitive, and return an owned result. `Histogram::histogram` likewise
-returns an owned bin vector while ignoring values outside its requested range.
+run the primitive, and return an owned result. `Histogram::histogram` returns
+an owned bin vector, while `RunLengthEncoder::encode` returns owned unique-value
+and run-length vectors.
 These are the smallest paths from ordinary Rust code to a correct GPU result.
 
 The input borrow lasts across `.await` because the async function may still
@@ -81,8 +82,9 @@ that boundary. `GpuSlice<T>` combines a typed buffer range, capacity, and either
 a CPU-fixed or GPU-resident extent. `GpuSliceMut<T>` marks shader-writable use,
 and `Recorder` transfers the resulting extent from compaction to sort and
 reduction while preparing shared count metadata at most once per command
-stream. The views borrow caller-owned buffers; they do not own allocations or
-submit work.
+stream. Run-length encoding consumes either a fixed or resident input extent
+and returns unique-value and length views sharing a new resident run count. The
+views borrow caller-owned buffers; they do not own allocations or submit work.
 
 The application-shaped `particle_pipeline` example extends those views to the
 existing `KeyValue { key, value }` record. One recorder generates a depth mask,
@@ -112,6 +114,9 @@ Private code owns the mechanisms that public methods share:
 - primitive-specific pipelines select and dispatch WGSL implementations. The
   portable histogram privatizes 256 counters per workgroup before merging into
   global atomics.
+- run-length encoding marks adjacent run heads, scans them into run indices,
+  and uses separate ordered scatter/finalize dispatches so no kernel assumes
+  cross-workgroup synchronization.
 - `GpuCountPlan` owns a cached preparation binding and bounded reduction/sort
   metadata for one count buffer and capacity. Counted sort defaults to indirect
   dispatch, while an explicit capacity strategy is available when benchmarks
@@ -125,9 +130,10 @@ A predicate mask does not own changing workspace, so its public methods can use
 Kernel selection uses explicit enums rather than trait objects. That keeps the
 selected path visible, avoids dynamic dispatch in command recording, and lets
 each implementation own different workspace. Capable Intel Vulkan adapters
-route to 4-bit key-value sort kernels, compatible NVIDIA Vulkan adapters can
-route to wider or subgroup-specialized kernels, and other devices retain the
-portable implementation.
+route key/value records to 4-bit kernels. Compatible NVIDIA Vulkan adapters can
+route key/value records to wider or subgroup-specialized kernels, while the
+measured discrete subgroup path also supports fixed-length `u32` keys. Other
+devices and GPU-counted key-only sorting retain the portable implementation.
 
 ## Performance contract
 

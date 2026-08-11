@@ -88,12 +88,45 @@ impl<'a> BufferRange<'a> {
         Ok(())
     }
 
+    pub(crate) fn validate_storage_binding_size(
+        self,
+        device: &wgpu::Device,
+        required_bytes: u64,
+    ) -> Result<(), Error> {
+        validate_storage_binding_size(device, required_bytes)
+    }
+
     pub(crate) fn binding(self, size: u64) -> wgpu::BindingResource<'a> {
         wgpu::BindingResource::Buffer(wgpu::BufferBinding {
             buffer: self.buffer,
             offset: self.offset,
             size: wgpu::BufferSize::new(size),
         })
+    }
+}
+
+pub(crate) fn validate_storage_binding_size(
+    device: &wgpu::Device,
+    requested: u64,
+) -> Result<(), Error> {
+    let limits = device.limits();
+    validate_storage_binding_size_against_limits(
+        requested,
+        limits.max_buffer_size,
+        limits.max_storage_buffer_binding_size,
+    )
+}
+
+fn validate_storage_binding_size_against_limits(
+    requested: u64,
+    max_buffer_size: u64,
+    max_storage_buffer_binding_size: u64,
+) -> Result<(), Error> {
+    let limit = max_buffer_size.min(max_storage_buffer_binding_size);
+    if requested > limit {
+        Err(Error::BufferLimitExceeded { requested, limit })
+    } else {
+        Ok(())
     }
 }
 
@@ -219,4 +252,29 @@ pub fn validate_buffer(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_storage_binding_size_against_limits;
+    use crate::Error;
+
+    #[test]
+    fn storage_binding_size_uses_the_stricter_device_limit() {
+        assert!(validate_storage_binding_size_against_limits(512, 1_024, 512).is_ok());
+        assert!(matches!(
+            validate_storage_binding_size_against_limits(513, 1_024, 512),
+            Err(Error::BufferLimitExceeded {
+                requested: 513,
+                limit: 512
+            })
+        ));
+        assert!(matches!(
+            validate_storage_binding_size_against_limits(257, 256, 512),
+            Err(Error::BufferLimitExceeded {
+                requested: 257,
+                limit: 256
+            })
+        ));
+    }
 }

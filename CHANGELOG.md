@@ -3,6 +3,42 @@
 All notable changes to Lampshade are documented here. Releases before 0.8 used
 the `wgpu-primitives` package name.
 
+## Unreleased
+
+### Added
+
+- Adjacent `u32` run-length encoding with slice, immediate GPU-buffer,
+  recording, timestamp-profiling, and typed-pipeline APIs.
+- Capacity-bounded RLE driven by a GPU-resident input count, producing unique
+  values and lengths that share a new GPU-resident run count without readback.
+- Deterministic boundary, alias, binding-limit, nonzero-offset, counted-clamp,
+  one-submission composition, example, and Criterion coverage for RLE.
+
+### Fixed
+
+- Reject aliased scan input/output handles before command recording, including
+  one-item copies and ranged internal scans.
+- Validate scan and predicate logical bindings against the device's effective
+  storage-binding limit before creating bind groups.
+- Require an actual Vulkan adapter for CI GPU tests instead of silently passing
+  skipped integration coverage.
+
+### Changed
+
+- Lazily initialize typed-facade primitives so construction and reservation
+  prepare only the operations callers request.
+- Route fixed-length `u32` sorting on compatible discrete NVIDIA Vulkan
+  adapters through the generalized 8-bit radix kernel; GPU-counted sorting and
+  other adapters retain the portable path.
+- Document the 1.87 MSRV required by wgpu 30 and clarify benchmark workload and
+  historical hardware-test scope.
+
+### Performance
+
+- The adapter-selected key-only path reduces full-width fixed-sort passes from
+  sixteen 2-bit passes to four 8-bit passes. Exact RTX before/after evidence is
+  recorded in `benchmarks/2026-08-11-key-only-sort.md`.
+
 ## 0.8.0 - 2026-08-11
 
 ### Added

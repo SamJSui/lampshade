@@ -287,6 +287,32 @@ async fn predicate_recording_validates_buffer_contracts() {
     generator
         .record_mask(&mut encoder, &input, &output, 4, U32Predicate::Equal(2))
         .expect("valid predicate buffers were rejected");
+
+    let limits = context.device.limits();
+    let limit = limits
+        .max_buffer_size
+        .min(limits.max_storage_buffer_binding_size);
+    let oversized_records = limit / size_of::<KeyValue>() as u64 + 1;
+    if let Ok(oversized_records) = u32::try_from(oversized_records) {
+        let requested = u64::from(oversized_records) * size_of::<KeyValue>() as u64;
+        let error = generator
+            .record_key_value_mask(
+                &mut encoder,
+                &input,
+                &output,
+                oversized_records,
+                KeyValueField::Key,
+                U32Predicate::Equal(2),
+            )
+            .expect_err("oversized predicate bindings must be rejected before recording");
+        assert!(matches!(
+            error,
+            Error::BufferLimitExceeded {
+                requested: actual_requested,
+                limit: actual_limit,
+            } if actual_requested == requested && actual_limit == limit
+        ));
+    }
 }
 
 fn storage_input<T: bytemuck::Pod>(

@@ -1,59 +1,100 @@
 #![allow(dead_code)]
 
+use std::sync::OnceLock;
+
 use futures::channel::oneshot;
 use lampshade::{Context, Error};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
+enum SharedContext {
+    Ready(Box<Context>),
+    Unavailable(String),
+    Failed(String),
+}
+
+static GPU_CONTEXT: OnceLock<SharedContext> = OnceLock::new();
+static PORTABLE_GPU_CONTEXT: OnceLock<SharedContext> = OnceLock::new();
+
 pub async fn gpu_context() -> Option<Context> {
-    match Context::init().await {
-        Ok(context) => Some(context),
-        Err(Error::RequestAdapter(error)) => {
-            eprintln!("skipping GPU test because no adapter is available: {error}");
+    shared_context(
+        GPU_CONTEXT.get_or_init(|| match pollster::block_on(Context::init()) {
+            Ok(context) => SharedContext::Ready(Box::new(context)),
+            Err(Error::RequestAdapter(error)) => SharedContext::Unavailable(error.to_string()),
+            Err(error) => SharedContext::Failed(error.to_string()),
+        }),
+        "GPU",
+    )
+}
+
+fn shared_context(context: &SharedContext, kind: &str) -> Option<Context> {
+    match context {
+        SharedContext::Ready(context) => Some(Context {
+            adapter_info: context.adapter_info.clone(),
+            device: context.device.clone(),
+            queue: context.queue.clone(),
+        }),
+        SharedContext::Unavailable(error) if gpu_tests_required() => {
+            panic!("{kind} test adapter is required but unavailable: {error}");
+        }
+        SharedContext::Unavailable(error) => {
+            eprintln!("skipping {kind} test because no adapter is available: {error}");
             None
         }
-        Err(error) => panic!("failed to initialize the GPU test context: {error}"),
+        SharedContext::Failed(error) => {
+            panic!("failed to initialize the {kind} test context: {error}")
+        }
     }
 }
 
-pub async fn gpu_context_without_optional_features() -> Option<Context> {
-    let descriptor = wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    }
-    .with_env();
-    let instance = wgpu::Instance::new(descriptor);
-    let adapter = match instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-            apply_limit_buckets: false,
-        })
-        .await
-    {
-        Ok(adapter) => adapter,
-        Err(error) => {
-            eprintln!("skipping portable GPU test because no adapter is available: {error}");
-            return None;
-        }
-    };
-    let adapter_info = adapter.get_info();
-    let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            label: Some("Portable Test Device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: adapter.limits(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            ..Default::default()
-        })
-        .await
-        .expect("failed to request portable GPU test device");
+fn gpu_tests_required() -> bool {
+    std::env::var("LAMPSHADE_REQUIRE_GPU_TESTS")
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+}
 
-    Some(Context {
-        adapter_info,
-        device,
-        queue,
-    })
+pub async fn gpu_context_without_optional_features() -> Option<Context> {
+    shared_context(
+        PORTABLE_GPU_CONTEXT.get_or_init(|| {
+            pollster::block_on(async {
+                let descriptor = wgpu::InstanceDescriptor {
+                    backends: wgpu::Backends::PRIMARY,
+                    ..wgpu::InstanceDescriptor::new_without_display_handle()
+                }
+                .with_env();
+                let instance = wgpu::Instance::new(descriptor);
+                let adapter = match instance
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::HighPerformance,
+                        compatible_surface: None,
+                        force_fallback_adapter: false,
+                        apply_limit_buckets: false,
+                    })
+                    .await
+                {
+                    Ok(adapter) => adapter,
+                    Err(error) => return SharedContext::Unavailable(error.to_string()),
+                };
+                let adapter_info = adapter.get_info();
+                match adapter
+                    .request_device(&wgpu::DeviceDescriptor {
+                        label: Some("Portable Test Device"),
+                        required_features: wgpu::Features::empty(),
+                        required_limits: adapter.limits(),
+                        memory_hints: wgpu::MemoryHints::Performance,
+                        ..Default::default()
+                    })
+                    .await
+                {
+                    Ok((device, queue)) => SharedContext::Ready(Box::new(Context {
+                        adapter_info,
+                        device,
+                        queue,
+                    })),
+                    Err(error) => SharedContext::Failed(error.to_string()),
+                }
+            })
+        }),
+        "portable GPU",
+    )
 }
 
 pub fn random_u32(len: usize, seed: u64) -> Vec<u32> {
