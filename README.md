@@ -130,21 +130,20 @@ timing boundaries.
 
 ## Installation
 
-Lampshade 0.8 is currently an unpublished release candidate. To validate this
-checkout before publication, use a local path dependency. Tokio is listed
-because the executable quick start below uses `#[tokio::main]`; library
-development dependencies do not propagate to applications.
+Lampshade 0.8 uses wgpu 30. Tokio is listed because the executable quick start
+below uses `#[tokio::main]`; library development dependencies do not propagate
+to applications.
 
 ```toml
 [dependencies]
-lampshade = { path = "../lampshade" }
+lampshade = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-The latest published predecessor remains `wgpu-primitives = "0.7"`. After
-Lampshade 0.8 is published, replace the path dependency with
-`lampshade = "0.8"`. Because wgpu types appear in the public GPU-buffer APIs,
-upgrading from versions before 0.6 also requires wgpu 30.
+The predecessor was published as `wgpu-primitives = "0.7"`. Existing users can
+move to `lampshade = "0.8"` and change Rust imports from `wgpu_primitives` to
+`lampshade`. Because wgpu types appear in the public GPU-buffer APIs, upgrading
+from versions before 0.6 also requires wgpu 30.
 
 ## Quick start
 
@@ -183,8 +182,8 @@ final readback.
 
 ## GPU-resident composition
 
-The `pipeline` API below is part of the current Lampshade 0.8 release candidate
-and is not present in the published `wgpu-primitives` 0.7 predecessor.
+The `pipeline` API below is part of Lampshade 0.8 and is not present in the
+published `wgpu-primitives` 0.7 predecessor.
 
 Applications that already own a wgpu device should reuse it and record multiple
 primitives before submitting once. The stable `pipeline` API carries buffer
