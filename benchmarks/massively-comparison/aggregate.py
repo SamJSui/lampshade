@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate process-isolated wgpu-primitives and Massively runner results."""
+"""Aggregate process-isolated Lampshade and Massively runner results."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def comparisons(aggregates: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     rows = []
     for (workload, items), implementations in sorted(by_case.items(), key=lambda pair: (pair[0][1], pair[0][0])):
-        primitives = implementations.get("wgpu-primitives")
+        primitives = implementations.get("lampshade")
         massively = implementations.get("massively")
         if primitives is None or massively is None:
             continue
@@ -63,9 +63,9 @@ def comparisons(aggregates: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "workload": workload,
                 "items": items,
-                "wgpu_primitives_ms": primitives_ms,
+                "lampshade_ms": primitives_ms,
                 "massively_ms": massively_ms,
-                "wgpu_primitives_speedup": massively_ms / primitives_ms,
+                "lampshade_speedup": massively_ms / primitives_ms,
             }
         )
     return rows
@@ -130,7 +130,7 @@ def main() -> None:
     failures = load_failures(args.failures)
     aggregates = aggregate_runs(runs)
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "repository": {
             "revision": args.repository_revision,
@@ -153,7 +153,7 @@ def main() -> None:
         "methodology": {
             "timing": "per-run public API boundary; reduction returns a host scalar, other workloads end at GPU completion",
             "excluded": ["host upload", "correctness validation", "non-reduction readback"],
-            "allocation_difference": "reduction includes each implementation's scalar readback path; other wgpu-primitives workloads reuse caller-owned outputs while Massively returns owned outputs",
+            "allocation_difference": "reduction includes each implementation's scalar readback path; other Lampshade workloads reuse caller-owned outputs while Massively returns owned outputs",
         },
         "runs": runs,
         "failures": failures,
@@ -167,8 +167,8 @@ def main() -> None:
     print(f"{'workload':<20} {'items':>10} {'wgpu_ms':>11} {'massively_ms':>14} {'speedup':>10}")
     for row in result["comparisons"]:
         print(
-            f"{row['workload']:<20} {row['items']:>10} {row['wgpu_primitives_ms']:>11.3f} "
-            f"{row['massively_ms']:>14.3f} {row['wgpu_primitives_speedup']:>9.2f}x"
+            f"{row['workload']:<20} {row['items']:>10} {row['lampshade_ms']:>11.3f} "
+            f"{row['massively_ms']:>14.3f} {row['lampshade_speedup']:>9.2f}x"
         )
     if failures:
         print(f"\n{len(failures)} run(s) failed; details are recorded in the result JSON.")

@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-primitives-particle-app"
+name = "lampshade-particle-app"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -10,4 +10,4 @@ pollster = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wgpu = "30.0.0"
-wgpu-primitives = { path = "../.." }
+lampshade = { path = "../.." }

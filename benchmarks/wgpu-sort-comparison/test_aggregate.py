@@ -25,19 +25,19 @@ class AggregateTests(unittest.TestCase):
     def test_aggregates_process_medians_by_implementation(self) -> None:
         aggregates = aggregate_runs(
             [
-                run("wgpu-primitives", 1, 3.0),
+                run("lampshade", 1, 3.0),
                 run("wgpu_sort", 1, 5.0),
-                run("wgpu-primitives", 2, 1.0),
+                run("lampshade", 2, 1.0),
                 run("wgpu_sort", 2, 7.0),
-                run("wgpu-primitives", 3, 2.0),
+                run("lampshade", 3, 2.0),
                 run("wgpu_sort", 3, 6.0),
             ]
         )
         by_name = {row["implementation"]: row for row in aggregates}
-        self.assertEqual(by_name["wgpu-primitives"]["median_of_process_medians_ms"], 2.0)
+        self.assertEqual(by_name["lampshade"]["median_of_process_medians_ms"], 2.0)
         self.assertEqual(by_name["wgpu_sort"]["median_of_process_medians_ms"], 6.0)
         self.assertEqual(
-            by_name["wgpu-primitives"]["throughput_pairs_per_second"],
+            by_name["lampshade"]["throughput_pairs_per_second"],
             500_000_000.0,
         )
 

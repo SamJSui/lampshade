@@ -1,9 +1,9 @@
 use futures::channel::oneshot;
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Context, MaskGenerator, Reducer, U32Predicate, U32Reduction,
-    v2::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
+    pipeline::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
 };
+use wgpu::util::DeviceExt;
 
 fn main() {
     env_logger::init();

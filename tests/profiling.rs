@@ -1,12 +1,12 @@
 mod support;
 
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Compactor, Error, GpuProfile, Histogram, KeyValue, KeyValueField, KeyValueSorter,
     MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
+use wgpu::util::DeviceExt;
 
-fn timestamp_queries_available(context: &wgpu_primitives::Context) -> bool {
+fn timestamp_queries_available(context: &lampshade::Context) -> bool {
     context
         .device
         .features()

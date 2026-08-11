@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use futures::channel::oneshot;
+use lampshade::{Context, Error};
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use wgpu_primitives::{Context, Error};
 
 pub async fn gpu_context() -> Option<Context> {
     match Context::init().await {

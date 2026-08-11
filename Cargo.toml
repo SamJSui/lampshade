@@ -1,11 +1,11 @@
 [package]
-name = "wgpu-primitives"
-version = "0.7.0"
+name = "lampshade"
+version = "0.8.0"
 edition = "2024"
-description = "Composable GPU primitives for Rust applications using wgpu."
+description = "Fast, composable GPU primitives for Rust applications using wgpu and WGSL."
 authors = ["samjsui"]
 license = "MIT"
-repository = "https://github.com/samjsui/wgpu-primitives"
+repository = "https://github.com/samjsui/lampshade"
 keywords = ["gpgpu", "wgpu", "sort", "radix", "compute"]
 categories = ["algorithms", "graphics", "science"]
 include = [

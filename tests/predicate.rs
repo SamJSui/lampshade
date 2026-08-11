@@ -1,9 +1,9 @@
 mod support;
 
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Compactor, Error, KeyValue, KeyValueCompactor, KeyValueField, MaskGenerator, U32Predicate,
 };
+use wgpu::util::DeviceExt;
 
 const PREDICATE_SIZES: [usize; 8] = [0, 1, 31, 255, 256, 257, 2_048, 4_097];
 

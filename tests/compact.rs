@@ -1,7 +1,7 @@
 mod support;
 
+use lampshade::{Compactor, Error};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Compactor, Error};
 
 const COMPACTION_SIZES: [usize; 18] = [
     0, 1, 2, 31, 32, 33, 127, 128, 129, 255, 256, 257, 511, 512, 513, 2_047, 2_048, 4_097,

@@ -1,4 +1,4 @@
-use wgpu_primitives::{Context, KeyValue, KeyValueCompactor};
+use lampshade::{Context, KeyValue, KeyValueCompactor};
 
 fn main() {
     env_logger::init();

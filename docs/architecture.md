@@ -1,6 +1,6 @@
 # Architecture
 
-`wgpu-primitives` has one north star: make common data-parallel GPU work feel
+Lampshade has one north star: make common data-parallel GPU work feel
 native in Rust without giving up explicit wgpu composition or hardware-aware
 performance.
 
@@ -76,7 +76,7 @@ This layer is the stable composition boundary. Applications can keep data on
 the GPU, combine primitives in one submission, and manage synchronization at
 the wgpu level.
 
-The additive `v2` module prototypes a smaller recording-first vocabulary over
+The stable `pipeline` module provides a smaller recording-first vocabulary over
 that boundary. `GpuSlice<T>` combines a typed buffer range, capacity, and either
 a CPU-fixed or GPU-resident extent. `GpuSliceMut<T>` marks shader-writable use,
 and `Recorder` transfers the resulting extent from compaction to sort and
@@ -158,8 +158,8 @@ should follow this order:
    private engine layer;
 2. keep existing public APIs source-compatible while adding physical GPU
    coverage;
-3. validate the experimental typed recorder against real applications before
-   promoting or replacing the explicit raw-buffer methods;
+3. evolve the typed pipeline through measured workloads while retaining the
+   explicit raw-buffer methods for callers that need lower-level control;
 4. add device-specialized kernels only behind measured capability gates;
 5. add higher-level algorithms only when a real workload demonstrates the API
    and performance value;

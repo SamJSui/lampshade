@@ -18,7 +18,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "validation" / "particle-app" / "Cargo.toml"
-BINARY_NAME = "wgpu-primitives-particle-app.exe" if os.name == "nt" else "wgpu-primitives-particle-app"
+BINARY_NAME = "lampshade-particle-app.exe" if os.name == "nt" else "lampshade-particle-app"
 BINARY = MANIFEST.parent / "target" / "release" / BINARY_NAME
 METRICS = (
     "command_recording",

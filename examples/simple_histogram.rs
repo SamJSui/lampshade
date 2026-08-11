@@ -1,4 +1,4 @@
-use wgpu_primitives::{Context, Histogram};
+use lampshade::{Context, Histogram};
 
 fn main() {
     env_logger::init();

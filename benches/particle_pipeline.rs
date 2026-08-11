@@ -3,12 +3,12 @@ mod support;
 use std::sync::mpsc;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Context, GpuCountPlan, KeyValue, KeyValueCompactor, KeyValueField, KeyValueSorter,
     MaskGenerator, U32Predicate,
-    v2::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
+    pipeline::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
 };
+use wgpu::util::DeviceExt;
 
 const KEY_BITS: u32 = 16;
 const VISIBILITY: U32Predicate = U32Predicate::BetweenInclusive {

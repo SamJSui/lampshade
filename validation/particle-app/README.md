@@ -2,11 +2,11 @@
 
 This crate is intentionally separate from the library package. It creates its
 own wgpu instance, adapter, device, queue, buffers, and submission loop, then
-uses only public `wgpu-primitives` APIs to filter, stably compact, and
+uses only public Lampshade APIs to filter, stably compact, and
 depth-sort `KeyValue` particle records. The selected length stays GPU-resident
 until one final validation readback.
 
-Run the typed recorder:
+Run the typed pipeline:
 
 ```sh
 cargo run --release --manifest-path validation/particle-app/Cargo.toml -- \

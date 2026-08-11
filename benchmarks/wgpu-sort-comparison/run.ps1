@@ -133,16 +133,16 @@ function Invoke-Runner {
     }
 }
 
-$primitivesManifest = Join-Path $benchmarkRoot 'wgpu-primitives-runner\Cargo.toml'
+$primitivesManifest = Join-Path $benchmarkRoot 'lampshade-runner\Cargo.toml'
 $comparisonManifest = Join-Path $benchmarkRoot 'wgpu-sort-runner\Cargo.toml'
-$primitivesTarget = Join-Path $targetRoot 'wgpu-primitives'
+$primitivesTarget = Join-Path $targetRoot 'lampshade'
 $comparisonTarget = Join-Path $targetRoot 'wgpu-sort'
 
-Build-Runner 'wgpu-primitives runner' $primitivesManifest $primitivesTarget
+Build-Runner 'Lampshade runner' $primitivesManifest $primitivesTarget
 Build-Runner 'wgpu_sort runner' $comparisonManifest $comparisonTarget
 
 $executableSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-$primitivesExecutable = Join-Path $primitivesTarget "release\wgpu-primitives-comparison-runner$executableSuffix"
+$primitivesExecutable = Join-Path $primitivesTarget "release\lampshade-wgpu-sort-comparison-runner$executableSuffix"
 $comparisonExecutable = Join-Path $comparisonTarget "release\wgpu-sort-comparison-runner$executableSuffix"
 $repoRevision = (& git -c "safe.directory=$safeRepoRoot" -C $repoRoot rev-parse HEAD).Trim()
 $repoStatus = & git -c "safe.directory=$safeRepoRoot" -C $repoRoot status --porcelain
@@ -162,7 +162,7 @@ foreach ($itemCount in $Items) {
             for ($processIndex = 1; $processIndex -le $Processes; $processIndex++) {
                 $runs.Add((Invoke-Runner `
                     $primitivesExecutable `
-                    "wgpu-primitives-$packageVersion" `
+                    "lampshade-$packageVersion" `
                     $repoRevision `
                     $itemCount `
                     $workload `

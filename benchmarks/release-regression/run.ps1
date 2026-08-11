@@ -73,7 +73,7 @@ function Build-Runner {
 
 function Invoke-Runner {
     param(
-        [string]$Executable, [string]$Version, [string]$Revision,
+        [string]$Executable, [string]$Implementation, [string]$Version, [string]$Revision,
         [long]$ItemCount, [string]$Workload, [int]$Warmups,
         [long]$WarmupMs, [int]$Samples, [int]$ProcessIndex
     )
@@ -81,6 +81,7 @@ function Invoke-Runner {
         'WGPU_BACKEND', 'MASSIVELY_BENCH_ITEMS', 'MASSIVELY_BENCH_WORKLOAD',
         'MASSIVELY_BENCH_WARMUPS', 'MASSIVELY_BENCH_WARMUP_MS',
         'MASSIVELY_BENCH_SAMPLES', 'MASSIVELY_BENCH_PROCESS_INDEX',
+        'MASSIVELY_BENCH_IMPLEMENTATION_NAME',
         'MASSIVELY_BENCH_IMPLEMENTATION_VERSION', 'MASSIVELY_BENCH_IMPLEMENTATION_REVISION'
     )
     $previous = @{}
@@ -93,6 +94,7 @@ function Invoke-Runner {
         $env:MASSIVELY_BENCH_WARMUP_MS = [string]$WarmupMs
         $env:MASSIVELY_BENCH_SAMPLES = [string]$Samples
         $env:MASSIVELY_BENCH_PROCESS_INDEX = [string]$ProcessIndex
+        $env:MASSIVELY_BENCH_IMPLEMENTATION_NAME = $Implementation
         $env:MASSIVELY_BENCH_IMPLEMENTATION_VERSION = $Version
         $env:MASSIVELY_BENCH_IMPLEMENTATION_REVISION = $Revision
         $output = @(& $Executable 2>&1)
@@ -106,7 +108,7 @@ function Invoke-Runner {
     }
 }
 
-$candidateManifest = Join-Path $repoRoot 'benchmarks\massively-comparison\wgpu-primitives-runner\Cargo.toml'
+$candidateManifest = Join-Path $repoRoot 'benchmarks\massively-comparison\lampshade-runner\Cargo.toml'
 $baselineManifest = Join-Path $benchmarkRoot 'published-runner\Cargo.toml'
 $candidateTarget = Join-Path $targetRoot 'checkout'
 $baselineTarget = Join-Path $targetRoot 'published'
@@ -114,7 +116,7 @@ Build-Runner 'checkout runner' $candidateManifest $candidateTarget
 Build-Runner "crates.io $baselineVersion runner" $baselineManifest $baselineTarget
 
 $suffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-$candidateExecutable = Join-Path $candidateTarget "release\wgpu-primitives-massively-comparison-runner$suffix"
+$candidateExecutable = Join-Path $candidateTarget "release\lampshade-massively-comparison-runner$suffix"
 $baselineExecutable = Join-Path $baselineTarget "release\wgpu-primitives-release-baseline-runner$suffix"
 $revision = (& git -c "safe.directory=$safeRepoRoot" -C $repoRoot rev-parse HEAD).Trim()
 $dirty = @(& git -c "safe.directory=$safeRepoRoot" -C $repoRoot status --porcelain).Count -gt 0
@@ -122,7 +124,7 @@ $metadata = cargo metadata --no-deps --format-version 1 --manifest-path (Join-Pa
 $candidateVersion = $metadata.packages[0].version
 $sourceRoots = @(
     'Cargo.toml', 'src', 'benchmarks/massively-comparison/common',
-    'benchmarks/massively-comparison/wgpu-primitives-runner', 'benchmarks/release-regression'
+    'benchmarks/massively-comparison/lampshade-runner', 'benchmarks/release-regression'
 )
 [string[]]$sourcePaths = @(& git -c "safe.directory=$safeRepoRoot" -C $repoRoot ls-files --cached --others --exclude-standard -- @sourceRoots)
 [Array]::Sort($sourcePaths, [StringComparer]::Ordinal)
@@ -145,14 +147,14 @@ foreach ($itemCount in $Items) {
     foreach ($workload in $Workloads) {
         for ($processIndex = 1; $processIndex -le $Processes; $processIndex++) {
             $sources = @(
-                @{ Source = 'published'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion" },
-                @{ Source = 'checkout'; Executable = $candidateExecutable; Version = "working-tree-$candidateVersion"; Revision = $revision }
+                @{ Source = 'published'; Implementation = 'wgpu-primitives'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion" },
+                @{ Source = 'checkout'; Implementation = 'lampshade'; Executable = $candidateExecutable; Version = "working-tree-$candidateVersion"; Revision = $revision }
             )
             if ($processIndex % 2 -eq 0) { [array]::Reverse($sources) }
             foreach ($source in $sources) {
                 Write-Host "$($source.Source) $workload items=$itemCount process=$processIndex"
                 try {
-                    $result = Invoke-Runner $source.Executable $source.Version $source.Revision $itemCount $workload $sampling.Warmups $sampling.WarmupMs $sampling.Samples $processIndex
+                    $result = Invoke-Runner $source.Executable $source.Implementation $source.Version $source.Revision $itemCount $workload $sampling.Warmups $sampling.WarmupMs $sampling.Samples $processIndex
                     $runs.Add([pscustomobject][ordered]@{ source = $source.Source; result = $result })
                 }
                 catch {

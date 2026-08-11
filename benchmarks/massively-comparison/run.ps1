@@ -90,6 +90,7 @@ function Invoke-Runner {
         'MASSIVELY_BENCH_WARMUP_MS',
         'MASSIVELY_BENCH_SAMPLES',
         'MASSIVELY_BENCH_PROCESS_INDEX',
+        'MASSIVELY_BENCH_IMPLEMENTATION_NAME',
         'MASSIVELY_BENCH_IMPLEMENTATION_VERSION',
         'MASSIVELY_BENCH_IMPLEMENTATION_REVISION'
     )
@@ -106,6 +107,7 @@ function Invoke-Runner {
         $env:MASSIVELY_BENCH_WARMUP_MS = [string]$WarmupMs
         $env:MASSIVELY_BENCH_SAMPLES = [string]$Samples
         $env:MASSIVELY_BENCH_PROCESS_INDEX = [string]$ProcessIndex
+        $env:MASSIVELY_BENCH_IMPLEMENTATION_NAME = $Implementation
         $env:MASSIVELY_BENCH_IMPLEMENTATION_VERSION = $ImplementationVersion
         $env:MASSIVELY_BENCH_IMPLEMENTATION_REVISION = $ImplementationRevision
 
@@ -130,15 +132,15 @@ function Invoke-Runner {
     }
 }
 
-$primitivesManifest = Join-Path $benchmarkRoot 'wgpu-primitives-runner\Cargo.toml'
+$primitivesManifest = Join-Path $benchmarkRoot 'lampshade-runner\Cargo.toml'
 $massivelyManifest = Join-Path $benchmarkRoot 'massively-runner\Cargo.toml'
-$primitivesTarget = Join-Path $targetRoot 'wgpu-primitives'
+$primitivesTarget = Join-Path $targetRoot 'lampshade'
 $massivelyTarget = Join-Path $targetRoot 'massively'
-Build-Runner 'wgpu-primitives runner' $primitivesManifest $primitivesTarget
+Build-Runner 'Lampshade runner' $primitivesManifest $primitivesTarget
 Build-Runner 'Massively runner' $massivelyManifest $massivelyTarget
 
 $executableSuffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-$primitivesExecutable = Join-Path $primitivesTarget "release\wgpu-primitives-massively-comparison-runner$executableSuffix"
+$primitivesExecutable = Join-Path $primitivesTarget "release\lampshade-massively-comparison-runner$executableSuffix"
 $massivelyExecutable = Join-Path $massivelyTarget "release\massively-comparison-runner$executableSuffix"
 $repoRevision = (& git -c "safe.directory=$safeRepoRoot" -C $repoRoot rev-parse HEAD).Trim()
 $repoStatus = & git -c "safe.directory=$safeRepoRoot" -C $repoRoot status --porcelain
@@ -159,8 +161,8 @@ foreach ($itemCount in $Items) {
         for ($processIndex = 1; $processIndex -le $Processes; $processIndex++) {
             $implementations = @(
                 @{
-                    Name = 'wgpu-primitives'; Executable = $primitivesExecutable;
-                    Version = "wgpu-primitives-$packageVersion"; Revision = $repoRevision
+                    Name = 'lampshade'; Executable = $primitivesExecutable;
+                    Version = "lampshade-$packageVersion"; Revision = $repoRevision
                 },
                 @{
                     Name = 'massively'; Executable = $massivelyExecutable;
@@ -221,21 +223,21 @@ foreach ($group in $groups) {
 $comparisons = [System.Collections.Generic.List[object]]::new()
 $cases = $aggregates | Group-Object -Property { "$($_.workload)|$($_.items)" }
 foreach ($case in $cases) {
-    $primitives = $case.Group | Where-Object implementation -eq 'wgpu-primitives' | Select-Object -First 1
+    $primitives = $case.Group | Where-Object implementation -eq 'lampshade' | Select-Object -First 1
     $massively = $case.Group | Where-Object implementation -eq 'massively' | Select-Object -First 1
     if ($null -ne $primitives -and $null -ne $massively) {
         $comparisons.Add([pscustomobject][ordered]@{
             workload = $primitives.workload
             items = $primitives.items
-            wgpu_primitives_ms = $primitives.median_of_process_medians_ms
+            lampshade_ms = $primitives.median_of_process_medians_ms
             massively_ms = $massively.median_of_process_medians_ms
-            wgpu_primitives_speedup = $massively.median_of_process_medians_ms / $primitives.median_of_process_medians_ms
+            lampshade_speedup = $massively.median_of_process_medians_ms / $primitives.median_of_process_medians_ms
         })
     }
 }
 
 $result = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
     repository = [ordered]@{
         revision = $repoRevision; dirty = $repoDirty; package_version = $packageVersion
@@ -252,7 +254,7 @@ $result = [ordered]@{
     methodology = [ordered]@{
         timing = 'per-run public API boundary; reduction returns a host scalar, other workloads end at GPU completion'
         excluded = @('host upload', 'correctness validation', 'non-reduction readback')
-        allocation_difference = 'reduction includes each implementation''s scalar readback path; other wgpu-primitives workloads reuse caller-owned outputs while Massively returns owned outputs'
+        allocation_difference = 'reduction includes each implementation''s scalar readback path; other Lampshade workloads reuse caller-owned outputs while Massively returns owned outputs'
     }
     runs = $runs
     failures = $failures
@@ -267,7 +269,7 @@ $result | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $OutputPath
 Write-Host "`nComparison medians:"
 $comparisons |
     Sort-Object items, workload |
-    Format-Table workload, items, wgpu_primitives_ms, massively_ms, wgpu_primitives_speedup -AutoSize
+    Format-Table workload, items, lampshade_ms, massively_ms, lampshade_speedup -AutoSize
 if ($failures.Count -gt 0) {
     Write-Warning "$($failures.Count) run(s) failed; details are recorded in the result JSON."
 }

@@ -1,4 +1,4 @@
-use wgpu_primitives::{context::Context, sort::Sorter};
+use lampshade::{context::Context, sort::Sorter};
 
 fn main() {
     env_logger::init();

@@ -402,6 +402,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "lampshade"
+version = "0.8.0"
+dependencies = [
+ "bytemuck",
+ "futures",
+ "log",
+ "wgpu",
+]
+
+[[package]]
+name = "lampshade-particle-app"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "lampshade",
+ "pollster",
+ "serde",
+ "serde_json",
+ "wgpu",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1131,28 +1153,6 @@ checksum = "c9eaac644e5008925c78567d272b9d66ef83da55a53cc17fc7daade7bb6e66e5"
 dependencies = [
  "naga",
  "wgpu-types",
-]
-
-[[package]]
-name = "wgpu-primitives"
-version = "0.7.0"
-dependencies = [
- "bytemuck",
- "futures",
- "log",
- "wgpu",
-]
-
-[[package]]
-name = "wgpu-primitives-particle-app"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "pollster",
- "serde",
- "serde_json",
- "wgpu",
- "wgpu-primitives",
 ]
 
 [[package]]

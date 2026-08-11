@@ -3,8 +3,8 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Context, Scanner};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, Scanner};
 
 const SCAN_SEED: u64 = 0x5CA1;
 
