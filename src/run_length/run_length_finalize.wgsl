@@ -1,6 +1,10 @@
 @group(0) @binding(0) var<storage, read> input: array<u32>;
-@group(0) @binding(1) var<storage, read_write> heads: array<u32>;
+@group(0) @binding(1) var<storage, read_write> run_starts: array<u32>;
+@group(0) @binding(2) var<storage, read> offsets: array<u32>;
+@group(0) @binding(3) var<storage, read_write> unique_values: array<u32>;
+@group(0) @binding(4) var<storage, read_write> run_lengths: array<u32>;
 @group(0) @binding(5) var<storage, read> input_count: array<u32>;
+@group(0) @binding(6) var<storage, read_write> run_count: array<u32>;
 
 const BLOCK_SIZE: u32 = 256u;
 
@@ -20,24 +24,29 @@ fn item_index(group_id: vec3<u32>, local_id: vec3<u32>, groups_x: u32) -> u32 {
 }
 
 @compute @workgroup_size(BLOCK_SIZE)
-fn mark_heads(
+fn finalize_lengths(
     @builtin(workgroup_id) group_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
 ) {
     let index = item_index(group_id, local_id, num_workgroups.x);
-    if (index >= arrayLength(&input)) {
+    let count = active_items();
+    if (index >= count) {
         return;
     }
 
-    let count = active_items();
-    var is_head = 0u;
-    if (index < count) {
-        if (index == 0u) {
-            is_head = 1u;
-        } else if (input[index] != input[index - 1u]) {
-            is_head = 1u;
+    let is_head = index == 0u || input[index] != input[index - 1u];
+    if (is_head) {
+        unique_values[offsets[index]] = input[index];
+    }
+
+    let is_last = index == count - 1u;
+    let is_tail = is_last || input[index] != input[index + 1u];
+    if (is_tail) {
+        let run_index = offsets[index] + select(0u, 1u, is_head) - 1u;
+        run_lengths[run_index] = index + 1u - run_starts[run_index];
+        if (is_last) {
+            run_count[0] = run_index + 1u;
         }
     }
-    heads[index] = is_head;
 }

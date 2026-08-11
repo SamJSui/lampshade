@@ -128,6 +128,14 @@ pub async fn read_pod<T: bytemuck::Pod>(
     encoder.copy_buffer_to_buffer(buffer, 0, &staging, 0, size);
     let submission = context.queue.submit(Some(encoder.finish()));
 
+    context
+        .device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission.clone()),
+            timeout: None,
+        })
+        .expect("GPU test copy poll failed");
+
     let slice = staging.slice(..);
     let (sender, receiver) = oneshot::channel();
     slice.map_async(wgpu::MapMode::Read, move |result| {
@@ -136,7 +144,7 @@ pub async fn read_pod<T: bytemuck::Pod>(
     context
         .device
         .poll(wgpu::PollType::Wait {
-            submission_index: Some(submission),
+            submission_index: None,
             timeout: None,
         })
         .expect("GPU test poll failed");

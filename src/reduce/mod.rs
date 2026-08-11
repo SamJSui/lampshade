@@ -39,12 +39,4 @@ impl U32Reduction {
             Self::Max => "Maximum Reduction",
         }
     }
-
-    pub(crate) const fn identity_offset(self) -> u64 {
-        match self {
-            Self::Sum => 0,
-            Self::Min => 4,
-            Self::Max => 8,
-        }
-    }
 }

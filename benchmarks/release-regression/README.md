@@ -7,7 +7,7 @@ crates are not.
 This harness compares the current Lampshade checkout against its last published
 predecessor using the same deterministic inputs, public resident APIs,
 completion boundary, correctness checks, and process-median aggregation. The
-baseline runner depends on crates.io `wgpu-primitives = "=0.7.0"`; the
+baseline runner depends on crates.io `lampshade = "=0.8.0"`; the
 candidate runner depends on the Lampshade repository checkout.
 
 Quick build, correctness, and artifact validation (timings are informational):

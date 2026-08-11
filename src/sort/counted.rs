@@ -319,6 +319,7 @@ impl CountedSorter {
             pass_count,
             self.device.limits().min_uniform_buffer_offset_alignment,
         );
+        let mut bind_groups = Vec::with_capacity(pass_count as usize * 2);
         let (capacity_groups_x, capacity_groups_y) = dispatch_dimensions(problem.capacity_blocks);
 
         for radix_pass in 0..pass_count {
@@ -404,7 +405,10 @@ impl CountedSorter {
                     }
                 },
             );
+            bind_groups.push(reduce_bind_group);
+            bind_groups.push(scatter_bind_group);
         }
+        encoder.on_submitted_work_done(move || drop((bind_groups, uniform)));
         Ok(())
     }
 
@@ -592,6 +596,7 @@ impl CountedSortPipelines {
                 pass.dispatch_workgroups(1, 1, 1);
             },
         );
+        encoder.on_submitted_work_done(move || drop((bind_group, config)));
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -13,4 +13,4 @@ categories = ["algorithms", "graphics", "science"]
 include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-lampshade = { version = "0.8.0", path = "../.." }
+lampshade = "=0.8.0"

@@ -206,6 +206,14 @@ pub async fn download_buffer<T: bytemuck::Pod>(
 
     let index = queue.submit(Some(encoder.finish()));
 
+    // Finish the device-local copy before asking the backend to map the
+    // staging allocation. Some integrated Vulkan drivers otherwise expose a
+    // previously recycled staging allocation through the completed callback.
+    device.poll(wgpu::PollType::Wait {
+        submission_index: Some(index.clone()),
+        timeout: None,
+    })?;
+
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = oneshot::channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
@@ -213,7 +221,7 @@ pub async fn download_buffer<T: bytemuck::Pod>(
     });
 
     device.poll(wgpu::PollType::Wait {
-        submission_index: Some(index),
+        submission_index: None,
         timeout: None,
     })?;
 

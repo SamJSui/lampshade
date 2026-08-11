@@ -5,6 +5,8 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+## 0.9.0 - 2026-08-11
+
 ### Added
 
 - Adjacent `u32` run-length encoding with slice, immediate GPU-buffer,
@@ -16,15 +18,32 @@ the `wgpu-primitives` package name.
 
 ### Fixed
 
+- Keep transient bind groups, uniform buffers, and counted-reduction metadata
+  alive through submission instead of relying on backend handle retention.
+- Pool predicate parameters and counted-reduction metadata so multiple recorded
+  operations cannot overwrite state that an earlier submission still uses.
+- Complete staging-buffer copies before starting host mapping, fixing recycled
+  readback data observed across repeated Jetson Orin Vulkan calls.
+- Disable optional subgroup and timestamp-query features in the convenience
+  context on integrated NVIDIA Vulkan, where those configurations made
+  repeated compute/readback dispatches unreliable. Portable kernels remain
+  enabled.
+- Initialize zero reduction identities with buffer clears and copy the minimum
+  identity from offset zero, avoiding incorrect packed-source offsets on Orin.
 - Reject aliased scan input/output handles before command recording, including
   one-item copies and ranged internal scans.
 - Validate scan and predicate logical bindings against the device's effective
   storage-binding limit before creating bind groups.
+- Disable unreliable Apple Metal timestamp profiling in the convenience
+  context, and return a timestamp-result error instead of reporting a false
+  zero-duration span when a custom device leaves a query pair unwritten.
 - Require an actual Vulkan adapter for CI GPU tests instead of silently passing
   skipped integration coverage.
 
 ### Changed
 
+- Move the published-release regression baseline from the pre-rename
+  `wgpu-primitives` 0.7 package to the published `lampshade` 0.8 package.
 - Lazily initialize typed-facade primitives so construction and reservation
   prepare only the operations callers request.
 - Route fixed-length `u32` sorting on compatible discrete NVIDIA Vulkan
@@ -38,6 +57,11 @@ the `wgpu-primitives` package name.
 - The adapter-selected key-only path reduces full-width fixed-sort passes from
   sixteen 2-bit passes to four 8-bit passes. Exact RTX before/after evidence is
   recorded in `benchmarks/2026-08-11-key-only-sort.md`.
+- RLE now uses one dense bind group and separate mark, scatter, and finalize
+  stages. On the RTX release candidate, fixed 100M RLE measured 7.225 ms versus
+  8.036 ms in the original implementation report.
+- The complete crates.io 0.8 regression gate and four-adapter correctness
+  matrix are recorded in `benchmarks/2026-08-11-lampshade-0.9-release.md`.
 
 ## 0.8.0 - 2026-08-11
 

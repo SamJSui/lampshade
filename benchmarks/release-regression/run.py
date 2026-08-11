@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-BASELINE_VERSION = "0.7.0"
+BASELINE_VERSION = "0.8.0"
 DEFAULT_ITEMS = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_WORKLOADS = (
     "reduce_sum",
@@ -257,7 +257,7 @@ def main() -> int:
     build_runner(baseline_manifest, baseline_target)
     suffix = ".exe" if os.name == "nt" else ""
     candidate_executable = candidate_target / "release" / f"lampshade-massively-comparison-runner{suffix}"
-    baseline_executable = baseline_target / "release" / f"wgpu-primitives-release-baseline-runner{suffix}"
+    baseline_executable = baseline_target / "release" / f"lampshade-release-baseline-runner{suffix}"
     revision = command_output(
         ["git", "-c", f"safe.directory={repo_root}", "rev-parse", "HEAD"], repo_root
     )
@@ -277,7 +277,7 @@ def main() -> int:
         for workload in args.workloads:
             for process_index in range(1, args.processes + 1):
                 sources = [
-                    ("published", "wgpu-primitives", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}"),
+                    ("published", "lampshade", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}"),
                     ("checkout", "lampshade", candidate_executable, f"working-tree-{candidate_version}", revision),
                 ]
                 if process_index % 2 == 0:

@@ -279,6 +279,13 @@ impl EightBitSorter {
                 },
             );
         }
+        let keepalive = (
+            bindings._uniform.clone(),
+            bindings.histogram.clone(),
+            bindings.prefix.clone(),
+            bindings.scatter.clone(),
+        );
+        encoder.on_submitted_work_done(move || drop(keepalive));
         Ok(())
     }
 

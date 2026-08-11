@@ -584,8 +584,19 @@ impl Primitives {
     }
 
     fn run_length_encoder(&mut self) -> &mut RunLengthEncoder {
+        if self.run_length_encoder.is_none() {
+            self.run_length_encoder = Some(match &self.adapter_info {
+                Some(adapter_info) => RunLengthEncoder::from_context(&Context {
+                    adapter_info: adapter_info.clone(),
+                    device: self.device.clone(),
+                    queue: self.queue.clone(),
+                }),
+                None => RunLengthEncoder::new(&self.device, &self.queue),
+            });
+        }
         self.run_length_encoder
-            .get_or_insert_with(|| RunLengthEncoder::new(&self.device, &self.queue))
+            .as_mut()
+            .expect("run-length encoder is initialized")
     }
 
     fn key_value_compactor(&mut self) -> &mut KeyValueCompactor {

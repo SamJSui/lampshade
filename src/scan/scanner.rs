@@ -3,7 +3,7 @@ use crate::{
     Error, common,
     common::buffers::BufferRange,
     common::{runtime::CommandSession, runtime::ProfileSession, workspace::ReusableBuffer},
-    context::Context,
+    context::{Context, reliable_subgroup_scan},
     profiling::{GpuProfile, TimestampRecorder},
 };
 
@@ -32,9 +32,29 @@ pub struct Scanner {
 
 impl Scanner {
     /// Creates a scanner that submits work through an existing wgpu device and queue.
+    ///
+    /// Without adapter metadata this constructor selects the portable scan.
+    /// Use [`Self::new_for_adapter`] to enable a validated subgroup path.
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        Self::new_with_subgroups(device, queue, false)
+    }
+
+    /// Creates a scanner with adapter-aware subgroup routing.
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        Self::new_with_subgroups(device, queue, reliable_subgroup_scan(adapter_info))
+    }
+
+    fn new_with_subgroups(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        allow_subgroups: bool,
+    ) -> Self {
         Self {
-            pipeline: ScanPipeline::new(device),
+            pipeline: ScanPipeline::new(device, allow_subgroups),
             device: device.clone(),
             queue: queue.clone(),
             scratch: ReusableBuffer::default(),
@@ -43,7 +63,7 @@ impl Scanner {
 
     /// Creates a scanner from the crate's optional convenience context.
     pub fn from_context(ctx: &Context) -> Self {
-        Self::new(&ctx.device, &ctx.queue)
+        Self::new_for_adapter(&ctx.device, &ctx.queue, &ctx.adapter_info)
     }
 
     /// Uploads values, scans them on the GPU, and downloads the inclusive prefixes.
@@ -481,6 +501,27 @@ impl Scanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routes_integrated_nvidia_vulkan_scans_to_portable() {
+        let adapter = |vendor, device_type| {
+            let mut info = wgpu::AdapterInfo::new(device_type, wgpu::Backend::Vulkan);
+            info.vendor = vendor;
+            info
+        };
+        assert!(!reliable_subgroup_scan(&adapter(
+            0x10de,
+            wgpu::DeviceType::IntegratedGpu,
+        )));
+        assert!(reliable_subgroup_scan(&adapter(
+            0x10de,
+            wgpu::DeviceType::DiscreteGpu,
+        )));
+        assert!(reliable_subgroup_scan(&adapter(
+            0x8086,
+            wgpu::DeviceType::IntegratedGpu,
+        )));
+    }
 
     #[tokio::test]
     async fn ranged_scan_rejects_ranges_from_the_same_buffer() {

@@ -74,13 +74,6 @@ impl<'a> InputExtent<'a> {
         }
     }
 
-    const fn fixed_items(self) -> u32 {
-        match self {
-            Self::Fixed(items) => items,
-            Self::Counted { .. } => 0,
-        }
-    }
-
     const fn count(self) -> Option<BufferRange<'a>> {
         match self {
             Self::Fixed(_) => None,
@@ -117,7 +110,14 @@ impl RunLengthEncoder {
 
     /// Creates an encoder from the crate's optional convenience context.
     pub fn from_context(context: &Context) -> Self {
-        Self::new(&context.device, &context.queue)
+        Self {
+            pipeline: RunLengthPipeline::new(&context.device),
+            scanner: Scanner::from_context(context),
+            device: context.device.clone(),
+            queue: context.queue.clone(),
+            heads: ReusableBuffer::default(),
+            offsets: ReusableBuffer::default(),
+        }
     }
 
     /// Uploads values, encodes adjacent runs, and downloads values and lengths.
@@ -399,18 +399,18 @@ impl RunLengthEncoder {
             size: COUNT_SIZE_BYTES,
             ..range
         });
-        let fixed_items = extent.fixed_items();
-
-        self.pipeline.mark(
+        let bind_group = self.pipeline.create_bind_group(
             &self.device,
-            encoder,
             input,
             heads,
+            offsets,
+            unique_values,
+            run_lengths,
             input_count,
-            capacity,
-            fixed_items,
-            profiler.as_deref_mut(),
+            run_count,
         );
+        self.pipeline
+            .mark(encoder, &bind_group, capacity, profiler.as_deref_mut());
         match profiler.as_deref_mut() {
             Some(profiler) => self.scanner.record_profiled_exclusive_scan(
                 encoder,
@@ -427,31 +427,11 @@ impl RunLengthEncoder {
                 capacity,
             )?,
         }
-        self.pipeline.scatter(
-            &self.device,
-            encoder,
-            input,
-            heads,
-            offsets,
-            unique_values,
-            run_lengths,
-            input_count,
-            capacity,
-            fixed_items,
-            profiler.as_deref_mut(),
-        );
-        self.pipeline.finalize(
-            &self.device,
-            encoder,
-            heads,
-            offsets,
-            run_lengths,
-            input_count,
-            run_count,
-            capacity,
-            fixed_items,
-            profiler,
-        );
+        self.pipeline
+            .scatter(encoder, &bind_group, capacity, profiler.as_deref_mut());
+        self.pipeline
+            .finalize(encoder, &bind_group, capacity, profiler);
+        encoder.on_submitted_work_done(move || drop(bind_group));
         Ok(())
     }
 
