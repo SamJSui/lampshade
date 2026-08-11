@@ -278,7 +278,11 @@ impl Sorter {
 
     fn counted(&mut self) -> &mut CountedSorter {
         if self.counted.is_none() {
-            self.counted = Some(CountedSorter::new(&self.device, &self.queue));
+            self.counted = Some(CountedSorter::new(
+                &self.device,
+                &self.queue,
+                SortItemKind::Key,
+            ));
         }
         self.counted
             .as_mut()

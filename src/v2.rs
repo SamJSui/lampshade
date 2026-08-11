@@ -8,7 +8,8 @@
 use std::{marker::PhantomData, ops::Range};
 
 use crate::{
-    Compactor, Context, CountedSortDispatch, Error, GpuCountPlan, Reducer, Sorter, U32Reduction,
+    Compactor, Context, CountedSortDispatch, Error, GpuCountPlan, KeyValue, KeyValueCompactor,
+    KeyValueField, KeyValueSorter, MaskGenerator, Reducer, Sorter, U32Predicate, U32Reduction,
     common::buffers::BufferRange,
 };
 
@@ -16,6 +17,7 @@ mod sealed {
     pub trait Sealed {}
 
     impl Sealed for u32 {}
+    impl Sealed for crate::KeyValue {}
 }
 
 /// Element types supported by typed resident-buffer views.
@@ -28,6 +30,10 @@ pub trait GpuElement: sealed::Sealed + bytemuck::Pod {
 }
 
 impl GpuElement for u32 {
+    const SIZE_BYTES: u64 = size_of::<Self>() as u64;
+}
+
+impl GpuElement for KeyValue {
     const SIZE_BYTES: u64 = size_of::<Self>() as u64;
 }
 
@@ -272,7 +278,7 @@ impl Default for SortOptions {
     }
 }
 
-/// Capacity-dependent workspaces to allocate before command recording.
+/// Primitive pipelines and capacity-dependent workspaces to prepare before recording.
 ///
 /// Build only the operations a pipeline will use. Fixed and GPU-counted paths
 /// can require different scratch, so they are selected independently.
@@ -280,29 +286,49 @@ impl Default for SortOptions {
 #[must_use]
 pub struct WorkspaceRequirements {
     capacity: u32,
+    predicate: bool,
     compact: bool,
+    compact_key_values: bool,
     fixed_sort: bool,
     counted_sort: bool,
+    fixed_key_value_sort: bool,
+    counted_key_value_sort: bool,
     fixed_reduce: bool,
     counted_reduce: bool,
 }
 
 impl WorkspaceRequirements {
-    /// Starts a workspace request for at most `capacity` `u32` elements.
+    /// Starts a workspace request for at most `capacity` elements or records.
     pub const fn new(capacity: u32) -> Self {
         Self {
             capacity,
+            predicate: false,
             compact: false,
+            compact_key_values: false,
             fixed_sort: false,
             counted_sort: false,
+            fixed_key_value_sort: false,
+            counted_key_value_sort: false,
             fixed_reduce: false,
             counted_reduce: false,
         }
     }
 
+    /// Prepares predicate-mask pipelines.
+    pub const fn predicate(mut self) -> Self {
+        self.predicate = true;
+        self
+    }
+
     /// Reserves stream-compaction workspace.
     pub const fn compact(mut self) -> Self {
         self.compact = true;
+        self
+    }
+
+    /// Reserves key-value stream-compaction workspace.
+    pub const fn compact_key_values(mut self) -> Self {
+        self.compact_key_values = true;
         self
     }
 
@@ -315,6 +341,18 @@ impl WorkspaceRequirements {
     /// Reserves GPU-counted radix-sort workspace.
     pub const fn counted_sort(mut self) -> Self {
         self.counted_sort = true;
+        self
+    }
+
+    /// Reserves fixed-extent key-value radix-sort workspace.
+    pub const fn fixed_key_value_sort(mut self) -> Self {
+        self.fixed_key_value_sort = true;
+        self
+    }
+
+    /// Reserves GPU-counted key-value radix-sort workspace.
+    pub const fn counted_key_value_sort(mut self) -> Self {
+        self.counted_key_value_sort = true;
         self
     }
 
@@ -341,8 +379,13 @@ struct CachedCountPlan {
 /// Reusable primitive pipelines and workspace for recording resident commands.
 pub struct Primitives {
     device: wgpu::Device,
+    queue: wgpu::Queue,
+    adapter_info: Option<wgpu::AdapterInfo>,
+    generator: Option<MaskGenerator>,
     compactor: Compactor,
+    key_value_compactor: Option<KeyValueCompactor>,
     sorter: Sorter,
+    key_value_sorter: Option<KeyValueSorter>,
     reducer: Reducer,
     count_plans: Vec<CachedCountPlan>,
     prepared_count_plans: Vec<usize>,
@@ -353,8 +396,13 @@ impl Primitives {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             device: device.clone(),
+            queue: queue.clone(),
+            adapter_info: None,
+            generator: None,
             compactor: Compactor::new(device, queue),
+            key_value_compactor: None,
             sorter: Sorter::new(device, queue),
+            key_value_sorter: None,
             reducer: Reducer::new(device, queue),
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
@@ -363,24 +411,48 @@ impl Primitives {
 
     /// Creates the recorder from the crate's convenience context.
     pub fn from_context(context: &Context) -> Self {
-        Self::new(&context.device, &context.queue)
+        Self {
+            device: context.device.clone(),
+            queue: context.queue.clone(),
+            adapter_info: Some(context.adapter_info.clone()),
+            generator: None,
+            compactor: Compactor::from_context(context),
+            key_value_compactor: None,
+            sorter: Sorter::from_context(context),
+            key_value_sorter: None,
+            reducer: Reducer::from_context(context),
+            count_plans: Vec::new(),
+            prepared_count_plans: Vec::new(),
+        }
     }
 
-    /// Reserves the requested capacity-dependent GPU workspaces.
+    /// Prepares the requested pipelines and capacity-dependent GPU workspaces.
     ///
     /// This prevents workspace growth while recording operations up to
     /// `capacity`. Recording still creates lightweight bind groups and uniform
     /// buffers; this method is not an allocation-free-recording guarantee.
     pub fn reserve_workspace(&mut self, requirements: WorkspaceRequirements) -> Result<(), Error> {
         let capacity = requirements.capacity;
+        if requirements.predicate {
+            self.generator();
+        }
         if requirements.compact {
             self.compactor.reserve(capacity)?;
+        }
+        if requirements.compact_key_values {
+            self.key_value_compactor().reserve(capacity)?;
         }
         if requirements.fixed_sort {
             self.sorter.reserve_fixed(capacity)?;
         }
         if requirements.counted_sort {
             self.sorter.reserve_counted(capacity)?;
+        }
+        if requirements.fixed_key_value_sort {
+            self.key_value_sorter().reserve_fixed(capacity)?;
+        }
+        if requirements.counted_key_value_sort {
+            self.key_value_sorter().reserve_counted(capacity)?;
         }
         if requirements.fixed_reduce {
             self.reducer.reserve_fixed(capacity)?;
@@ -444,6 +516,44 @@ impl Primitives {
         });
         Ok(self.count_plans.len() - 1)
     }
+
+    fn generator(&mut self) -> &MaskGenerator {
+        self.generator
+            .get_or_insert_with(|| MaskGenerator::new(&self.device, &self.queue))
+    }
+
+    fn key_value_compactor(&mut self) -> &mut KeyValueCompactor {
+        if self.key_value_compactor.is_none() {
+            self.key_value_compactor = Some(match &self.adapter_info {
+                Some(adapter_info) => {
+                    let context = Context {
+                        adapter_info: adapter_info.clone(),
+                        device: self.device.clone(),
+                        queue: self.queue.clone(),
+                    };
+                    KeyValueCompactor::from_context(&context)
+                }
+                None => KeyValueCompactor::new(&self.device, &self.queue),
+            });
+        }
+        self.key_value_compactor
+            .as_mut()
+            .expect("key-value compactor is initialized")
+    }
+
+    fn key_value_sorter(&mut self) -> &mut KeyValueSorter {
+        if self.key_value_sorter.is_none() {
+            self.key_value_sorter = Some(match &self.adapter_info {
+                Some(adapter_info) => {
+                    KeyValueSorter::new_for_adapter(&self.device, &self.queue, adapter_info)
+                }
+                None => KeyValueSorter::new(&self.device, &self.queue),
+            });
+        }
+        self.key_value_sorter
+            .as_mut()
+            .expect("key-value sorter is initialized")
+    }
 }
 
 /// Ordered, recording-only access to resident GPU primitives.
@@ -456,6 +566,67 @@ pub struct Recorder<'primitives, 'encoder> {
 }
 
 impl Recorder<'_, '_> {
+    /// Tests a fixed-length `u32` slice and returns a same-length `0`/`1` mask.
+    pub fn mask<'a>(
+        &mut self,
+        input: GpuSlice<'a, u32>,
+        output: GpuSliceMut<'a, u32>,
+        predicate: U32Predicate,
+    ) -> Result<GpuSlice<'a, u32>, Error> {
+        let Extent::Fixed(num_items) = input.extent else {
+            return Err(Error::UnsupportedDynamicExtent {
+                operation: "predicate mask",
+            });
+        };
+        if output.capacity < num_items {
+            return Err(Error::BufferTooSmall {
+                name: "predicate mask output view",
+                required: u64::from(num_items) * size_of::<u32>() as u64,
+                actual: u64::from(output.capacity) * size_of::<u32>() as u64,
+            });
+        }
+        self.primitives.generator().record_mask_ranges(
+            self.encoder,
+            input.range(),
+            output.range(),
+            num_items,
+            predicate,
+        )?;
+        Ok(output.initialized(num_items, Extent::Fixed(num_items)))
+    }
+
+    /// Tests one field of fixed-length key-value records and returns a
+    /// same-length `0`/`1` mask.
+    pub fn mask_key_values<'a>(
+        &mut self,
+        input: GpuSlice<'a, KeyValue>,
+        output: GpuSliceMut<'a, u32>,
+        field: KeyValueField,
+        predicate: U32Predicate,
+    ) -> Result<GpuSlice<'a, u32>, Error> {
+        let Extent::Fixed(num_items) = input.extent else {
+            return Err(Error::UnsupportedDynamicExtent {
+                operation: "key-value predicate mask",
+            });
+        };
+        if output.capacity < num_items {
+            return Err(Error::BufferTooSmall {
+                name: "predicate mask output view",
+                required: u64::from(num_items) * size_of::<u32>() as u64,
+                actual: u64::from(output.capacity) * size_of::<u32>() as u64,
+            });
+        }
+        self.primitives.generator().record_key_value_mask_ranges(
+            self.encoder,
+            input.range(),
+            output.range(),
+            num_items,
+            field,
+            predicate,
+        )?;
+        Ok(output.initialized(num_items, Extent::Fixed(num_items)))
+    }
+
     /// Stably compacts a fixed-length input and returns a slice carrying the
     /// GPU-resident selected count.
     pub fn compact<'a>(
@@ -500,6 +671,52 @@ impl Recorder<'_, '_> {
         Ok(output.initialized(num_items, Extent::Gpu(count)))
     }
 
+    /// Stably compacts fixed-length key-value records and carries their
+    /// GPU-resident selected count into later operations.
+    pub fn compact_key_values<'a>(
+        &mut self,
+        input: GpuSlice<'a, KeyValue>,
+        mask: GpuSlice<'a, u32>,
+        output: GpuSliceMut<'a, KeyValue>,
+        count: GpuCount<'a>,
+    ) -> Result<GpuSlice<'a, KeyValue>, Error> {
+        let Extent::Fixed(num_items) = input.extent else {
+            return Err(Error::UnsupportedDynamicExtent {
+                operation: "key-value stream compaction",
+            });
+        };
+        let Extent::Fixed(mask_items) = mask.extent else {
+            return Err(Error::UnsupportedDynamicExtent {
+                operation: "key-value stream-compaction mask",
+            });
+        };
+        if num_items != mask_items {
+            return Err(Error::CompactionLengthMismatch {
+                input: num_items as usize,
+                mask: mask_items as usize,
+            });
+        }
+        if output.capacity < num_items {
+            return Err(Error::BufferTooSmall {
+                name: "key-value compaction output view",
+                required: u64::from(num_items) * size_of::<KeyValue>() as u64,
+                actual: u64::from(output.capacity) * size_of::<KeyValue>() as u64,
+            });
+        }
+        self.primitives
+            .key_value_compactor()
+            .record_compact_ranges(
+                self.encoder,
+                input.range(),
+                mask.range(),
+                output.range(),
+                count.range(),
+                num_items,
+            )?;
+        self.invalidate_count(count);
+        Ok(output.initialized(num_items, Extent::Gpu(count)))
+    }
+
     /// Stably sorts a fixed or GPU-counted `u32` slice.
     pub fn sort<'a>(
         &mut self,
@@ -532,6 +749,52 @@ impl Recorder<'_, '_> {
                     &plans[plan_index].plan,
                     options.key_bits,
                 )?;
+            }
+        }
+        Ok(output.initialized(input.capacity, input.extent))
+    }
+
+    /// Stably sorts fixed or GPU-counted key-value records by their `u32` key.
+    pub fn sort_by_key<'a>(
+        &mut self,
+        input: GpuSlice<'a, KeyValue>,
+        output: GpuSliceMut<'a, KeyValue>,
+        options: SortOptions,
+    ) -> Result<GpuSlice<'a, KeyValue>, Error> {
+        if output.capacity < input.capacity {
+            return Err(Error::BufferTooSmall {
+                name: "key-value sort output view",
+                required: u64::from(input.capacity) * size_of::<KeyValue>() as u64,
+                actual: u64::from(output.capacity) * size_of::<KeyValue>() as u64,
+            });
+        }
+        match input.extent {
+            Extent::Fixed(num_items) => {
+                self.primitives.key_value_sorter().record_sort_ranges(
+                    self.encoder,
+                    input.range(),
+                    output.range(),
+                    num_items,
+                    options.key_bits,
+                )?;
+            }
+            Extent::Gpu(count) => {
+                let plan_index = self.prepare_count(count, input.capacity)?;
+                self.primitives.key_value_sorter();
+                let (sorter, plans) = (
+                    &mut self.primitives.key_value_sorter,
+                    &self.primitives.count_plans,
+                );
+                sorter
+                    .as_mut()
+                    .expect("key-value sorter is initialized")
+                    .record_sort_ranges_with_count_plan(
+                        self.encoder,
+                        input.range(),
+                        output.range(),
+                        &plans[plan_index].plan,
+                        options.key_bits,
+                    )?;
             }
         }
         Ok(output.initialized(input.capacity, input.extent))

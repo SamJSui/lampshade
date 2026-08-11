@@ -14,7 +14,6 @@ async fn run() {
     let context = Context::init()
         .await
         .expect("failed to create wgpu context");
-    let generator = MaskGenerator::from_context(&context);
     let mut primitives = Primitives::from_context(&context);
 
     // The predicate determines the selected length at GPU execution time. The
@@ -67,7 +66,7 @@ async fn run() {
     });
 
     let input = GpuSlice::from_range(&input_buffer, 0..item_count).expect("invalid input view");
-    let mask = GpuSlice::from_range(&mask_buffer, 0..item_count).expect("invalid mask view");
+    let mask = GpuSliceMut::from_range(&mask_buffer, 0..item_count).expect("invalid mask view");
     let compacted = GpuSliceMut::from_range(&compacted_buffer, 0..item_count)
         .expect("invalid compaction output view");
     let sorted =
@@ -77,6 +76,7 @@ async fn run() {
     primitives
         .reserve_workspace(
             WorkspaceRequirements::new(item_count)
+                .predicate()
                 .compact()
                 .counted_sort()
                 .counted_reduce(),
@@ -91,17 +91,11 @@ async fn run() {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Predicate Compact Sort Reduce Pipeline"),
         });
-    generator
-        .record_mask(
-            &mut encoder,
-            &input_buffer,
-            &mask_buffer,
-            item_count,
-            U32Predicate::GreaterThanOrEqual(8),
-        )
-        .expect("failed to record predicate mask");
     {
         let mut recorder = primitives.record(&mut encoder);
+        let mask = recorder
+            .mask(input, mask, U32Predicate::GreaterThanOrEqual(8))
+            .expect("failed to record predicate mask");
         let compacted = recorder
             .compact(input, mask, compacted, selected_count)
             .expect("failed to record compaction");

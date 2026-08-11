@@ -170,8 +170,8 @@ impl RadixSorter {
             SortImplementation::ReduceScan(sorter) => {
                 sorter.record_sort_ranges(encoder, input, output, num_items, key_bits)
             }
-            SortImplementation::EightBit(_) => {
-                unreachable!("typed u32 views use the key-only reduce/scan sorter")
+            SortImplementation::EightBit(sorter) => {
+                sorter.record_sort_ranges(encoder, input, output, num_items, key_bits)
             }
         }
     }
@@ -179,7 +179,7 @@ impl RadixSorter {
     pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
         match &mut self.implementation {
             SortImplementation::ReduceScan(sorter) => sorter.reserve(capacity),
-            SortImplementation::EightBit(_) => Ok(()),
+            SortImplementation::EightBit(sorter) => sorter.reserve(capacity),
         }
     }
 }

@@ -84,15 +84,22 @@ reduction while preparing shared count metadata at most once per command
 stream. The views borrow caller-owned buffers; they do not own allocations or
 submit work.
 
+The application-shaped `particle_pipeline` example extends those views to the
+existing `KeyValue { key, value }` record. One recorder generates a depth mask,
+stably compacts selected records, and performs a stable GPU-counted sort without
+exposing the count to the CPU. This validates an array-of-structs key/payload
+path while leaving a separate-buffer layout out of the public API until a
+workload requires it.
+
 Ranges support aligned nonzero offsets, but one primitive still requires
 separate underlying handles for read and write roles. wgpu tracks writable
 storage use at buffer-handle granularity within a dispatch, so disjoint static
 bindings into one arena do not make simultaneous read/write use legal.
 `Primitives::reserve_workspace` takes explicit operation and extent-mode
-requirements, avoiding unused fixed/counting scratch, while `reserve_count`
-creates count-specific metadata before recording. Bind groups and small uniform
-buffers are still created during recording, so this is not yet an
-allocation-free command-plan API.
+requirements, preparing lazy pipelines while avoiding unused fixed/counting
+scratch. `reserve_count` creates count-specific metadata before recording.
+Bind groups and small uniform buffers are still created during recording, so
+this is not yet an allocation-free command-plan API.
 
 ### 3. Private runtime, workspace, and kernels
 
