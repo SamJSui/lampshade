@@ -2,6 +2,7 @@
 name = "lampshade"
 version = "0.8.0"
 edition = "2024"
+rust-version = "1.87.0"
 description = "Fast, composable GPU primitives for Rust applications using wgpu and WGSL."
 authors = ["samjsui"]
 license = "MIT"
@@ -75,4 +76,8 @@ harness = false
 
 [[bench]]
 name = "particle_pipeline"
+harness = false
+
+[[bench]]
+name = "run_length"
 harness = false

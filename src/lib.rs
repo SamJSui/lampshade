@@ -9,6 +9,7 @@ pub mod pipeline;
 pub mod predicate;
 pub mod profiling;
 pub mod reduce;
+pub mod run_length;
 pub mod scan;
 pub mod sort;
 #[deprecated(since = "0.8.0", note = "use `lampshade::pipeline` instead")]
@@ -22,5 +23,6 @@ pub use histogram::Histogram;
 pub use predicate::{KeyValueField, MaskGenerator, U32Predicate};
 pub use profiling::{GpuProfile, GpuTimestampSpan};
 pub use reduce::{Reducer, U32Reduction};
+pub use run_length::{RunLengthEncoder, RunLengthOutputBuffers};
 pub use scan::Scanner;
 pub use sort::{KeyValue, KeyValueSorter, Sorter};

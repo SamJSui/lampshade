@@ -17,7 +17,11 @@ older `lampshade::v2` path remains as a deprecated compatibility alias.
 - `Primitives` and `Recorder`: reusable pipelines/workspace plus ordered command
   recording. A count produced by compaction is prepared once and then shared by
   counted sort and reduction. Predicate generation, stable key/value
-  compaction, and stable GPU-counted key/value sorting use the same vocabulary.
+  compaction, stable GPU-counted key/value sorting, and fixed or counted
+  run-length encoding use the same vocabulary.
+- `RunLengthOutput`: unique-value and run-length views that share one
+  GPU-resident run count. The input may be unsorted; sorting first produces one
+  run per distinct key.
 - `reserve_workspace` and `reserve_count`: explicit pre-recording pipeline,
   workspace, and count-metadata creation. A `WorkspaceRequirements` builder
   selects only the operations and fixed/counting modes the command stream
@@ -32,6 +36,13 @@ buffer-handle level within a dispatch.
 The existing slice, raw-buffer, and explicit `GpuCountPlan` APIs remain intact.
 The typed layer is additive: callers can adopt it operation by operation while
 retaining direct wgpu control.
+
+Run-length output composes directly with counted primitives:
+
+```rust,ignore
+let encoded = recorder.run_length_encode(input, values, lengths, run_count)?;
+recorder.reduce(encoded.run_lengths, total, U32Reduction::Sum)?;
+```
 
 ## Key/payload decision
 

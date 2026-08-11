@@ -10,8 +10,8 @@ use std::{marker::PhantomData, ops::Range};
 
 use crate::{
     Compactor, Context, CountedSortDispatch, Error, GpuCountPlan, KeyValue, KeyValueCompactor,
-    KeyValueField, KeyValueSorter, MaskGenerator, Reducer, Sorter, U32Predicate, U32Reduction,
-    common::buffers::BufferRange,
+    KeyValueField, KeyValueSorter, MaskGenerator, Reducer, RunLengthEncoder, Sorter, U32Predicate,
+    U32Reduction, common::buffers::BufferRange, run_length::RunLengthOutputRanges,
 };
 
 mod sealed {
@@ -296,6 +296,7 @@ pub struct WorkspaceRequirements {
     counted_key_value_sort: bool,
     fixed_reduce: bool,
     counted_reduce: bool,
+    run_length_encode: bool,
 }
 
 impl WorkspaceRequirements {
@@ -312,6 +313,7 @@ impl WorkspaceRequirements {
             counted_key_value_sort: false,
             fixed_reduce: false,
             counted_reduce: false,
+            run_length_encode: false,
         }
     }
 
@@ -368,6 +370,12 @@ impl WorkspaceRequirements {
         self.counted_reduce = true;
         self
     }
+
+    /// Reserves run-length-encoding workspace.
+    pub const fn run_length_encode(mut self) -> Self {
+        self.run_length_encode = true;
+        self
+    }
 }
 
 struct CachedCountPlan {
@@ -383,11 +391,12 @@ pub struct Primitives {
     queue: wgpu::Queue,
     adapter_info: Option<wgpu::AdapterInfo>,
     generator: Option<MaskGenerator>,
-    compactor: Compactor,
+    compactor: Option<Compactor>,
     key_value_compactor: Option<KeyValueCompactor>,
-    sorter: Sorter,
+    sorter: Option<Sorter>,
     key_value_sorter: Option<KeyValueSorter>,
-    reducer: Reducer,
+    reducer: Option<Reducer>,
+    run_length_encoder: Option<RunLengthEncoder>,
     count_plans: Vec<CachedCountPlan>,
     prepared_count_plans: Vec<usize>,
 }
@@ -400,11 +409,12 @@ impl Primitives {
             queue: queue.clone(),
             adapter_info: None,
             generator: None,
-            compactor: Compactor::new(device, queue),
+            compactor: None,
             key_value_compactor: None,
-            sorter: Sorter::new(device, queue),
+            sorter: None,
             key_value_sorter: None,
-            reducer: Reducer::new(device, queue),
+            reducer: None,
+            run_length_encoder: None,
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
         }
@@ -422,21 +432,17 @@ impl Primitives {
         queue: &wgpu::Queue,
         adapter_info: &wgpu::AdapterInfo,
     ) -> Self {
-        let context = Context {
-            adapter_info: adapter_info.clone(),
-            device: device.clone(),
-            queue: queue.clone(),
-        };
         Self {
             device: device.clone(),
             queue: queue.clone(),
             adapter_info: Some(adapter_info.clone()),
             generator: None,
-            compactor: Compactor::from_context(&context),
+            compactor: None,
             key_value_compactor: None,
-            sorter: Sorter::from_context(&context),
+            sorter: None,
             key_value_sorter: None,
-            reducer: Reducer::from_context(&context),
+            reducer: None,
+            run_length_encoder: None,
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
         }
@@ -458,16 +464,16 @@ impl Primitives {
             self.generator();
         }
         if requirements.compact {
-            self.compactor.reserve(capacity)?;
+            self.compactor().reserve(capacity)?;
         }
         if requirements.compact_key_values {
             self.key_value_compactor().reserve(capacity)?;
         }
         if requirements.fixed_sort {
-            self.sorter.reserve_fixed(capacity)?;
+            self.sorter().reserve_fixed(capacity)?;
         }
         if requirements.counted_sort {
-            self.sorter.reserve_counted(capacity)?;
+            self.sorter().reserve_counted(capacity)?;
         }
         if requirements.fixed_key_value_sort {
             self.key_value_sorter().reserve_fixed(capacity)?;
@@ -476,10 +482,13 @@ impl Primitives {
             self.key_value_sorter().reserve_counted(capacity)?;
         }
         if requirements.fixed_reduce {
-            self.reducer.reserve_fixed(capacity)?;
+            self.reducer().reserve_fixed(capacity)?;
         }
         if requirements.counted_reduce {
-            self.reducer.reserve_counted(capacity)?;
+            self.reducer().reserve_counted(capacity)?;
+        }
+        if requirements.run_length_encode {
+            self.run_length_encoder().reserve(capacity)?;
         }
         Ok(())
     }
@@ -543,6 +552,42 @@ impl Primitives {
             .get_or_insert_with(|| MaskGenerator::new(&self.device, &self.queue))
     }
 
+    fn compactor(&mut self) -> &mut Compactor {
+        if self.compactor.is_none() {
+            self.compactor = Some(match &self.adapter_info {
+                Some(adapter_info) => Compactor::from_context(&Context {
+                    adapter_info: adapter_info.clone(),
+                    device: self.device.clone(),
+                    queue: self.queue.clone(),
+                }),
+                None => Compactor::new(&self.device, &self.queue),
+            });
+        }
+        self.compactor.as_mut().expect("compactor is initialized")
+    }
+
+    fn sorter(&mut self) -> &mut Sorter {
+        if self.sorter.is_none() {
+            self.sorter = Some(match &self.adapter_info {
+                Some(adapter_info) => {
+                    Sorter::new_for_adapter(&self.device, &self.queue, adapter_info)
+                }
+                None => Sorter::new(&self.device, &self.queue),
+            });
+        }
+        self.sorter.as_mut().expect("sorter is initialized")
+    }
+
+    fn reducer(&mut self) -> &mut Reducer {
+        self.reducer
+            .get_or_insert_with(|| Reducer::new(&self.device, &self.queue))
+    }
+
+    fn run_length_encoder(&mut self) -> &mut RunLengthEncoder {
+        self.run_length_encoder
+            .get_or_insert_with(|| RunLengthEncoder::new(&self.device, &self.queue))
+    }
+
     fn key_value_compactor(&mut self) -> &mut KeyValueCompactor {
         if self.key_value_compactor.is_none() {
             self.key_value_compactor = Some(match &self.adapter_info {
@@ -584,6 +629,15 @@ impl Primitives {
 pub struct Recorder<'primitives, 'encoder> {
     primitives: &'primitives mut Primitives,
     encoder: &'encoder mut wgpu::CommandEncoder,
+}
+
+/// GPU-counted unique values and their adjacent run lengths.
+#[derive(Clone, Copy)]
+pub struct RunLengthOutput<'a> {
+    /// One value for each adjacent input run.
+    pub unique_values: GpuSlice<'a, u32>,
+    /// The item count for each adjacent input run.
+    pub run_lengths: GpuSlice<'a, u32>,
 }
 
 impl Recorder<'_, '_> {
@@ -680,7 +734,7 @@ impl Recorder<'_, '_> {
                 actual: u64::from(output.capacity) * size_of::<u32>() as u64,
             });
         }
-        self.primitives.compactor.record_compact_ranges(
+        self.primitives.compactor().record_compact_ranges(
             self.encoder,
             input.range(),
             mask.range(),
@@ -738,6 +792,65 @@ impl Recorder<'_, '_> {
         Ok(output.initialized(num_items, Extent::Gpu(count)))
     }
 
+    /// Encodes adjacent equal values from a fixed or GPU-counted input.
+    ///
+    /// Both returned slices share `run_count` as their GPU-resident extent.
+    pub fn run_length_encode<'a>(
+        &mut self,
+        input: GpuSlice<'a, u32>,
+        unique_values: GpuSliceMut<'a, u32>,
+        run_lengths: GpuSliceMut<'a, u32>,
+        run_count: GpuCount<'a>,
+    ) -> Result<RunLengthOutput<'a>, Error> {
+        for (output, name) in [
+            (unique_values, "run-length unique-values output view"),
+            (run_lengths, "run-length lengths output view"),
+        ] {
+            if output.capacity < input.capacity {
+                return Err(Error::BufferTooSmall {
+                    name,
+                    required: u64::from(input.capacity) * size_of::<u32>() as u64,
+                    actual: u64::from(output.capacity) * size_of::<u32>() as u64,
+                });
+            }
+        }
+        match input.extent {
+            Extent::Fixed(num_items) => {
+                self.primitives.run_length_encoder().record_encode_ranges(
+                    self.encoder,
+                    input.range(),
+                    RunLengthOutputRanges {
+                        unique_values: unique_values.range(),
+                        run_lengths: run_lengths.range(),
+                        run_count: run_count.range(),
+                    },
+                    num_items,
+                )?;
+            }
+            Extent::Gpu(input_count) => {
+                self.primitives
+                    .run_length_encoder()
+                    .record_encode_counted_ranges(
+                        self.encoder,
+                        input.range(),
+                        input_count.range(),
+                        RunLengthOutputRanges {
+                            unique_values: unique_values.range(),
+                            run_lengths: run_lengths.range(),
+                            run_count: run_count.range(),
+                        },
+                        input.capacity,
+                    )?;
+            }
+        }
+        self.invalidate_count(run_count);
+        let extent = Extent::Gpu(run_count);
+        Ok(RunLengthOutput {
+            unique_values: unique_values.initialized(input.capacity, extent),
+            run_lengths: run_lengths.initialized(input.capacity, extent),
+        })
+    }
+
     /// Stably sorts a fixed or GPU-counted `u32` slice.
     pub fn sort<'a>(
         &mut self,
@@ -753,7 +866,7 @@ impl Recorder<'_, '_> {
             });
         }
         match input.extent {
-            Extent::Fixed(num_items) => self.primitives.sorter.record_sort_ranges(
+            Extent::Fixed(num_items) => self.primitives.sorter().record_sort_ranges(
                 self.encoder,
                 input.range(),
                 output.range(),
@@ -762,14 +875,18 @@ impl Recorder<'_, '_> {
             )?,
             Extent::Gpu(count) => {
                 let plan_index = self.prepare_count(count, input.capacity)?;
+                self.primitives.sorter();
                 let (sorter, plans) = (&mut self.primitives.sorter, &self.primitives.count_plans);
-                sorter.record_sort_ranges_with_count_plan(
-                    self.encoder,
-                    input.range(),
-                    output.range(),
-                    &plans[plan_index].plan,
-                    options.key_bits,
-                )?;
+                sorter
+                    .as_mut()
+                    .expect("sorter is initialized")
+                    .record_sort_ranges_with_count_plan(
+                        self.encoder,
+                        input.range(),
+                        output.range(),
+                        &plans[plan_index].plan,
+                        options.key_bits,
+                    )?;
             }
         }
         Ok(output.initialized(input.capacity, input.extent))
@@ -836,7 +953,7 @@ impl Recorder<'_, '_> {
             });
         }
         match input.extent {
-            Extent::Fixed(num_items) => self.primitives.reducer.record_reduce_ranges(
+            Extent::Fixed(num_items) => self.primitives.reducer().record_reduce_ranges(
                 self.encoder,
                 input.range(),
                 output.range(),
@@ -845,14 +962,18 @@ impl Recorder<'_, '_> {
             ),
             Extent::Gpu(count) => {
                 let plan_index = self.prepare_count(count, input.capacity)?;
+                self.primitives.reducer();
                 let (reducer, plans) = (&mut self.primitives.reducer, &self.primitives.count_plans);
-                reducer.record_reduce_ranges_with_count_plan(
-                    self.encoder,
-                    input.range(),
-                    output.range(),
-                    &plans[plan_index].plan,
-                    operation,
-                )
+                reducer
+                    .as_mut()
+                    .expect("reducer is initialized")
+                    .record_reduce_ranges_with_count_plan(
+                        self.encoder,
+                        input.range(),
+                        output.range(),
+                        &plans[plan_index].plan,
+                        operation,
+                    )
             }
         }
     }
