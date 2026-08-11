@@ -1,17 +1,19 @@
-use std::hint::black_box;
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::{
+    hint::black_box,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
+use lampshade::{Context, KeyValue, KeyValueSorter};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
 use wgpu_sort_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkMode, BenchmarkRun, GeneratorMetadata, LogicalInput,
-    MemoryEstimate, SCHEMA_VERSION, Workload, median, wgpu_primitives_eight_bit_memory,
+    MemoryEstimate, SCHEMA_VERSION, Workload, lampshade_eight_bit_memory, median,
 };
 
 fn main() {
     if let Err(error) = pollster::block_on(run()) {
-        eprintln!("wgpu-primitives comparison runner failed: {error}");
+        eprintln!("Lampshade comparison runner failed: {error}");
         std::process::exit(1);
     }
 }
@@ -114,7 +116,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let memory = memory_estimate(&context, config.items);
     let run = BenchmarkRun {
         schema_version: SCHEMA_VERSION,
-        implementation: "wgpu-primitives".into(),
+        implementation: "lampshade".into(),
         implementation_version: runtime_metadata(
             "WGPU_SORT_BENCH_IMPLEMENTATION_VERSION",
             "working-tree",
@@ -235,7 +237,7 @@ fn memory_estimate(context: &Context, items: u32) -> MemoryEstimate {
         && info.subgroup_max_size == 32
         && context.device.features().contains(wgpu::Features::SUBGROUP);
     if uses_eight_bit {
-        wgpu_primitives_eight_bit_memory(
+        lampshade_eight_bit_memory(
             items,
             u64::from(context.device.limits().min_uniform_buffer_offset_alignment),
         )

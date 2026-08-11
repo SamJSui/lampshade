@@ -3,10 +3,10 @@ mod support;
 use std::{hint::black_box, sync::mpsc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Compactor, Context, CountedSortDispatch, GpuCountPlan, Reducer, Sorter, U32Reduction,
 };
+use wgpu::util::DeviceExt;
 
 const DEFAULT_SELECTIVITIES: [u32; 3] = [10, 50, 90];
 

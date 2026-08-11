@@ -1,6 +1,6 @@
 # Massively comparison
 
-This harness compares the overlapping public GPU primitives in wgpu-primitives and
+This harness compares the overlapping public GPU primitives in Lampshade and
 [Massively 0.96.0](https://crates.io/crates/massively). The two implementations run in
 separate processes so dependency graphs, allocators, and GPU runtime state stay
 isolated. Both currently use wgpu 30. Massively is pinned exactly in
@@ -28,18 +28,18 @@ The primary measurement is resident public-API wall time through confirmed GPU c
 sort, scan, and compaction, host upload, readback, and correctness validation are excluded. The
 reduction boundary instead ends at the returned host scalar for both libraries, so its timed call
 includes the four-byte readback. This includes a real API difference:
-wgpu-primitives reuses caller-owned output and workspace buffers, while Massively's public APIs
+Lampshade reuses caller-owned output and workspace buffers, while Massively's public APIs
 return a newly allocated owned output on each call. CubeCL may satisfy that allocation from its
 cache after warmup. The JSON preserves this distinction instead of presenting the calls as
 identical kernel-only measurements.
 
 Each normal case warms for at least two seconds and four calls, then records 11 samples. A 100M
 case uses two warmups and seven samples. The published value is the median of three independent
-process medians. `wgpu_primitives_speedup` is `Massively time / wgpu-primitives time`, so values
-above `1.0x` favor wgpu-primitives.
+process medians. `lampshade_speedup` is `Massively time / Lampshade time`, so values
+above `1.0x` favor Lampshade.
 
 Setting `MASSIVELY_BENCH_PROFILE_REDUCTION_PHASES=1` when invoking the
-wgpu-primitives runner directly prints median allocation, encoding, submission,
+Lampshade runner directly prints median allocation, encoding, submission,
 mapping, completion-wait, and scalar-access times for per-call and reusable
 staging buffers. It also prints GPU timestamp totals. Normal runs are unchanged.
 

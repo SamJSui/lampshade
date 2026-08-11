@@ -1,6 +1,6 @@
 use criterion::{BenchmarkGroup, Throughput, measurement::WallTime};
+use lampshade::Context;
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use wgpu_primitives::Context;
 
 pub const INPUT_SIZES: [usize; 4] = [100_000, 1_000_000, 10_000_000, 100_000_000];
 

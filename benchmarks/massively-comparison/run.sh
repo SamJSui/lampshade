@@ -9,7 +9,7 @@ Options:
   --items CSV       Item counts (default: 1000000,10000000,100000000)
   --workloads CSV   reduce_sum,sort_bounded16,sort_full_width,exclusive_scan,compact_50
   --processes N     Independent processes, 1-20 (default: 3)
-  --backend NAME    wgpu-primitives backend (default: vulkan)
+  --backend NAME    Lampshade backend (default: vulkan)
   --output PATH     Aggregate JSON path
   --quick           All workloads at 1M, one process
   --help            Show this help
@@ -69,19 +69,19 @@ elif [ "${output_path#/}" = "$output_path" ]; then
     output_path=$repo_root/$output_path
 fi
 
-primitives_manifest=$benchmark_root/wgpu-primitives-runner/Cargo.toml
+primitives_manifest=$benchmark_root/lampshade-runner/Cargo.toml
 massively_manifest=$benchmark_root/massively-runner/Cargo.toml
-primitives_target=$target_root/wgpu-primitives
+primitives_target=$target_root/lampshade
 massively_target=$target_root/massively
 
-echo "Building wgpu-primitives runner..."
+echo "Building Lampshade runner..."
 CARGO_TARGET_DIR=$primitives_target cargo build --release --locked --manifest-path "$primitives_manifest"
 echo "Building Massively runner..."
 CARGO_TARGET_DIR=$massively_target cargo build --release --locked --manifest-path "$massively_manifest"
 
 executable_suffix=
 case "${OS:-}" in Windows_NT) executable_suffix=.exe ;; esac
-primitives_executable=$primitives_target/release/wgpu-primitives-massively-comparison-runner$executable_suffix
+primitives_executable=$primitives_target/release/lampshade-massively-comparison-runner$executable_suffix
 massively_executable=$massively_target/release/massively-comparison-runner$executable_suffix
 
 repo_revision=$(git -c "safe.directory=$repo_root" -C "$repo_root" rev-parse HEAD)
@@ -110,6 +110,7 @@ run_one() {
         MASSIVELY_BENCH_WARMUP_MS=$warmup_ms \
         MASSIVELY_BENCH_SAMPLES=$samples \
         MASSIVELY_BENCH_PROCESS_INDEX=$process_index \
+        MASSIVELY_BENCH_IMPLEMENTATION_NAME=$implementation \
         MASSIVELY_BENCH_IMPLEMENTATION_VERSION=$implementation_version \
         MASSIVELY_BENCH_IMPLEMENTATION_REVISION=$implementation_revision \
         "$executable" > "$runner_output" 2>&1
@@ -147,7 +148,7 @@ for item_count in $(csv_words "$items_csv"); do
         case "$workload" in reduce_sum|sort_bounded16|sort_full_width|exclusive_scan|compact_50) ;; *) echo "unsupported workload: $workload" >&2; exit 2 ;; esac
         process_index=1
         while [ "$process_index" -le "$processes" ]; do
-            run_one "$primitives_executable" wgpu-primitives "wgpu-primitives-$package_version" "$repo_revision" "$item_count" "$workload" "$warmups" "$warmup_ms" "$samples" "$process_index"
+            run_one "$primitives_executable" lampshade "lampshade-$package_version" "$repo_revision" "$item_count" "$workload" "$warmups" "$warmup_ms" "$samples" "$process_index"
             run_one "$massively_executable" massively 0.96.0 ef9de55190529be98203aca207edab9d560d312e "$item_count" "$workload" "$warmups" "$warmup_ms" "$samples" "$process_index"
             process_index=$((process_index + 1))
         done

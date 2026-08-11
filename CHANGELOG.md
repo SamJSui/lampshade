@@ -1,8 +1,9 @@
 # Changelog
 
-All notable changes to `wgpu-primitives` are documented here.
+All notable changes to Lampshade are documented here. Releases before 0.8 used
+the `wgpu-primitives` package name.
 
-## Unreleased
+## Unreleased - 0.8.0
 
 ### Added
 
@@ -20,20 +21,41 @@ All notable changes to `wgpu-primitives` are documented here.
   counted-sort scheduling.
 - An end-to-end Criterion comparison of one-submission GPU-counted composition
   against CPU count readback followed by fixed-length sort and reduction.
-- An experimental `v2` recording facade with typed `u32` buffer ranges,
-  CPU-fixed or GPU-resident extents, automatic shared-count preparation, and
-  operation-specific workspace and count-metadata reservation.
+- A stable `pipeline` recording API with typed `u32` and `KeyValue` buffer
+  ranges, CPU-fixed or GPU-resident extents, automatic shared-count
+  preparation, and operation-specific workspace and count-metadata
+  reservation.
 - Nonzero buffer-offset coverage for compaction, fixed and GPU-counted sort,
   and fixed and GPU-counted reduction, including alignment and alias errors.
-- A typed-recorder design note that keeps key/payload layout explicitly
-  unresolved until a downstream workload provides evidence.
+- Typed stable key/value predicate, compaction, and GPU-counted radix-sort
+  composition, including a particle-shaped example and repository-owned
+  crate-boundary validation application.
+- A typed-pipeline guide that records buffer ownership, layout scope, and the
+  correctness and performance evidence used for stabilization.
 
 ### Changed
 
+- The project is renamed from `wgpu-primitives` to `lampshade`. Package imports,
+  repository metadata, examples, validation, and active benchmark harnesses use
+  the new name; kernels and public behavior are unchanged.
 - The resident pipeline example now uses the compactor's actual GPU-produced
   count through the typed recorder for downstream sort and reduction instead
   of manual count-plan ordering or a CPU-known selected length.
+- The former `v2` namespace remains as a deprecated compatibility alias for
+  `pipeline`; existing raw-buffer and explicit-plan APIs remain unchanged.
+- The obsolete `wgpu-algorithms` forwarding package is discontinued. A final,
+  frozen `wgpu-primitives` 0.8 compatibility package reexports Lampshade and
+  directs consumers to the new crate.
 - The published-release regression baseline now targets crates.io 0.7.0.
+
+### Performance
+
+- The typed-pipeline 0.7-versus-0.8 fixed-path gate passed all 15 workload/size rows.
+  Eleven passed the initial three-process matrix; four noisy rows passed
+  nine-process targeted rechecks between -0.96% and +1.03%.
+- The final Lampshade source passed 14 of 15 rows initially; the sole 10M
+  reduction miss passed a nine-process recheck at +1.62%. All 100M changes
+  remained between -0.56% and +0.38%.
 
 ## 0.7.0 - 2026-08-09
 

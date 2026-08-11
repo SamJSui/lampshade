@@ -1,15 +1,15 @@
 [package]
-name = "wgpu-algorithms"
-version = "0.6.0"
+name = "wgpu-primitives"
+version = "0.8.0"
 edition = "2024"
-description = "Deprecated compatibility package for wgpu-primitives."
+description = "Deprecated compatibility package for Lampshade."
 authors = ["samjsui"]
 license = "MIT"
-repository = "https://github.com/samjsui/wgpu-primitives"
+repository = "https://github.com/samjsui/lampshade"
 readme = "README.md"
 keywords = ["gpgpu", "wgpu", "sort", "scan", "compute"]
 categories = ["algorithms", "graphics", "science"]
 include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-wgpu-primitives = { version = "0.7.0", path = "../.." }
+lampshade = { version = "0.8.0", path = "../.." }

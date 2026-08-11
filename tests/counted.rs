@@ -1,10 +1,10 @@
 mod support;
 
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Compactor, CountedSortDispatch, Error, GpuCountPlan, MaskGenerator, Reducer, Sorter,
     U32Predicate, U32Reduction,
 };
+use wgpu::util::DeviceExt;
 
 #[tokio::test]
 async fn gpu_count_drives_sort_and_reduction_across_boundaries() {

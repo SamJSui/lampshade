@@ -402,6 +402,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "lampshade"
+version = "0.8.0"
+dependencies = [
+ "bytemuck",
+ "futures",
+ "log",
+ "wgpu",
+]
+
+[[package]]
+name = "lampshade-massively-comparison-runner"
+version = "0.0.0"
+dependencies = [
+ "bytemuck",
+ "lampshade",
+ "massively-benchmark-common",
+ "pollster",
+ "serde_json",
+ "wgpu",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -658,9 +680,9 @@ checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
 
 [[package]]
 name = "portable-atomic"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d20d5497ef88037a52ff98267d066e7f11fcc5e99bbfbd58a42336193aacec3"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "portable-atomic-util"
@@ -1138,28 +1160,6 @@ checksum = "c9eaac644e5008925c78567d272b9d66ef83da55a53cc17fc7daade7bb6e66e5"
 dependencies = [
  "naga",
  "wgpu-types",
-]
-
-[[package]]
-name = "wgpu-primitives"
-version = "0.7.0"
-dependencies = [
- "bytemuck",
- "futures",
- "log",
- "wgpu",
-]
-
-[[package]]
-name = "wgpu-primitives-massively-comparison-runner"
-version = "0.0.0"
-dependencies = [
- "bytemuck",
- "massively-benchmark-common",
- "pollster",
- "serde_json",
- "wgpu",
- "wgpu-primitives",
 ]
 
 [[package]]

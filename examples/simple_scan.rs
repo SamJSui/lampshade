@@ -1,4 +1,4 @@
-use wgpu_primitives::{context::Context, scan::Scanner};
+use lampshade::{context::Context, scan::Scanner};
 
 fn main() {
     env_logger::init();

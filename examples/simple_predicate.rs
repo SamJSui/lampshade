@@ -1,4 +1,4 @@
-use wgpu_primitives::{Compactor, Context, MaskGenerator, U32Predicate};
+use lampshade::{Compactor, Context, MaskGenerator, U32Predicate};
 
 fn main() {
     env_logger::init();

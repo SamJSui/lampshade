@@ -1,4 +1,4 @@
-use wgpu_primitives::{Compactor, Context};
+use lampshade::{Compactor, Context};
 
 fn main() {
     env_logger::init();

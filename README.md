@@ -1,13 +1,13 @@
-# wgpu-primitives
+# Lampshade
 
-[![CI](https://github.com/samjsui/wgpu-primitives/actions/workflows/ci.yml/badge.svg)](https://github.com/samjsui/wgpu-primitives/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/wgpu-primitives.svg)](https://crates.io/crates/wgpu-primitives)
-[![Docs.rs](https://docs.rs/wgpu-primitives/badge.svg)](https://docs.rs/wgpu-primitives)
+[![CI](https://github.com/samjsui/lampshade/actions/workflows/ci.yml/badge.svg)](https://github.com/samjsui/lampshade/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/lampshade.svg)](https://crates.io/crates/lampshade)
+[![Docs.rs](https://docs.rs/lampshade/badge.svg)](https://docs.rs/lampshade)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Fast, composable GPU histograms, reduction, predicate masks, prefix scan,
-stream compaction, and unsigned integer radix sort for Rust applications using
-wgpu.
+Lampshade provides fast, composable GPU histograms, reduction, predicate masks,
+prefix scan, stream compaction, and unsigned integer radix sort for Rust
+applications using wgpu and WGSL.
 
 ## Benchmarks
 
@@ -20,16 +20,20 @@ comparisons are medians of independent process medians.
 The [published-release regression harness](benchmarks/release-regression/README.md)
 runs identical resident workloads against crates.io 0.7 and the current checkout,
 writes raw runs and process medians to JSON, and enforces a 2% regression budget.
+The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
+records the final fixed-path gate and targeted rechecks.
+The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
+verifies the renamed final source against the published 0.7 predecessor.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
 
 ### Against Massively 0.96
 
-On an RTX 4070 Ti SUPER using Vulkan, `wgpu-primitives` was faster in every
+On an RTX 4070 Ti SUPER using Vulkan, Lampshade was faster in every
 overlapping 100-million-item workload:
 
-| Workload | `wgpu-primitives` | Massively | Speedup |
+| Workload | Lampshade | Massively | Speedup |
 | --- | ---: | ---: | ---: |
 | Stable sort, 16-bit keys | 7.961 ms | 167.915 ms | 21.09x |
 | Stable sort, full-width keys | 14.559 ms | 168.132 ms | 11.55x |
@@ -37,7 +41,7 @@ overlapping 100-million-item workload:
 | Stable compaction, 50% selected | 3.717 ms | 5.662 ms | 1.52x |
 | Wrapping sum reduction | 0.714 ms | 1.388 ms | 1.94x |
 
-The same comparison at 10 million items also favored `wgpu-primitives` on two
+The same comparison at 10 million items also favored Lampshade on two
 Jetson Orin Nano systems:
 
 | Workload | RTX 4070 Ti SUPER | Jetson, 8 TPC | Jetson, 4 TPC |
@@ -54,10 +58,10 @@ revisions, complete matrices, and machine-readable results.
 ### Intel Vulkan
 
 On Intel Alder Lake-N integrated graphics at 10 million items,
-`wgpu-primitives` led Massively in every workload. Sort uses the
+Lampshade led Massively in every workload. Sort uses the
 capability-gated 4-bit radix path; reduction uses the portable kernel:
 
-| Workload | `wgpu-primitives` | Massively | Speedup |
+| Workload | Lampshade | Massively | Speedup |
 | --- | ---: | ---: | ---: |
 | Stable sort, 16-bit keys | 129.879 ms | 562.704 ms | 4.33x |
 | Stable sort, full-width keys | 262.103 ms | 587.898 ms | 2.24x |
@@ -77,7 +81,7 @@ Upgrading from wgpu 28 to wgpu 30 removed the previous host-returning reduction
 deficit on an M3 Pro. These are final-candidate medians of three independent
 process medians:
 
-| Items | `wgpu-primitives` | Massively | Speedup |
+| Items | Lampshade | Massively | Speedup |
 | ---: | ---: | ---: | ---: |
 | 1M | 0.171 ms | 0.749 ms | 4.37x |
 | 10M | 0.479 ms | 0.844 ms | 1.76x |
@@ -96,7 +100,7 @@ release GPU tests and every 100M benchmark validator pass on the M3 Pro. See the
 
 On the tested NVIDIA Vulkan system at 100 million key/value pairs:
 
-| Key width | `wgpu-primitives` | `wgpu_sort` | Speedup |
+| Key width | Lampshade | `wgpu_sort` | Speedup |
 | ---: | ---: | ---: | ---: |
 | 16 bits | 8.605 ms | 14.884 ms | 1.73x |
 | 32 bits | 15.457 ms | 15.907 ms | 1.03x |
@@ -116,35 +120,41 @@ the pinned baseline and reproduction harness.
 - Slice APIs for simple upload/execute/readback workflows.
 - GPU-buffer APIs for composing work in one command encoder.
 - Capacity-bounded sort and reduction driven by GPU-resident item counts.
-- Experimental typed buffer views and an ordered recorder that prepares shared
+- Typed buffer views and an ordered `pipeline` recorder that prepares shared
   GPU-count metadata automatically.
 - Reusable scratch storage and no `unsafe` blocks in library code.
 
+The measurements above were collected under the former `wgpu-primitives`
+package name. The 0.8 rebrand changes package/import names but not kernels or
+timing boundaries.
+
 ## Installation
 
-Published version 0.7 contains histogram and reduction and uses wgpu 30. Tokio
-is listed because the executable quick start below uses `#[tokio::main]`;
-library development dependencies do not propagate to applications.
+Lampshade 0.8 is currently an unpublished release candidate. To validate this
+checkout before publication, use a local path dependency. Tokio is listed
+because the executable quick start below uses `#[tokio::main]`; library
+development dependencies do not propagate to applications.
 
 ```toml
 [dependencies]
-wgpu-primitives = "0.7"
+lampshade = { path = "../lampshade" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-Because wgpu types appear in the public GPU-buffer APIs, upgrading from 0.5 also
-requires upgrading the application's wgpu dependency. The package continues
-the crate previously published as `wgpu-algorithms`.
+The latest published predecessor remains `wgpu-primitives = "0.7"`. After
+Lampshade 0.8 is published, replace the path dependency with
+`lampshade = "0.8"`. Because wgpu types appear in the public GPU-buffer APIs,
+upgrading from versions before 0.6 also requires wgpu 30.
 
 ## Quick start
 
 ```rust
-use wgpu_primitives::{
+use lampshade::{
     Compactor, Context, MaskGenerator, Reducer, Scanner, Sorter, U32Predicate,
 };
 
 #[tokio::main]
-async fn main() -> Result<(), wgpu_primitives::Error> {
+async fn main() -> Result<(), lampshade::Error> {
     let context = Context::init().await?;
     let generator = MaskGenerator::from_context(&context);
     let mut reducer = Reducer::from_context(&context);
@@ -173,21 +183,24 @@ final readback.
 
 ## GPU-resident composition
 
+The `pipeline` API below is part of the current Lampshade 0.8 release candidate
+and is not present in the published `wgpu-primitives` 0.7 predecessor.
+
 Applications that already own a wgpu device should reuse it and record multiple
-primitives before submitting once. The experimental `v2` facade carries buffer
+primitives before submitting once. The stable `pipeline` API carries buffer
 ranges, capacities, and fixed or GPU-resident extents between operations:
 
 ```rust,ignore
-let mut primitives = v2::Primitives::new(&device, &queue);
-let input_view = v2::GpuSlice::from_range(&input_buffer, 0..item_count)?;
-let mask_output = v2::GpuSliceMut::from_range(&mask_buffer, 0..item_count)?;
-let compacted = v2::GpuSliceMut::from_range(&compacted_buffer, 0..item_count)?;
-let sorted = v2::GpuSliceMut::from_range(&sorted_buffer, 0..item_count)?;
-let sum = v2::GpuSliceMut::from_range(&sum_buffer, 0..1)?;
-let count = v2::GpuCount::new(&output_count)?;
+let mut primitives = pipeline::Primitives::new(&device, &queue);
+let input_view = pipeline::GpuSlice::from_range(&input_buffer, 0..item_count)?;
+let mask_output = pipeline::GpuSliceMut::from_range(&mask_buffer, 0..item_count)?;
+let compacted = pipeline::GpuSliceMut::from_range(&compacted_buffer, 0..item_count)?;
+let sorted = pipeline::GpuSliceMut::from_range(&sorted_buffer, 0..item_count)?;
+let sum = pipeline::GpuSliceMut::from_range(&sum_buffer, 0..1)?;
+let count = pipeline::GpuCount::new(&output_count)?;
 
 primitives.reserve_workspace(
-    v2::WorkspaceRequirements::new(item_count)
+    pipeline::WorkspaceRequirements::new(item_count)
         .predicate()
         .compact()
         .counted_sort()
@@ -202,7 +215,7 @@ let mask = recorder.mask(
     U32Predicate::GreaterThanOrEqual(10),
 )?;
 let compacted = recorder.compact(input_view, mask, compacted, count)?;
-let sorted = recorder.sort(compacted, sorted, v2::SortOptions::default())?;
+let sorted = recorder.sort(compacted, sorted, pipeline::SortOptions::default())?;
 recorder.reduce(sorted, sum, U32Reduction::Sum)?;
 drop(recorder);
 queue.submit(Some(encoder.finish()));
@@ -240,19 +253,19 @@ inspect GPU data.
 Masks must contain only `0` or `1`; declared key-width bounds must contain every
 key. Primitive participants that read and write must use distinct buffer handles.
 Full usage requirements are documented on each API
-at [docs.rs](https://docs.rs/wgpu-primitives).
+at [docs.rs](https://docs.rs/lampshade).
 
 Applications that own the adapter as well as the device should construct the
 facade with `Primitives::new_for_adapter(&device, &queue, &adapter_info)` so
 measured hardware-specific paths remain available. The
-[repository-only standalone consumer](https://github.com/samjsui/wgpu-primitives/tree/main/validation/particle-app)
+[repository-only standalone consumer](https://github.com/samjsui/lampshade/tree/main/validation/particle-app)
 validates this public API boundary and records typed-versus-raw overhead on
 discrete NVIDIA and integrated Intel GPUs.
 
 See the [architecture guide](docs/architecture.md) for the public convenience,
 resident composition, and private kernel/runtime layers. The
-[typed-recorder note](docs/v2-api.md) records the experiment's current evidence
-and remaining promotion gates.
+[typed-pipeline guide](docs/typed-pipeline.md) records the API contract and
+stabilization evidence.
 
 ## How it works
 

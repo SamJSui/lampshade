@@ -1,7 +1,7 @@
 mod support;
 
+use lampshade::{Error, KeyValue, KeyValueSorter};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Error, KeyValue, KeyValueSorter};
 
 const SORT_SIZES: [usize; 18] = [
     0, 1, 2, 31, 32, 33, 127, 128, 129, 511, 512, 513, 2_047, 2_048, 2_049, 4_097, 65_537, 17,

@@ -1,13 +1,13 @@
 [package]
-name = "wgpu-primitives-massively-comparison-runner"
+name = "lampshade-massively-comparison-runner"
 version = "0.0.0"
 edition = "2024"
 publish = false
 
 [dependencies]
 bytemuck = "1.24"
+lampshade = { path = "../../.." }
 massively-benchmark-common = { path = "../common" }
 pollster = "0.4"
 serde_json = "1"
 wgpu = "30.0.0"
-wgpu-primitives = { path = "../../.." }

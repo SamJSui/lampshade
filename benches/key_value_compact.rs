@@ -3,8 +3,8 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Context, KeyValue, KeyValueCompactor};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, KeyValue, KeyValueCompactor};
 
 const SELECTIVITY_PERCENTAGES: [u32; 5] = [0, 10, 50, 90, 100];
 

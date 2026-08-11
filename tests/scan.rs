@@ -1,7 +1,7 @@
 mod support;
 
+use lampshade::{Error, Scanner};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Error, Scanner};
 
 const SCAN_SIZES: [usize; 20] = [
     0, 1, 2, 31, 32, 33, 127, 128, 129, 511, 512, 513, 1_023, 1_024, 1_025, 2_047, 2_048, 2_049,

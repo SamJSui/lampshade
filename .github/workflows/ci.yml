@@ -41,21 +41,21 @@ jobs:
       - name: Check pinned wgpu_sort comparison harness
         run: |
           cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml -- --check
-          cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.toml -- --check
+          cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/lampshade-runner/Cargo.toml -- --check
           cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.toml -- --check
           cargo test --locked --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml
           cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml -- -D warnings
-          cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.toml -- -D warnings
+          cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/lampshade-runner/Cargo.toml -- -D warnings
           cargo clippy --locked --manifest-path benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.toml -- -D warnings
       - name: Check pinned Massively comparison harness
         run: |
           cargo fmt --manifest-path benchmarks/massively-comparison/common/Cargo.toml -- --check
-          cargo fmt --manifest-path benchmarks/massively-comparison/wgpu-primitives-runner/Cargo.toml -- --check
+          cargo fmt --manifest-path benchmarks/massively-comparison/lampshade-runner/Cargo.toml -- --check
           cargo fmt --manifest-path benchmarks/massively-comparison/massively-runner/Cargo.toml -- --check
           cargo test --locked --manifest-path benchmarks/massively-comparison/common/Cargo.toml
           python3 -m unittest discover -s benchmarks/massively-comparison -p test_aggregate.py
           cargo clippy --locked --manifest-path benchmarks/massively-comparison/common/Cargo.toml -- -D warnings
-          cargo clippy --locked --manifest-path benchmarks/massively-comparison/wgpu-primitives-runner/Cargo.toml -- -D warnings
+          cargo clippy --locked --manifest-path benchmarks/massively-comparison/lampshade-runner/Cargo.toml -- -D warnings
           cargo clippy --locked --manifest-path benchmarks/massively-comparison/massively-runner/Cargo.toml -- -D warnings
       - name: Check published-release regression harness
         run: |
@@ -67,9 +67,9 @@ jobs:
         run: cargo test --doc
       - name: Verify package contents
         run: cargo package
-      - name: Check deprecated compatibility package
+      - name: Check final wgpu-primitives compatibility package
         run: |
-          cargo fmt --manifest-path compat/wgpu-algorithms/Cargo.toml -- --check
-          cargo clippy --manifest-path compat/wgpu-algorithms/Cargo.toml -- -D warnings
+          cargo fmt --manifest-path compat/wgpu-primitives/Cargo.toml -- --check
+          cargo clippy --manifest-path compat/wgpu-primitives/Cargo.toml -- -D warnings
       - name: List compatibility package contents
-        run: cargo package --list --manifest-path compat/wgpu-algorithms/Cargo.toml
+        run: cargo package --list --manifest-path compat/wgpu-primitives/Cargo.toml

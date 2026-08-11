@@ -3,8 +3,8 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Context, Reducer, U32Reduction};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, Reducer, U32Reduction};
 
 const REDUCTION_SEED: u64 = 0x005E_D0CE;
 

@@ -26,18 +26,18 @@ class AggregateTests(unittest.TestCase):
     def test_aggregate_and_speedup_use_process_medians(self) -> None:
         aggregates = aggregate_runs(
             [
-                run("wgpu-primitives", 1, 2.0),
+                run("lampshade", 1, 2.0),
                 run("massively", 1, 6.0),
-                run("wgpu-primitives", 2, 1.0),
+                run("lampshade", 2, 1.0),
                 run("massively", 2, 4.0),
-                run("wgpu-primitives", 3, 3.0),
+                run("lampshade", 3, 3.0),
                 run("massively", 3, 5.0),
             ]
         )
         comparison = comparisons(aggregates)[0]
-        self.assertEqual(comparison["wgpu_primitives_ms"], 2.0)
+        self.assertEqual(comparison["lampshade_ms"], 2.0)
         self.assertEqual(comparison["massively_ms"], 5.0)
-        self.assertEqual(comparison["wgpu_primitives_speedup"], 2.5)
+        self.assertEqual(comparison["lampshade_speedup"], 2.5)
 
     def test_load_failures_preserves_case_and_error_output(self) -> None:
         with TemporaryDirectory() as temp_directory:

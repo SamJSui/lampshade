@@ -111,12 +111,12 @@ elif [ "${output_path#/}" = "$output_path" ]; then
     output_path=$repo_root/$output_path
 fi
 
-primitives_manifest=$benchmark_root/wgpu-primitives-runner/Cargo.toml
+primitives_manifest=$benchmark_root/lampshade-runner/Cargo.toml
 comparison_manifest=$benchmark_root/wgpu-sort-runner/Cargo.toml
-primitives_target=$target_root/wgpu-primitives
+primitives_target=$target_root/lampshade
 comparison_target=$target_root/wgpu-sort
 
-echo "Building wgpu-primitives runner..."
+echo "Building Lampshade runner..."
 CARGO_TARGET_DIR=$primitives_target cargo build --release --locked --manifest-path "$primitives_manifest"
 echo "Building wgpu_sort runner..."
 CARGO_TARGET_DIR=$comparison_target cargo build --release --locked --manifest-path "$comparison_manifest"
@@ -125,7 +125,7 @@ executable_suffix=
 case "${OS:-}" in
     Windows_NT) executable_suffix=.exe ;;
 esac
-primitives_executable=$primitives_target/release/wgpu-primitives-comparison-runner$executable_suffix
+primitives_executable=$primitives_target/release/lampshade-wgpu-sort-comparison-runner$executable_suffix
 comparison_executable=$comparison_target/release/wgpu-sort-comparison-runner$executable_suffix
 
 repo_revision=$(git -c "safe.directory=$repo_root" -C "$repo_root" rev-parse HEAD)
@@ -209,7 +209,7 @@ for item_count in $(csv_words "$items_csv"); do
             esac
             process_index=1
             while [ "$process_index" -le "$processes" ]; do
-                run_one "$primitives_executable" "wgpu-primitives-$package_version" \
+                run_one "$primitives_executable" "lampshade-$package_version" \
                     "$repo_revision" "$item_count" "$workload" "$mode" \
                     "$warmups" "$warmup_ms" "$samples" "$process_index"
                 run_one "$comparison_executable" wgpu_sort-git \

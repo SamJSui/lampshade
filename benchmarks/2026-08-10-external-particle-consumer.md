@@ -71,14 +71,14 @@ readback bytes respectively. Wgpu does not expose portable physical-allocation
 or peak-driver-memory telemetry, so internal primitive workspace remains
 explicitly unobserved rather than estimated.
 
-## Promotion decision
+## Stabilization decision
 
 This clears the public crate-boundary, multi-adapter overhead, correctness, and
-2% performance gates. It does not constitute independent adoption because the
-consumer remains maintained in this repository. The typed API should remain
-experimental until an application outside this repository uses it. Apple and
-Jetson measurements were not available in this pass; no result is inferred for
-those adapters.
+2% performance gates used to stabilize `wgpu_primitives::pipeline`. The
+consumer intentionally remains repository-owned validation rather than a
+separate application product. Independent adoption is a future traction signal,
+not a release requirement. Apple and Jetson measurements were not available in
+this pass; no result is inferred for those adapters.
 
 Exact process medians, source state, adapter identity, and artifact timestamps
 are preserved in the adjacent JSON file.

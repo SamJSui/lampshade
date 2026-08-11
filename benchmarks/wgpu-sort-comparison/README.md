@@ -3,7 +3,7 @@
 This harness reproduces the direct stable key-value sort comparison without
 mixing incompatible wgpu types in one process:
 
-- `wgpu-primitives-runner` uses the current checkout and wgpu 30.
+- `lampshade-runner` uses the current checkout and wgpu 30.
 - `wgpu-sort-runner` pins `wgpu_sort` at
   `4cb640e8cae28eba0149d470c5168cc2853466dd` and wgpu 0.20.1.
 - `common` owns the xorshift input generator, configuration schema, aggregation
@@ -15,10 +15,10 @@ and waiting. It excludes initial allocation, upload, and readback. Because
 `wgpu_sort` mutates its primary buffers, the orchestrator restores and waits for
 its input from immutable GPU-resident backup buffers before starting each
 resident sample. That untimed device-to-device copy avoids repeated host upload
-allocations affecting later processes. `wgpu-primitives` preserves its input.
+allocations affecting later processes. Lampshade preserves its input.
 
 The `bounded16` workload calls the explicit 16-bit-bound API in
-`wgpu-primitives`; `full_width` declares 32 bits. This measures the crate's
+Lampshade; `full_width` declares 32 bits. This measures the crate's
 public application-supplied-bound path rather than claiming automatic key-range
 detection. The generated keys are validated against the shared stable CPU
 reference before timing.

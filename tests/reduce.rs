@@ -1,7 +1,7 @@
 mod support;
 
+use lampshade::{Error, Reducer, U32Reduction};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Error, Reducer, U32Reduction};
 
 const REDUCTION_SIZES: [usize; 17] = [
     0, 1, 2, 31, 32, 33, 255, 256, 257, 2_047, 2_048, 2_049, 4_095, 4_096, 4_097, 8_193, 17,

@@ -3,9 +3,9 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Context, KeyValue, KeyValueSorter};
 use rayon::prelude::*;
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, KeyValue, KeyValueSorter};
 
 const SORT_SEED: u64 = 0x4B56;
 

@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Compactor, Context, GpuProfile, Histogram, KeyValue, KeyValueCompactor, KeyValueSorter,
     MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
+use wgpu::util::DeviceExt;
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
@@ -630,9 +630,9 @@ async fn profile_key_value_sort(
 
 fn measure_wall(
     samples: usize,
-    mut submit: impl FnMut() -> Result<(), wgpu_primitives::Error>,
+    mut submit: impl FnMut() -> Result<(), lampshade::Error>,
     context: &Context,
-) -> Result<Duration, wgpu_primitives::Error> {
+) -> Result<Duration, lampshade::Error> {
     let mut durations = Vec::with_capacity(samples);
     for _ in 0..samples {
         let started = Instant::now();
@@ -645,9 +645,9 @@ fn measure_wall(
 
 fn warm_up(
     minimum_duration: Duration,
-    mut submit: impl FnMut() -> Result<(), wgpu_primitives::Error>,
+    mut submit: impl FnMut() -> Result<(), lampshade::Error>,
     context: &Context,
-) -> Result<(), wgpu_primitives::Error> {
+) -> Result<(), lampshade::Error> {
     let started = Instant::now();
     loop {
         submit()?;
@@ -809,7 +809,7 @@ fn create_output(context: &Context, label: &'static str, size: u64) -> wgpu::Buf
     })
 }
 
-fn wait_for_gpu(device: &wgpu::Device) -> Result<(), wgpu_primitives::Error> {
+fn wait_for_gpu(device: &wgpu::Device) -> Result<(), lampshade::Error> {
     device.poll(wgpu::PollType::Wait {
         submission_index: None,
         timeout: None,

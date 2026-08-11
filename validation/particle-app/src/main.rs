@@ -6,13 +6,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::Serialize;
-use wgpu::util::DeviceExt;
-use wgpu_primitives::{
+use lampshade::{
     Context, GpuCountPlan, KeyValue, KeyValueCompactor, KeyValueField, KeyValueSorter,
     MaskGenerator, U32Predicate,
-    v2::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
+    pipeline::{GpuCount, GpuSlice, GpuSliceMut, Primitives, SortOptions, WorkspaceRequirements},
 };
+use serde::Serialize;
+use wgpu::util::DeviceExt;
 
 type AnyError = Box<dyn Error + Send + Sync>;
 
@@ -347,7 +347,7 @@ impl Engine {
         encoder: &mut wgpu::CommandEncoder,
         buffers: &ParticleBuffers,
         capacity: u32,
-    ) -> Result<(), wgpu_primitives::Error> {
+    ) -> Result<(), lampshade::Error> {
         match self {
             Self::Typed(primitives) => {
                 let input = GpuSlice::from_range(&buffers.input, 0..capacity)?;
@@ -396,7 +396,7 @@ fn record_command(
     engine: &mut Engine,
     buffers: &ParticleBuffers,
     capacity: u32,
-) -> Result<wgpu::CommandBuffer, wgpu_primitives::Error> {
+) -> Result<wgpu::CommandBuffer, lampshade::Error> {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Standalone Particle Pipeline"),
     });

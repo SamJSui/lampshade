@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-10",
+  "candidate": {
+    "version": "0.8.0",
+    "branch": "feat/stabilize-typed-pipeline",
+    "parent_revision": "58a3fba57b9c5dcb0a7f9d0cd7d980e9f41b1068",
+    "dirty": true,
+    "source_manifest_sha256": "c7bc8d743773f0f3ce2beae507b88364fabf36223946cfabcf72885363631224",
+    "source_manifest_algorithm": "release-regression SHA-256 manifest of ordered LF-normalized source-file hashes"
+  },
+  "baseline": {
+    "source": "crates.io",
+    "version": "0.7.0"
+  },
+  "host": {
+    "hostname": "DESKTOP-IMC2LBD",
+    "adapter": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "backend": "Vulkan",
+    "driver": "591.86"
+  },
+  "method": {
+    "threshold_percent": 2.0,
+    "aggregation": "median of independent process medians",
+    "initial_processes": 3,
+    "targeted_recheck_processes": 9,
+    "initial_command": "benchmarks/release-regression/run.ps1 -Backend vulkan -OutputPath target/release-regression/typed-pipeline-final.json",
+    "recheck_commands": [
+      "benchmarks/release-regression/run.ps1 -Backend vulkan -Items 1000000 -Workloads reduce_sum,sort_full_width -Processes 9 -OutputPath target/release-regression/typed-pipeline-recheck-1m.json",
+      "benchmarks/release-regression/run.ps1 -Backend vulkan -Items 10000000 -Workloads exclusive_scan -Processes 9 -OutputPath target/release-regression/typed-pipeline-recheck-scan-10m.json",
+      "benchmarks/release-regression/run.ps1 -Backend vulkan -Items 100000000 -Workloads reduce_sum -Processes 9 -OutputPath target/release-regression/typed-pipeline-recheck-reduce-100m.json"
+    ]
+  },
+  "initial": {
+    "generated_at_utc": "2026-08-11T04:15:43.7142688Z",
+    "gate_passed": false,
+    "rows": [
+      {"workload":"reduce_sum","items":1000000,"published_process_medians_ms":[0.0884,0.0861,0.0841],"candidate_process_medians_ms":[0.0895,0.0970,0.0824],"published_ms":0.0861,"candidate_ms":0.0895,"change_percent":3.948896631823451,"passed":false},
+      {"workload":"sort_bounded16","items":1000000,"published_process_medians_ms":[0.1811,0.1793,0.1899],"candidate_process_medians_ms":[0.1799,0.1784,0.1795],"published_ms":0.1811,"candidate_ms":0.1795,"change_percent":-0.8834897846493717,"passed":true},
+      {"workload":"sort_full_width","items":1000000,"published_process_medians_ms":[0.2815,0.2830,0.2828],"candidate_process_medians_ms":[0.2930,0.2963,0.2816],"published_ms":0.2828,"candidate_ms":0.2930,"change_percent":3.606789250353626,"passed":false},
+      {"workload":"exclusive_scan","items":1000000,"published_process_medians_ms":[0.1160,0.1164,0.1168],"candidate_process_medians_ms":[0.1162,0.1253,0.1174],"published_ms":0.1164,"candidate_ms":0.1174,"change_percent":0.8591065292096189,"passed":true},
+      {"workload":"compact_50","items":1000000,"published_process_medians_ms":[0.1312,0.1451,0.1322],"candidate_process_medians_ms":[0.1319,0.1321,0.1322],"published_ms":0.1322,"candidate_ms":0.1321,"change_percent":-0.07564296520420344,"passed":true},
+      {"workload":"reduce_sum","items":10000000,"published_process_medians_ms":[0.1040,0.0996,0.0999],"candidate_process_medians_ms":[0.0987,0.0994,0.0998],"published_ms":0.0999,"candidate_ms":0.0994,"change_percent":-0.5005005005005003,"passed":true},
+      {"workload":"sort_bounded16","items":10000000,"published_process_medians_ms":[0.9134,0.9164,0.9179],"candidate_process_medians_ms":[0.9134,0.9153,0.9143],"published_ms":0.9164,"candidate_ms":0.9143,"change_percent":-0.229157573112182,"passed":true},
+      {"workload":"sort_full_width","items":10000000,"published_process_medians_ms":[1.6153,1.6307,1.6228],"candidate_process_medians_ms":[1.6095,1.6104,1.6209],"published_ms":1.6228,"candidate_ms":1.6104,"change_percent":-0.7641114123736914,"passed":true},
+      {"workload":"exclusive_scan","items":10000000,"published_process_medians_ms":[0.3373,0.3481,0.3370],"candidate_process_medians_ms":[0.3449,0.3385,0.3547],"published_ms":0.3373,"candidate_ms":0.3449,"change_percent":2.2531870738215165,"passed":false},
+      {"workload":"compact_50","items":10000000,"published_process_medians_ms":[0.4859,0.4955,0.4854],"candidate_process_medians_ms":[0.4862,0.4859,0.4834],"published_ms":0.4859,"candidate_ms":0.4859,"change_percent":0.0,"passed":true},
+      {"workload":"reduce_sum","items":100000000,"published_process_medians_ms":[0.7108,0.7103,0.7148],"candidate_process_medians_ms":[0.7384,0.7309,0.7216],"published_ms":0.7108,"candidate_ms":0.7309,"change_percent":2.8277996623522705,"passed":false},
+      {"workload":"sort_bounded16","items":100000000,"published_process_medians_ms":[7.9118,7.9261,7.9393],"candidate_process_medians_ms":[7.9304,7.9482,7.9308],"published_ms":7.9261,"candidate_ms":7.9308,"change_percent":0.05929776308650769,"passed":true},
+      {"workload":"sort_full_width","items":100000000,"published_process_medians_ms":[14.5089,14.5162,14.4928],"candidate_process_medians_ms":[14.4968,14.4909,14.4833],"published_ms":14.5089,"candidate_ms":14.4909,"change_percent":-0.12406178276782587,"passed":true},
+      {"workload":"exclusive_scan","items":100000000,"published_process_medians_ms":[2.8553,2.8176,2.8319],"candidate_process_medians_ms":[2.8337,2.8422,2.8471],"published_ms":2.8319,"candidate_ms":2.8422,"change_percent":0.3637134079593096,"passed":true},
+      {"workload":"compact_50","items":100000000,"published_process_medians_ms":[3.7204,3.7311,3.7077],"candidate_process_medians_ms":[3.7355,3.7281,3.7165],"published_ms":3.7204,"candidate_ms":3.7281,"change_percent":0.20696699279647568,"passed":true}
+    ]
+  },
+  "targeted_rechecks": [
+    {"generated_at_utc":"2026-08-11T04:18:37.6045940Z","workload":"reduce_sum","items":1000000,"published_process_medians_ms":[0.0835,0.0822,0.0908,0.0831,0.0828,0.0833,0.0859,0.0829,0.0855],"candidate_process_medians_ms":[0.0822,0.1034,0.0844,0.0818,0.0820,0.0825,0.0816,0.0833,0.0850],"published_ms":0.0833,"candidate_ms":0.0825,"change_percent":-0.9603841536614532,"passed":true},
+    {"generated_at_utc":"2026-08-11T04:18:37.6045940Z","workload":"sort_full_width","items":1000000,"published_process_medians_ms":[0.2814,0.2834,0.2821,0.2831,0.2867,0.2917,0.2840,0.3026,0.2965],"candidate_process_medians_ms":[0.2826,0.2809,0.2842,0.3114,0.2833,0.2842,0.2837,0.2911,0.2959],"published_ms":0.2840,"candidate_ms":0.2842,"change_percent":0.07042253521125641,"passed":true},
+    {"generated_at_utc":"2026-08-11T04:19:27.2030996Z","workload":"exclusive_scan","items":10000000,"published_process_medians_ms":[0.3481,0.3648,0.3362,0.3387,0.3541,0.3367,0.3385,0.3389,0.3382],"candidate_process_medians_ms":[0.3711,0.3367,0.3416,0.4000,0.3545,0.3472,0.3389,0.3376,0.3422],"published_ms":0.3387,"candidate_ms":0.3422,"change_percent":1.0333628579864085,"passed":true},
+    {"generated_at_utc":"2026-08-11T04:17:02.4897830Z","workload":"reduce_sum","items":100000000,"published_process_medians_ms":[0.7240,0.7139,0.7246,0.7228,0.7115,0.7333,0.7265,0.7375,0.7388],"candidate_process_medians_ms":[0.7197,0.7172,0.7197,0.7292,0.7141,0.7218,0.7203,0.7222,0.7148],"published_ms":0.7246,"candidate_ms":0.7197,"change_percent":-0.6762351642285447,"passed":true}
+  ],
+  "resolved_gate_passed": true
+}

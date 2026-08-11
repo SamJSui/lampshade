@@ -5,11 +5,13 @@ pub mod context;
 pub mod count;
 pub mod error;
 pub mod histogram;
+pub mod pipeline;
 pub mod predicate;
 pub mod profiling;
 pub mod reduce;
 pub mod scan;
 pub mod sort;
+#[deprecated(since = "0.8.0", note = "use `lampshade::pipeline` instead")]
 pub mod v2;
 
 pub use compact::{Compactor, KeyValueCompactor};

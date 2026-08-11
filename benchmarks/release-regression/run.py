@@ -30,7 +30,7 @@ SOURCE_PATHS = (
     "Cargo.toml",
     "src",
     "benchmarks/massively-comparison/common",
-    "benchmarks/massively-comparison/wgpu-primitives-runner",
+    "benchmarks/massively-comparison/lampshade-runner",
     "benchmarks/release-regression",
 )
 
@@ -173,6 +173,7 @@ def sampling(items: int, quick: bool) -> tuple[int, int, int]:
 def run_one(
     executable: Path,
     source: str,
+    implementation: str,
     version: str,
     revision: str,
     backend: str,
@@ -192,6 +193,7 @@ def run_one(
             "MASSIVELY_BENCH_WARMUP_MS": str(warmup_ms),
             "MASSIVELY_BENCH_SAMPLES": str(samples),
             "MASSIVELY_BENCH_PROCESS_INDEX": str(process_index),
+            "MASSIVELY_BENCH_IMPLEMENTATION_NAME": implementation,
             "MASSIVELY_BENCH_IMPLEMENTATION_VERSION": version,
             "MASSIVELY_BENCH_IMPLEMENTATION_REVISION": revision,
         }
@@ -244,7 +246,7 @@ def main() -> int:
     benchmark_root = Path(__file__).resolve().parent
     repo_root = benchmark_root.parents[1]
     target_root = repo_root / "target" / "release-regression"
-    candidate_manifest = repo_root / "benchmarks" / "massively-comparison" / "wgpu-primitives-runner" / "Cargo.toml"
+    candidate_manifest = repo_root / "benchmarks" / "massively-comparison" / "lampshade-runner" / "Cargo.toml"
     baseline_manifest = benchmark_root / "published-runner" / "Cargo.toml"
     candidate_target = target_root / "checkout"
     baseline_target = target_root / "published"
@@ -254,7 +256,7 @@ def main() -> int:
     print(f"Building crates.io {BASELINE_VERSION} runner...", file=sys.stderr)
     build_runner(baseline_manifest, baseline_target)
     suffix = ".exe" if os.name == "nt" else ""
-    candidate_executable = candidate_target / "release" / f"wgpu-primitives-massively-comparison-runner{suffix}"
+    candidate_executable = candidate_target / "release" / f"lampshade-massively-comparison-runner{suffix}"
     baseline_executable = baseline_target / "release" / f"wgpu-primitives-release-baseline-runner{suffix}"
     revision = command_output(
         ["git", "-c", f"safe.directory={repo_root}", "rev-parse", "HEAD"], repo_root
@@ -275,18 +277,19 @@ def main() -> int:
         for workload in args.workloads:
             for process_index in range(1, args.processes + 1):
                 sources = [
-                    ("published", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}"),
-                    ("checkout", candidate_executable, f"working-tree-{candidate_version}", revision),
+                    ("published", "wgpu-primitives", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}"),
+                    ("checkout", "lampshade", candidate_executable, f"working-tree-{candidate_version}", revision),
                 ]
                 if process_index % 2 == 0:
                     sources.reverse()
-                for source, executable, version, source_revision in sources:
+                for source, implementation, executable, version, source_revision in sources:
                     print(f"{source} {workload} items={items} process={process_index}", file=sys.stderr)
                     try:
                         runs.append(
                             run_one(
                                 executable,
                                 source,
+                                implementation,
                                 version,
                                 source_revision,
                                 args.backend,

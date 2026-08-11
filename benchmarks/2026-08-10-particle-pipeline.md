@@ -2,7 +2,7 @@
 
 Date: 2026-08-10
 
-This change validates the experimental typed recorder against an
+This change validates the typed recorder against an
 application-shaped visibility pipeline: generate a depth mask, stably compact
 `KeyValue { key, value }` particle records, and stably sort the selected prefix
 by key. The selected count remains GPU-resident between operations.
@@ -69,7 +69,7 @@ workspace.
 - `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features`
 - `cargo test --release --all-targets`
 - `cargo package --allow-dirty`
-- physical Vulkan and DX12 focused key/value and v2 suites
+- physical Vulkan and DX12 focused key/value and typed-pipeline suites
 - one-submit particle example with one final map/readback
 - zero, full, and partial selection; duplicate-key stability; oversized count
   clamping; aligned nonzero ranges; capacity, usage, and alias failures

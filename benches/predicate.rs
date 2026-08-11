@@ -3,8 +3,8 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Compactor, Context, MaskGenerator, U32Predicate};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Compactor, Context, MaskGenerator, U32Predicate};
 
 const PREDICATE_THRESHOLD: u32 = 1_u32 << 31;
 

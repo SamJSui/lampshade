@@ -235,7 +235,7 @@ pub fn median(values: &[f64]) -> f64 {
     }
 }
 
-pub fn wgpu_primitives_eight_bit_memory(items: u32, uniform_stride: u64) -> MemoryEstimate {
+pub fn lampshade_eight_bit_memory(items: u32, uniform_stride: u64) -> MemoryEstimate {
     const ITEM_BYTES: u64 = 8;
     const GROWTH_BYTES: u64 = 16 * 1024 * 1024;
     const ITEMS_PER_TILE: u64 = 256 * 7;
@@ -259,7 +259,7 @@ pub fn wgpu_primitives_eight_bit_memory(items: u32, uniform_stride: u64) -> Memo
     let primary = requested * 2;
 
     MemoryEstimate {
-        model: "wgpu-primitives 8-bit source allocation formula".into(),
+        model: "Lampshade 8-bit source allocation formula".into(),
         primary_input_output_bytes: Some(primary),
         workspace_bytes: Some(workspace),
         total_known_buffer_bytes: Some(primary + workspace),
@@ -334,9 +334,9 @@ mod tests {
 
     #[test]
     fn memory_models_match_the_published_100m_case() {
-        let primitives = wgpu_primitives_eight_bit_memory(100_000_000, 256);
-        assert_eq!(primitives.workspace_bytes, Some(862_838_064));
-        assert_eq!(primitives.total_known_buffer_bytes, Some(2_462_838_064));
+        let lampshade = lampshade_eight_bit_memory(100_000_000, 256);
+        assert_eq!(lampshade.workspace_bytes, Some(862_838_064));
+        assert_eq!(lampshade.total_known_buffer_bytes, Some(2_462_838_064));
 
         let comparison = wgpu_sort_pinned_memory(100_000_000);
         assert_eq!(comparison.workspace_bytes, Some(2_026_691_600));

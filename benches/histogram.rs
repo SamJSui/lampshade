@@ -3,8 +3,8 @@ mod support;
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use lampshade::{Context, Histogram};
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{Context, Histogram};
 
 const BIN_COUNT: u32 = 256;
 const HISTOGRAM_SEED: u64 = 0xA11C_E5ED;

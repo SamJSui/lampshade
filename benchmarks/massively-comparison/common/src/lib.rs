@@ -290,12 +290,16 @@ pub fn public_buffer_memory(
 ) -> MemoryEstimate {
     let items = u64::from(items);
     let primary = match (implementation, workload) {
-        ("wgpu-primitives", Workload::ReduceSum) => 4 * items + 8,
+        ("wgpu-primitives" | "lampshade", Workload::ReduceSum) => 4 * items + 8,
         ("massively", Workload::ReduceSum) => 4 * items,
-        ("wgpu-primitives", Workload::SortBounded16 | Workload::SortFullWidth) => 16 * items,
+        ("wgpu-primitives" | "lampshade", Workload::SortBounded16 | Workload::SortFullWidth) => {
+            16 * items
+        }
         ("massively", Workload::SortBounded16 | Workload::SortFullWidth) => 12 * items,
         (_, Workload::ExclusiveScan) => 8 * items,
-        (_, Workload::Compact50) => 12 * items + u64::from(implementation == "wgpu-primitives") * 4,
+        (_, Workload::Compact50) => {
+            12 * items + u64::from(matches!(implementation, "wgpu-primitives" | "lampshade")) * 4
+        }
         _ => 0,
     };
     MemoryEstimate {
@@ -423,10 +427,13 @@ mod tests {
     }
 
     #[test]
-    fn reduction_memory_counts_explicit_wgpu_scalar_buffers() {
-        let memory = public_buffer_memory("wgpu-primitives", Workload::ReduceSum, 10);
+    fn reduction_memory_counts_explicit_lampshade_scalar_buffers() {
+        let memory = public_buffer_memory("lampshade", Workload::ReduceSum, 10);
         assert_eq!(memory.primary_input_output_bytes, 48);
         assert_eq!(memory.total_known_buffer_bytes, 48);
+
+        let predecessor = public_buffer_memory("wgpu-primitives", Workload::ReduceSum, 10);
+        assert_eq!(predecessor.primary_input_output_bytes, 48);
     }
 
     #[test]

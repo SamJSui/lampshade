@@ -1,8 +1,9 @@
-# Experimental typed recorder
+# Typed pipeline API
 
-`wgpu_primitives::v2` is an additive API experiment. It tests whether resident
-GPU composition can use a small common vocabulary instead of repeating raw
-buffers, lengths, count plans, and preparation order in every primitive.
+`lampshade::pipeline` is the stable recording-first API for resident GPU
+composition. It uses a small common vocabulary instead of repeating raw
+buffers, lengths, count plans, and preparation order in every primitive. The
+older `lampshade::v2` path remains as a deprecated compatibility alias.
 
 ## Implemented
 
@@ -28,8 +29,9 @@ in one primitive must use distinct underlying buffer handles even when their
 ranges do not overlap. WebGPU treats writable storage use as exclusive at the
 buffer-handle level within a dispatch.
 
-The existing slice, raw-buffer, and explicit `GpuCountPlan` APIs remain intact
-while this facade is evaluated.
+The existing slice, raw-buffer, and explicit `GpuCountPlan` APIs remain intact.
+The typed layer is additive: callers can adopt it operation by operation while
+retaining direct wgpu control.
 
 ## Key/payload decision
 
@@ -55,19 +57,27 @@ remain deliberately unsupported until a workload demonstrates that their
 memory-access benefit justifies another public layout and another set of
 kernels.
 
-## Promotion status
+## Stabilization evidence
 
 The in-repository particle pipeline now validates ordinary typed composition,
 array-of-structs ownership, GPU-resident length propagation, and stable payload
 ordering. A separate consumer crate now validates application-owned wgpu
 devices, the public crate boundary, and typed-versus-raw overhead on RTX and
-Intel. Promotion out of `v2` still requires:
+Intel. The stable namespace is accepted against objective repository gates:
 
-1. use by an independently maintained application outside this repository;
-2. continued fixed and GPU-counted performance within the 2% release
-   regression budget.
+1. formatting, strict Clippy, rustdoc, release tests, and package verification;
+2. public crate-boundary correctness with an application-owned wgpu context;
+3. typed-versus-raw total time within the 2% budget on discrete and integrated
+   GPUs;
+4. affected GPU-counted paths within the 2% pre-change budget at 1M, 10M, and
+   100M items; and
+5. existing fixed paths within the 2% published-release budget, using the
+   documented targeted-recheck protocol for bimodal driver states.
 
 The [standalone consumer report](../benchmarks/2026-08-10-external-particle-consumer.md)
-records the satisfied crate-boundary and multi-adapter overhead gates. Apple
-and Jetson results remain useful coverage, but are not represented by the RTX
-and Intel evidence.
+and [particle pipeline report](../benchmarks/2026-08-10-particle-pipeline.md)
+record the satisfied crate-boundary, multi-adapter overhead, counted-path, and
+fixed-path gates. Real downstream adoption will guide future ergonomics and
+layout additions, but is an outcome rather than a release requirement. Apple
+and Jetson results remain useful additional coverage; no result is inferred
+for adapters absent from these reports.

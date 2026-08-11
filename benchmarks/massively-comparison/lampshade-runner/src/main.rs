@@ -1,22 +1,22 @@
-use std::hint::black_box;
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::{
+    hint::black_box,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
+use lampshade::{Compactor, Context, KeyValue, KeyValueSorter, Reducer, Scanner, U32Reduction};
 use massively_benchmark_common::{
     AdapterMetadata, BenchmarkConfig, BenchmarkRun, GeneratorMetadata, SCHEMA_VERSION, SortInput,
     Workload, generate_compact, generate_reduction, generate_scan, median, public_buffer_memory,
     runtime_metadata, validate_compact, validate_exclusive_scan, validate_reduction_sum,
 };
 use wgpu::util::DeviceExt;
-use wgpu_primitives::{
-    Compactor, Context, KeyValue, KeyValueSorter, Reducer, Scanner, U32Reduction,
-};
 
 type AnyError = Box<dyn std::error::Error>;
 
 fn main() {
     if let Err(error) = pollster::block_on(run()) {
-        eprintln!("wgpu-primitives Massively comparison runner failed: {error}");
+        eprintln!("Primitive comparison runner failed: {error}");
         std::process::exit(1);
     }
 }
@@ -33,7 +33,7 @@ async fn run() -> Result<(), AnyError> {
     let median_ms = median(&samples_ms);
     let run = BenchmarkRun {
         schema_version: SCHEMA_VERSION,
-        implementation: "wgpu-primitives".into(),
+        implementation: runtime_metadata("MASSIVELY_BENCH_IMPLEMENTATION_NAME", "lampshade"),
         implementation_version: runtime_metadata(
             "MASSIVELY_BENCH_IMPLEMENTATION_VERSION",
             "working-tree",
@@ -59,7 +59,7 @@ async fn run() -> Result<(), AnyError> {
         median_ms,
         throughput_items_per_second: f64::from(config.items) / (median_ms / 1_000.0),
         output_items,
-        memory: public_buffer_memory("wgpu-primitives", config.workload, config.items),
+        memory: public_buffer_memory("lampshade", config.workload, config.items),
     };
     println!("{}", serde_json::to_string(&run)?);
     Ok(())
