@@ -178,6 +178,51 @@ async fn key_value_sort_gpu_to_gpu_writes_the_caller_output_buffer() {
 }
 
 #[tokio::test]
+async fn counted_key_value_sort_uses_the_gpu_resident_prefix_and_stays_stable() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let input = [
+        KeyValue::new(7, 70),
+        KeyValue::new(2, 20),
+        KeyValue::new(2, 21),
+        KeyValue::new(1, 10),
+        KeyValue::new(0, 0),
+    ];
+    let selected = 4_u32;
+    let input_buffer = create_sort_input(&context.device, &input);
+    let output = create_sort_output(&context.device, input.len());
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Key-Value Sort GPU Count"),
+            contents: bytemuck::bytes_of(&selected),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let mut sorter = KeyValueSorter::from_context(&context);
+
+    sorter
+        .sort_counted_gpu_to_gpu_with_key_bits(
+            &input_buffer,
+            &output,
+            &count,
+            input.len() as u32,
+            3,
+        )
+        .expect("counted key-value sort failed");
+    let actual = support::read_pod::<KeyValue>(&context, &output, selected as usize).await;
+    assert_eq!(
+        actual,
+        [
+            KeyValue::new(1, 10),
+            KeyValue::new(2, 20),
+            KeyValue::new(2, 21),
+            KeyValue::new(7, 70),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn bounded_key_value_gpu_sort_writes_output_after_one_and_three_byte_passes() {
     let Some(context) = support::gpu_context().await else {
         return;

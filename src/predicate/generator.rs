@@ -1,5 +1,6 @@
 use crate::{
     Error, KeyValue, common,
+    common::buffers::BufferRange,
     common::runtime::{CommandSession, ProfileSession},
     context::Context,
     profiling::{GpuProfile, TimestampRecorder},
@@ -120,8 +121,8 @@ impl MaskGenerator {
     ) -> Result<(), Error> {
         self.record_commands(
             encoder,
-            input,
-            mask,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
             num_items,
             KeyValueField::Key,
             predicate,
@@ -138,6 +139,47 @@ impl MaskGenerator {
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::Buffer,
         mask: &wgpu::Buffer,
+        num_items: u32,
+        field: KeyValueField,
+        predicate: U32Predicate,
+    ) -> Result<(), Error> {
+        self.record_commands(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
+            num_items,
+            field,
+            predicate,
+            PredicateItemKind::KeyValue,
+            None,
+        )
+    }
+
+    pub(crate) fn record_mask_ranges(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
+        num_items: u32,
+        predicate: U32Predicate,
+    ) -> Result<(), Error> {
+        self.record_commands(
+            encoder,
+            input,
+            mask,
+            num_items,
+            KeyValueField::Key,
+            predicate,
+            PredicateItemKind::Value,
+            None,
+        )
+    }
+
+    pub(crate) fn record_key_value_mask_ranges(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
         num_items: u32,
         field: KeyValueField,
         predicate: U32Predicate,
@@ -234,8 +276,8 @@ impl MaskGenerator {
         let mut commands = CommandSession::new(&self.device, None);
         self.record_commands(
             commands.encoder(),
-            input,
-            mask,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
             num_items,
             field,
             predicate,
@@ -264,7 +306,14 @@ impl MaskGenerator {
             ProfileSession::new(&self.device, &self.queue, 1, "Profiled Predicate Mask")?;
         let (encoder, profiler) = profile.recording();
         self.record_commands(
-            encoder, input, mask, num_items, field, predicate, item_kind, profiler,
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(mask),
+            num_items,
+            field,
+            predicate,
+            item_kind,
+            profiler,
         )?;
         profile.finish(&self.device, &self.queue).await
     }
@@ -273,8 +322,8 @@ impl MaskGenerator {
     fn record_commands(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Buffer,
-        mask: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        mask: BufferRange<'_>,
         num_items: u32,
         field: KeyValueField,
         predicate: U32Predicate,
@@ -284,7 +333,7 @@ impl MaskGenerator {
         if num_items == 0 {
             return Ok(());
         }
-        if input == mask {
+        if input.buffer == mask.buffer {
             return Err(Error::BufferAlias {
                 first: "predicate input",
                 second: "predicate mask",
@@ -294,18 +343,22 @@ impl MaskGenerator {
         let input_bytes =
             common::math::checked_byte_size(u64::from(num_items), item_kind.size_bytes())?;
         let mask_bytes = Self::mask_buffer_size(num_items)?;
-        common::buffers::validate_buffer(
-            input,
-            "predicate input",
-            input_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
-        common::buffers::validate_buffer(
-            mask,
+        input.validate("predicate input", input_bytes, wgpu::BufferUsages::STORAGE)?;
+        mask.validate(
             "predicate mask",
             mask_bytes,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         )?;
+        input.validate_storage_offset(&self.device, "predicate input")?;
+        mask.validate_storage_offset(&self.device, "predicate mask")?;
+        let input = BufferRange {
+            size: input_bytes,
+            ..input
+        };
+        let mask = BufferRange {
+            size: mask_bytes,
+            ..mask
+        };
 
         let pipeline = match item_kind {
             PredicateItemKind::Value => &self.value_pipeline,

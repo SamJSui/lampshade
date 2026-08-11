@@ -19,14 +19,14 @@ impl SortItemKind {
         }
     }
 
-    fn shader_item_type(self) -> &'static str {
+    pub(super) fn shader_item_type(self) -> &'static str {
         match self {
             Self::Key => "u32",
             Self::KeyValue => "KeyValue",
         }
     }
 
-    fn shader_key_access(self) -> &'static str {
+    pub(super) fn shader_key_access(self) -> &'static str {
         match self {
             Self::Key => "item",
             Self::KeyValue => "item.key",

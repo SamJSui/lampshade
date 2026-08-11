@@ -72,3 +72,7 @@ harness = false
 [[bench]]
 name = "counted_pipeline"
 harness = false
+
+[[bench]]
+name = "particle_pipeline"
+harness = false

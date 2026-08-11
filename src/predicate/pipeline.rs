@@ -1,4 +1,8 @@
-use crate::{KeyValueField, U32Predicate, common, profiling};
+use crate::{
+    KeyValueField, U32Predicate,
+    common::{self, buffers::BufferRange},
+    profiling,
+};
 
 const BLOCK_SIZE: u32 = 256;
 const PARAMS_SIZE_BYTES: u64 = 32;
@@ -39,8 +43,8 @@ pub(crate) struct PredicatePipeline {
 }
 
 pub(crate) struct PredicateDispatch<'a> {
-    pub input: &'a wgpu::Buffer,
-    pub mask: &'a wgpu::Buffer,
+    pub input: BufferRange<'a>,
+    pub mask: BufferRange<'a>,
     pub num_items: u32,
     pub field: KeyValueField,
     pub predicate: U32Predicate,
@@ -110,11 +114,11 @@ impl PredicatePipeline {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: dispatch.input.as_entire_binding(),
+                    resource: dispatch.input.binding(dispatch.input.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: dispatch.mask.as_entire_binding(),
+                    resource: dispatch.mask.binding(dispatch.mask.size),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,

@@ -2,6 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::Error;
 use crate::common;
+use crate::common::buffers::BufferRange;
 use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 
@@ -32,11 +33,14 @@ struct EightBitWorkspace {
 struct PreparedSort {
     num_items: u32,
     num_tiles: u32,
+    size_bytes: u64,
 }
 
 struct CachedBindings {
     input: wgpu::Buffer,
+    input_offset: u64,
     output: wgpu::Buffer,
+    output_offset: u64,
     num_items: u32,
     pass_count: u32,
     workspace_capacity: u64,
@@ -107,8 +111,33 @@ impl EightBitSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
+        self.record_sort_ranges(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(output),
+            num_items,
+            key_bits,
+        )
+    }
+
+    pub(crate) fn record_sort_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        num_items: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(());
+        };
+        let input = BufferRange {
+            size: problem.size_bytes,
+            ..input
+        };
+        let output = BufferRange {
+            size: problem.size_bytes,
+            ..output
         };
         let pass_count = pass_count_for_key_bits(key_bits);
         self.record_commands(encoder, input, output, problem, pass_count, None)
@@ -121,8 +150,18 @@ impl EightBitSorter {
         num_items: u32,
         key_bits: u32,
     ) -> Result<GpuProfile, Error> {
+        let input = BufferRange::whole(input);
+        let output = BufferRange::whole(output);
         let Some(problem) = self.prepare_sort(input, output, num_items)? else {
             return Ok(GpuProfile::empty());
+        };
+        let input = BufferRange {
+            size: problem.size_bytes,
+            ..input
+        };
+        let output = BufferRange {
+            size: problem.size_bytes,
+            ..output
         };
 
         let pass_count = pass_count_for_key_bits(key_bits);
@@ -139,14 +178,14 @@ impl EightBitSorter {
 
     fn prepare_sort(
         &mut self,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         num_items: u32,
     ) -> Result<Option<PreparedSort>, Error> {
         if num_items == 0 {
             return Ok(None);
         }
-        if input == output {
+        if input.buffer == output.buffer {
             return Err(Error::BufferAlias {
                 first: "sort input",
                 second: "sort output",
@@ -162,31 +201,24 @@ impl EightBitSorter {
         }
 
         let size_bytes = common::math::checked_byte_size(u64::from(num_items), ITEM_SIZE_BYTES)?;
-        common::buffers::validate_buffer(
-            input,
-            "sort input",
-            size_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
-        common::buffers::validate_buffer(
-            output,
-            "sort output",
-            size_bytes,
-            wgpu::BufferUsages::STORAGE,
-        )?;
+        input.validate("sort input", size_bytes, wgpu::BufferUsages::STORAGE)?;
+        output.validate("sort output", size_bytes, wgpu::BufferUsages::STORAGE)?;
+        input.validate_storage_offset(&self.device, "sort input")?;
+        output.validate_storage_offset(&self.device, "sort output")?;
         self.ensure_workspace(size_bytes)?;
 
         Ok(Some(PreparedSort {
             num_items,
             num_tiles: num_items.div_ceil(ITEMS_PER_TILE),
+            size_bytes,
         }))
     }
 
     fn record_commands(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         problem: PreparedSort,
         pass_count: u32,
         mut profiler: Option<&mut TimestampRecorder>,
@@ -248,15 +280,17 @@ impl EightBitSorter {
 
     fn ensure_bindings(
         &mut self,
-        input: &wgpu::Buffer,
-        output: &wgpu::Buffer,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
         problem: PreparedSort,
         pass_count: u32,
     ) {
         let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
         let matches = self.cached_bindings.as_ref().is_some_and(|bindings| {
-            bindings.input == *input
-                && bindings.output == *output
+            bindings.input == *input.buffer
+                && bindings.input_offset == input.offset
+                && bindings.output == *output.buffer
+                && bindings.output_offset == output.offset
                 && bindings.num_items == problem.num_items
                 && bindings.pass_count == pass_count
                 && bindings.workspace_capacity == workspace.capacity_bytes
@@ -294,8 +328,10 @@ impl EightBitSorter {
             })
             .collect();
         self.cached_bindings = Some(CachedBindings {
-            input: input.clone(),
-            output: output.clone(),
+            input: input.buffer.clone(),
+            input_offset: input.offset,
+            output: output.buffer.clone(),
+            output_offset: output.offset,
             num_items: problem.num_items,
             pass_count,
             workspace_capacity: workspace.capacity_bytes,
@@ -361,6 +397,14 @@ impl EightBitSorter {
         });
         self.cached_bindings = None;
         Ok(())
+    }
+
+    pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        if capacity == 0 {
+            return Ok(());
+        }
+        let size_bytes = common::math::checked_byte_size(u64::from(capacity), ITEM_SIZE_BYTES)?;
+        self.ensure_workspace(size_bytes)
     }
 }
 
@@ -447,7 +491,7 @@ impl EightBitPipelines {
     fn create_histogram_bind_group(
         &self,
         device: &wgpu::Device,
-        input: &wgpu::Buffer,
+        input: BufferRange<'_>,
         histogram: &wgpu::Buffer,
         uniform: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
@@ -456,7 +500,7 @@ impl EightBitPipelines {
             &self.histogram_layout,
             "8-bit Histogram Bind Group",
             &[
-                entire_buffer(0, input),
+                range_buffer(0, input),
                 entire_buffer(1, histogram),
                 uniform_binding(2, uniform, 0),
             ],
@@ -488,8 +532,8 @@ impl EightBitPipelines {
     fn create_scatter_bind_group(
         &self,
         device: &wgpu::Device,
-        source: &wgpu::Buffer,
-        destination: &wgpu::Buffer,
+        source: BufferRange<'_>,
+        destination: BufferRange<'_>,
         workspace: &EightBitWorkspace,
         uniform: &wgpu::Buffer,
         uniform_offset: u64,
@@ -499,8 +543,8 @@ impl EightBitPipelines {
             &self.scatter_layout,
             "8-bit Scatter Bind Group",
             &[
-                entire_buffer(0, source),
-                entire_buffer(1, destination),
+                range_buffer(0, source),
+                range_buffer(1, destination),
                 entire_buffer(2, &workspace.offsets),
                 entire_buffer(3, &workspace.partition_state),
                 uniform_binding(4, uniform, uniform_offset),
@@ -578,6 +622,13 @@ fn entire_buffer(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_
     }
 }
 
+fn range_buffer(binding: u32, range: BufferRange<'_>) -> wgpu::BindGroupEntry<'_> {
+    wgpu::BindGroupEntry {
+        binding,
+        resource: range.binding(range.size),
+    }
+}
+
 fn uniform_binding(binding: u32, buffer: &wgpu::Buffer, offset: u64) -> wgpu::BindGroupEntry<'_> {
     wgpu::BindGroupEntry {
         binding,
@@ -592,10 +643,15 @@ fn uniform_binding(binding: u32, buffer: &wgpu::Buffer, offset: u64) -> wgpu::Bi
 fn pass_buffers<'a>(
     radix_pass: u32,
     pass_count: u32,
-    input: &'a wgpu::Buffer,
-    output: &'a wgpu::Buffer,
+    input: BufferRange<'a>,
+    output: BufferRange<'a>,
     scratch: &'a wgpu::Buffer,
-) -> (&'a wgpu::Buffer, &'a wgpu::Buffer) {
+) -> (BufferRange<'a>, BufferRange<'a>) {
+    let scratch = BufferRange {
+        buffer: scratch,
+        offset: 0,
+        size: input.size,
+    };
     let (source_slot, destination_slot) = pass_buffer_slots(radix_pass, pass_count);
     let source = match source_slot {
         BufferSlot::Input => input,

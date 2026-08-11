@@ -8,7 +8,9 @@ use crate::{
     scan::Scanner,
 };
 
-const ITEM_SIZE_BYTES: u64 = size_of::<u32>() as u64;
+use super::pipeline::SortItemKind;
+
+const U32_SIZE_BYTES: u64 = size_of::<u32>() as u64;
 const UNIFORM_SIZE_BYTES: u64 = 16;
 const DISPATCH_ARGS_SIZE_BYTES: u64 = 3 * size_of::<u32>() as u64;
 const WORKSPACE_GROWTH_BYTES: u64 = 16 * 1024 * 1024;
@@ -20,6 +22,7 @@ pub(super) struct CountedSorter {
     queue: wgpu::Queue,
     scanner: Scanner,
     pipelines: CountedSortPipelines,
+    item_size_bytes: u64,
     workspace: Option<CountedSortWorkspace>,
 }
 
@@ -54,15 +57,17 @@ struct CountedSortPipelines {
     scatter: wgpu::ComputePipeline,
     vt: u32,
     block_size: u32,
+    item_size_bytes: u64,
 }
 
 impl CountedSorter {
-    pub(super) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub(super) fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
         Self {
             device: device.clone(),
             queue: queue.clone(),
             scanner: Scanner::new(device, queue),
-            pipelines: CountedSortPipelines::new(device),
+            pipelines: CountedSortPipelines::new(device, item_kind),
+            item_size_bytes: item_kind.size_bytes(),
             workspace: None,
         }
     }
@@ -71,11 +76,12 @@ impl CountedSorter {
         if capacity == 0 {
             return Ok(());
         }
-        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), ITEM_SIZE_BYTES)?;
+        let capacity_bytes =
+            common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
         let capacity_blocks = capacity.div_ceil(self.pipelines.items_per_block());
         let histogram_items = capacity_blocks.checked_mul(4).ok_or(Error::SizeOverflow)?;
         let histogram_bytes =
-            common::math::checked_byte_size(u64::from(histogram_items), ITEM_SIZE_BYTES)?;
+            common::math::checked_byte_size(u64::from(histogram_items), U32_SIZE_BYTES)?;
         self.ensure_workspace(capacity_bytes, histogram_bytes)?;
         self.scanner.reserve(histogram_items);
         Ok(())
@@ -247,10 +253,11 @@ impl CountedSorter {
         validate_distinct(input, output, count)?;
         count.validate(
             "sort item count",
-            ITEM_SIZE_BYTES,
+            U32_SIZE_BYTES,
             wgpu::BufferUsages::STORAGE,
         )?;
-        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), ITEM_SIZE_BYTES)?;
+        let capacity_bytes =
+            common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
         input.validate("sort input", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
         output.validate("sort output", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
         input.validate_storage_offset(&self.device, "sort input")?;
@@ -264,7 +271,7 @@ impl CountedSorter {
         let capacity_blocks = capacity.div_ceil(items_per_block);
         let histogram_items = capacity_blocks.checked_mul(4).ok_or(Error::SizeOverflow)?;
         let histogram_bytes =
-            common::math::checked_byte_size(u64::from(histogram_items), ITEM_SIZE_BYTES)?;
+            common::math::checked_byte_size(u64::from(histogram_items), U32_SIZE_BYTES)?;
         self.ensure_workspace(capacity_bytes, histogram_bytes)?;
         Ok(Some(CountedProblem {
             capacity_items: capacity,
@@ -430,7 +437,7 @@ impl CountedSorter {
             scratch: create_buffer(
                 &self.device,
                 "Counted Sort Scratch",
-                capacity_bytes.max(ITEM_SIZE_BYTES),
+                capacity_bytes.max(self.item_size_bytes),
                 wgpu::BufferUsages::STORAGE,
             ),
             histogram: create_buffer(
@@ -459,7 +466,7 @@ impl CountedSorter {
 }
 
 impl CountedSortPipelines {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &wgpu::Device, item_kind: SortItemKind) -> Self {
         let prepare_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Counted Sort Dispatch Preparation Layout"),
             entries: &[
@@ -491,7 +498,9 @@ impl CountedSortPipelines {
         let source = include_str!("counted.wgsl")
             .replace("{{VT}}", &vt.to_string())
             .replace("{{BLOCK_SIZE}}", &block_size.to_string())
-            .replace("{{MAX_WORKGROUPS_X}}", &MAX_WORKGROUPS_X.to_string());
+            .replace("{{MAX_WORKGROUPS_X}}", &MAX_WORKGROUPS_X.to_string())
+            .replace("{{ITEM_TYPE}}", item_kind.shader_item_type())
+            .replace("{{KEY_ACCESS}}", item_kind.shader_key_access());
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Counted Sort Shader"),
             source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -525,6 +534,7 @@ impl CountedSortPipelines {
             scatter,
             vt,
             block_size,
+            item_size_bytes: item_kind.size_bytes(),
         }
     }
 
@@ -557,7 +567,7 @@ impl CountedSortPipelines {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: count.binding(ITEM_SIZE_BYTES),
+                    resource: count.binding(U32_SIZE_BYTES),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -603,7 +613,8 @@ impl CountedSortPipelines {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: input.binding(u64::from(problem.capacity_items) * ITEM_SIZE_BYTES),
+                    resource: input
+                        .binding(u64::from(problem.capacity_items) * self.item_size_bytes),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -611,7 +622,8 @@ impl CountedSortPipelines {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: output.binding(u64::from(problem.capacity_items) * ITEM_SIZE_BYTES),
+                    resource: output
+                        .binding(u64::from(problem.capacity_items) * self.item_size_bytes),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -623,7 +635,7 @@ impl CountedSortPipelines {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: count.binding(ITEM_SIZE_BYTES),
+                    resource: count.binding(U32_SIZE_BYTES),
                 },
             ],
         })
@@ -650,7 +662,7 @@ fn create_uniform_buffer(
     min_alignment: u32,
 ) -> (wgpu::Buffer, u64) {
     let stride = u64::from(min_alignment).max(UNIFORM_SIZE_BYTES);
-    let words_per_uniform = (stride / ITEM_SIZE_BYTES) as usize;
+    let words_per_uniform = (stride / U32_SIZE_BYTES) as usize;
     let mut data = vec![0_u32; words_per_uniform * pass_count as usize];
     for radix_pass in 0..pass_count as usize {
         let offset = radix_pass * words_per_uniform;
@@ -714,7 +726,7 @@ fn exact_binding(buffer: &wgpu::Buffer, offset: u64, size: u64) -> wgpu::Binding
 fn workspace_capacity(requested: u64) -> Result<u64, Error> {
     if requested < WORKSPACE_GROWTH_BYTES {
         requested
-            .max(ITEM_SIZE_BYTES)
+            .max(U32_SIZE_BYTES)
             .checked_next_power_of_two()
             .ok_or(Error::SizeOverflow)
     } else {

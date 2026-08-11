@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-10",
+  "experiment": "typed particle pipeline and counted-sort regression",
+  "candidate": {
+    "parent_revision": "c98b42ebbf1e713feb2003c6370fdb97308b0d93",
+    "branch": "feat/particle-pipeline",
+    "working_tree_dirty": true,
+    "library_diff_sha1": "348e6f39c41ee3c5185afe2dd3051b27f596072b",
+    "traceability": "the PR commit containing this artifact is the reproducible candidate"
+  },
+  "adapter": {
+    "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "backend": "Vulkan",
+    "driver": "NVIDIA",
+    "driver_info": "591.86"
+  },
+  "counted_regression": {
+    "baseline": "parent commit in an isolated detached worktree",
+    "workload": "50%-selected compaction -> indirect GPU-counted full-width u32 sort -> GPU-counted reduction",
+    "timing_boundary": "recording, submission, execution, and completion wait; upload and validation readback excluded",
+    "aggregation": "median of three alternating-process medians",
+    "threshold_percent": 2.0,
+    "rows": [
+      {
+        "items": 1000000,
+        "parent_process_medians_ms": [1.6475, 1.6578, 1.6628],
+        "candidate_process_medians_ms": [1.6657, 1.6687, 1.7115],
+        "parent_ms": 1.6578,
+        "candidate_ms": 1.6687,
+        "change_percent": 0.6575,
+        "passed": true
+      },
+      {
+        "items": 10000000,
+        "parent_process_medians_ms": [3.9511, 3.9555, 3.9522],
+        "candidate_process_medians_ms": [3.9547, 3.9549, 3.9668],
+        "parent_ms": 3.9522,
+        "candidate_ms": 3.9549,
+        "change_percent": 0.0683,
+        "passed": true
+      },
+      {
+        "items": 100000000,
+        "parent_process_medians_ms": [27.054, 27.021, 27.015],
+        "candidate_process_medians_ms": [27.026, 27.120, 27.029],
+        "parent_ms": 27.021,
+        "candidate_ms": 27.029,
+        "change_percent": 0.0296,
+        "passed": true
+      }
+    ]
+  },
+  "fixed_path_regression": {
+    "baseline": "crates.io 0.7.0",
+    "threshold_percent": 2.0,
+    "initial_gate": {
+      "source_artifact": "target/particle-release-gate.json",
+      "generated_at_utc": "2026-08-10T22:15:16.4630364Z",
+      "command": "python benchmarks/release-regression/run.py --backend vulkan --processes 3 --output target/particle-release-gate.json",
+      "aggregation": "median of three alternating-process medians",
+      "passed_rows": 12,
+      "total_rows": 15,
+      "rows": [
+        {
+          "workload": "reduce_sum",
+          "items": 1000000,
+          "published_ms": 0.1147,
+          "candidate_ms": 0.1004,
+          "change_percent": -12.467306015693103,
+          "passed": true
+        },
+        {
+          "workload": "sort_bounded16",
+          "items": 1000000,
+          "published_ms": 0.2023,
+          "candidate_ms": 0.185,
+          "change_percent": -8.551655956500248,
+          "passed": true
+        },
+        {
+          "workload": "sort_full_width",
+          "items": 1000000,
+          "published_ms": 0.3018,
+          "candidate_ms": 0.2879,
+          "change_percent": -4.605699138502328,
+          "passed": true
+        },
+        {
+          "workload": "exclusive_scan",
+          "items": 1000000,
+          "published_ms": 0.1336,
+          "candidate_ms": 0.4176,
+          "change_percent": 212.57485029940125,
+          "passed": false
+        },
+        {
+          "workload": "compact_50",
+          "items": 1000000,
+          "published_ms": 0.1332,
+          "candidate_ms": 0.132,
+          "change_percent": -0.9009009009009028,
+          "passed": true
+        },
+        {
+          "workload": "reduce_sum",
+          "items": 10000000,
+          "published_ms": 0.0994,
+          "candidate_ms": 0.6987,
+          "change_percent": 602.917505030181,
+          "passed": false
+        },
+        {
+          "workload": "sort_bounded16",
+          "items": 10000000,
+          "published_ms": 2.631,
+          "candidate_ms": 2.6149,
+          "change_percent": -0.6119346256176272,
+          "passed": true
+        },
+        {
+          "workload": "sort_full_width",
+          "items": 10000000,
+          "published_ms": 1.6367,
+          "candidate_ms": 3.8191,
+          "change_percent": 133.34147980692856,
+          "passed": false
+        },
+        {
+          "workload": "exclusive_scan",
+          "items": 10000000,
+          "published_ms": 0.3391,
+          "candidate_ms": 0.3406,
+          "change_percent": 0.44234739015038826,
+          "passed": true
+        },
+        {
+          "workload": "compact_50",
+          "items": 10000000,
+          "published_ms": 0.4859,
+          "candidate_ms": 0.4943,
+          "change_percent": 1.7287507717637318,
+          "passed": true
+        },
+        {
+          "workload": "reduce_sum",
+          "items": 100000000,
+          "published_ms": 0.7224,
+          "candidate_ms": 0.7278,
+          "change_percent": 0.747508305647826,
+          "passed": true
+        },
+        {
+          "workload": "sort_bounded16",
+          "items": 100000000,
+          "published_ms": 7.9504,
+          "candidate_ms": 7.944,
+          "change_percent": -0.0804990943851891,
+          "passed": true
+        },
+        {
+          "workload": "sort_full_width",
+          "items": 100000000,
+          "published_ms": 14.5092,
+          "candidate_ms": 14.4944,
+          "change_percent": -0.10200424558211019,
+          "passed": true
+        },
+        {
+          "workload": "exclusive_scan",
+          "items": 100000000,
+          "published_ms": 2.8284,
+          "candidate_ms": 2.8385,
+          "change_percent": 0.35709234903125164,
+          "passed": true
+        },
+        {
+          "workload": "compact_50",
+          "items": 100000000,
+          "published_ms": 3.7525,
+          "candidate_ms": 3.7276,
+          "change_percent": -0.663557628247835,
+          "passed": true
+        }
+      ]
+    },
+    "targeted_rechecks": [
+      {
+        "source_artifact": "target/particle-recheck-scan-1m.json",
+        "generated_at_utc": "2026-08-10T22:23:38.7496484Z",
+        "command": "python benchmarks/release-regression/run.py --backend vulkan --processes 9 --workloads exclusive_scan --items 1000000 --output target/particle-recheck-scan-1m.json",
+        "aggregation": "median of nine alternating-process medians",
+        "workload": "exclusive_scan",
+        "items": 1000000,
+        "published_process_medians_ms": [0.1141, 0.1184, 0.1145, 0.1173, 0.115, 0.1154, 0.1149, 0.1145, 0.1146],
+        "candidate_process_medians_ms": [0.114, 0.1159, 0.1146, 0.1152, 0.1162, 0.1138, 0.129, 0.1152, 0.116],
+        "published_ms": 0.1149,
+        "candidate_ms": 0.1152,
+        "change_percent": 0.2611,
+        "passed": true
+      },
+      {
+        "source_artifact": "target/particle-recheck-reduce-10m.json",
+        "generated_at_utc": "2026-08-10T22:24:21.7261222Z",
+        "command": "python benchmarks/release-regression/run.py --backend vulkan --processes 9 --workloads reduce_sum --items 10000000 --output target/particle-recheck-reduce-10m.json",
+        "aggregation": "median of nine alternating-process medians",
+        "workload": "reduce_sum",
+        "items": 10000000,
+        "published_process_medians_ms": [0.0985, 0.1048, 0.0989, 0.0993, 0.1057, 0.0999, 0.1004, 0.0995, 0.0994],
+        "candidate_process_medians_ms": [0.0987, 0.099, 0.0984, 0.1002, 0.0983, 0.0984, 0.0976, 0.0981, 0.0983],
+        "published_ms": 0.0995,
+        "candidate_ms": 0.0984,
+        "change_percent": -1.1055,
+        "passed": true
+      },
+      {
+        "source_artifact": "target/particle-recheck-sort-10m.json",
+        "generated_at_utc": "2026-08-10T22:25:08.8880531Z",
+        "command": "python benchmarks/release-regression/run.py --backend vulkan --processes 9 --workloads sort_full_width --items 10000000 --output target/particle-recheck-sort-10m.json",
+        "aggregation": "median of nine alternating-process medians",
+        "workload": "sort_full_width",
+        "items": 10000000,
+        "published_process_medians_ms": [1.6119, 1.6185, 1.6095, 1.6327, 1.6353, 1.6209, 1.6215, 1.6233, 1.6321],
+        "candidate_process_medians_ms": [1.6133, 1.6162, 1.6253, 1.6204, 1.6198, 1.6165, 1.6174, 1.6155, 1.6197],
+        "published_ms": 1.6215,
+        "candidate_ms": 1.6174,
+        "change_percent": -0.2529,
+        "passed": true
+      }
+    ]
+  },
+  "typed_raw_comparison": {
+    "classification": "benchmark and correctness baseline only",
+    "parity_claimed": false,
+    "reason": "short combined wall-clock samples were GPU-state-sensitive and do not isolate recording or execution"
+  }
+}

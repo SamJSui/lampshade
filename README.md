@@ -166,9 +166,10 @@ async fn main() -> Result<(), wgpu_primitives::Error> {
 }
 ```
 
-See [`examples/`](examples/) for the composed resident pipeline, histograms,
-key/value sorting, structured compaction, and standalone examples for every
-primitive.
+See [`examples/`](examples/) for standalone primitives and composed resident
+pipelines. The [particle pipeline](examples/particle_pipeline.rs) filters,
+stably compacts, and depth-sorts key/entity records with one submission and one
+final readback.
 
 ## GPU-resident composition
 
@@ -177,10 +178,9 @@ primitives before submitting once. The experimental `v2` facade carries buffer
 ranges, capacities, and fixed or GPU-resident extents between operations:
 
 ```rust,ignore
-let generator = MaskGenerator::new(&device, &queue);
 let mut primitives = v2::Primitives::new(&device, &queue);
 let input_view = v2::GpuSlice::from_range(&input_buffer, 0..item_count)?;
-let mask_view = v2::GpuSlice::from_range(&mask_buffer, 0..item_count)?;
+let mask_output = v2::GpuSliceMut::from_range(&mask_buffer, 0..item_count)?;
 let compacted = v2::GpuSliceMut::from_range(&compacted_buffer, 0..item_count)?;
 let sorted = v2::GpuSliceMut::from_range(&sorted_buffer, 0..item_count)?;
 let sum = v2::GpuSliceMut::from_range(&sum_buffer, 0..1)?;
@@ -188,40 +188,41 @@ let count = v2::GpuCount::new(&output_count)?;
 
 primitives.reserve_workspace(
     v2::WorkspaceRequirements::new(item_count)
+        .predicate()
         .compact()
         .counted_sort()
         .counted_reduce(),
 )?;
 primitives.reserve_count(count, item_count)?;
 
-generator.record_mask(
-    &mut encoder,
-    &input_buffer,
-    &mask_buffer,
-    item_count,
+let mut recorder = primitives.record(&mut encoder);
+let mask = recorder.mask(
+    input_view,
+    mask_output,
     U32Predicate::GreaterThanOrEqual(10),
 )?;
-let mut recorder = primitives.record(&mut encoder);
-let compacted = recorder.compact(input_view, mask_view, compacted, count)?;
+let compacted = recorder.compact(input_view, mask, compacted, count)?;
 let sorted = recorder.sort(compacted, sorted, v2::SortOptions::default())?;
 recorder.reduce(sorted, sum, U32Reduction::Sum)?;
 drop(recorder);
 queue.submit(Some(encoder.finish()));
 ```
 
-[`resident_pipeline.rs`](examples/resident_pipeline.rs) extends this pattern
-through predicate, compaction, sort, and reduction in one submission and maps
-one final readback buffer. Compaction writes the selected count; sort and
-reduction consume it without a CPU synchronization point. The recorder caches
-a `GpuCountPlan` internally and schedules its preparation once after the count
-producer. The existing raw-buffer and explicit-plan APIs remain available.
+[`resident_pipeline.rs`](examples/resident_pipeline.rs) composes `u32`
+predicate, compaction, sort, and reduction. The
+[particle example](examples/particle_pipeline.rs) proves the same typed flow for
+`KeyValue` records: predicate, stable compaction, and stable sort by key.
+Compaction writes the selected count and later primitives consume it without a
+CPU synchronization point. The recorder caches a `GpuCountPlan` internally and
+schedules its preparation once after the count producer. Existing raw-buffer
+and explicit-plan APIs remain available.
 
 `GpuSlice` ranges use element indices and may start at aligned nonzero offsets.
 Different read/write roles in one primitive must still use distinct underlying
 buffer handles: WebGPU treats writable storage use as exclusive even for
-disjoint static binding ranges. `reserve_workspace` grows only the requested
-capacity-dependent workspaces ahead of recording; bind groups and small uniform
-buffers may still be created while commands are recorded.
+disjoint static binding ranges. `reserve_workspace` prepares only the requested
+pipelines and grows only their capacity-dependent workspaces; bind groups and
+small uniform buffers may still be created while commands are recorded.
 
 Plans default to `CountedSortDispatch::Indirect`, which sizes radix
 reduce/scatter launches to the GPU-selected prefix and is the portable choice
@@ -243,8 +244,8 @@ at [docs.rs](https://docs.rs/wgpu-primitives).
 
 See the [architecture guide](docs/architecture.md) for the public convenience,
 resident composition, and private kernel/runtime layers. The
-[typed-recorder note](docs/v2-api.md) records the experiment's current limits
-and unresolved key/payload design.
+[typed-recorder note](docs/v2-api.md) records the experiment's current evidence
+and remaining promotion gates.
 
 ## How it works
 
@@ -309,10 +310,9 @@ cargo check --examples --benches
 cargo package
 ```
 
-Criterion benches cover `histogram`, `reduce`, `scan`, `compact`,
-`key_value_compact`, `predicate`, `sort`, and `key_value_sort`. GPU integration
-tests skip when no compatible adapter is available; CI uses Mesa's Vulkan
-software adapter.
+Criterion benches cover each primitive plus `counted_pipeline` and the
+raw-versus-typed `particle_pipeline`. GPU integration tests skip when no
+compatible adapter is available; CI uses Mesa's Vulkan software adapter.
 
 ## License
 
