@@ -296,7 +296,16 @@ impl Scanner {
             return Ok(());
         }
 
+        if input.buffer == output.buffer {
+            return Err(Error::BufferAlias {
+                first: "scan input",
+                second: "scan output",
+            });
+        }
+
         let size_bytes = common::math::checked_byte_size(u64::from(num_items), 4)?;
+        input.validate_storage_binding_size(&self.device, size_bytes)?;
+        output.validate_storage_binding_size(&self.device, size_bytes)?;
         input.validate(
             "scan input",
             size_bytes,
@@ -443,5 +452,82 @@ impl Scanner {
             "Scanner Scratch",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         );
+    }
+
+    pub(crate) fn record_profiled_exclusive_scan(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input_buf: &wgpu::Buffer,
+        output_buf: &wgpu::Buffer,
+        num_items: u32,
+        profile_prefix: &str,
+        profiler: &mut TimestampRecorder,
+    ) -> Result<(), Error> {
+        self.record_scan_with_mode(
+            encoder,
+            ScanRecording {
+                input: BufferRange::whole(input_buf),
+                output: BufferRange::whole(output_buf),
+                num_items,
+                mode: ScanMode::Exclusive,
+                profile_prefix,
+                propagate_output: true,
+            },
+            Some(profiler),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ranged_scan_rejects_ranges_from_the_same_buffer() {
+        let context = match Context::init().await {
+            Ok(context) => context,
+            Err(Error::RequestAdapter(error)) => {
+                let required = std::env::var("LAMPSHADE_REQUIRE_GPU_TESTS")
+                    .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+                if required {
+                    panic!("GPU test adapter is required: {error}");
+                }
+                eprintln!("skipping GPU test because no adapter is available: {error}");
+                return;
+            }
+            Err(error) => panic!("failed to initialize the GPU test context: {error}"),
+        };
+        let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Aliased Ranged Scan Buffer"),
+            size: 1_024,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let input = BufferRange::new(&buffer, 0, 16, "ranged scan input").unwrap();
+        let output = BufferRange::new(&buffer, 256, 16, "ranged scan output").unwrap();
+        let mut scanner = Scanner::from_context(&context);
+        let mut encoder = context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+        let error = scanner
+            .record_block_local_exclusive_scan_ranges(
+                &mut encoder,
+                input,
+                output,
+                4,
+                "test.scan",
+                None,
+            )
+            .expect_err("same-handle ranged scans must be rejected");
+        assert!(matches!(
+            error,
+            Error::BufferAlias {
+                first: "scan input",
+                second: "scan output"
+            }
+        ));
     }
 }

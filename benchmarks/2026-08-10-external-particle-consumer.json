@@ -4,6 +4,8 @@
   "experiment": "standalone public-API particle consumer",
   "source": {
     "revision": "db9aa3dc41748e926ad28381ab2f525f97b42c20",
+    "reachable_merge_revision": "58a3fba57b9c5dcb0a7f9d0cd7d980e9f41b1068",
+    "merge_equivalence": "squash merge adds the report and adjacent documentation without changing measured src, benchmark, or standalone-consumer implementation",
     "dirty": false,
     "branch": "feat/external-particle-demo"
   },

@@ -21,7 +21,10 @@ applications already own. `Primitives::new` remains the portable fallback.
 
 ## Method
 
-- Source: clean `db9aa3dc41748e926ad28381ab2f525f97b42c20`
+- Measured source: clean `db9aa3dc41748e926ad28381ab2f525f97b42c20`
+- Reachable squash-merge equivalent: `58a3fba57b9c5dcb0a7f9d0cd7d980e9f41b1068`;
+  the merge adds this report and adjacent documentation without changing the
+  measured `src`, benchmark, or standalone-consumer implementation
 - Three independent processes per mode and size
 - Raw and typed ordering alternates by process
 - Three warm-ups and ten measured iterations per process

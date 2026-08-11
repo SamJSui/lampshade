@@ -259,6 +259,57 @@ async fn scan_rejects_invalid_buffer_contracts() {
         .record_scan(&mut encoder, &valid_input, &short_output, 4)
         .expect_err("short output must be rejected");
     assert!(matches!(error, Error::BufferTooSmall { .. }));
+
+    let aliased = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Aliased Scan Buffer"),
+        size: 16,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    for num_items in [1, 4] {
+        let error = scanner
+            .record_scan(&mut encoder, &aliased, &aliased, num_items)
+            .expect_err("aliased inclusive scan buffers must be rejected");
+        assert!(matches!(
+            error,
+            Error::BufferAlias {
+                first: "scan input",
+                second: "scan output"
+            }
+        ));
+
+        let error = scanner
+            .record_exclusive_scan(&mut encoder, &aliased, &aliased, num_items)
+            .expect_err("aliased exclusive scan buffers must be rejected");
+        assert!(matches!(
+            error,
+            Error::BufferAlias {
+                first: "scan input",
+                second: "scan output"
+            }
+        ));
+    }
+
+    let limits = context.device.limits();
+    let limit = limits
+        .max_buffer_size
+        .min(limits.max_storage_buffer_binding_size);
+    let oversized_items = limit / size_of::<u32>() as u64 + 1;
+    if let Ok(oversized_items) = u32::try_from(oversized_items) {
+        let requested = u64::from(oversized_items) * size_of::<u32>() as u64;
+        let error = scanner
+            .record_scan(&mut encoder, &valid_input, &output, oversized_items)
+            .expect_err("oversized scan bindings must be rejected before recording");
+        assert!(matches!(
+            error,
+            Error::BufferLimitExceeded {
+                requested: actual_requested,
+                limit: actual_limit,
+            } if actual_requested == requested && actual_limit == limit
+        ));
+    }
 }
 
 fn create_scan_input(device: &wgpu::Device, input: &[u32]) -> wgpu::Buffer {

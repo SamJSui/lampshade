@@ -343,6 +343,8 @@ impl MaskGenerator {
         let input_bytes =
             common::math::checked_byte_size(u64::from(num_items), item_kind.size_bytes())?;
         let mask_bytes = Self::mask_buffer_size(num_items)?;
+        input.validate_storage_binding_size(&self.device, input_bytes)?;
+        mask.validate_storage_binding_size(&self.device, mask_bytes)?;
         input.validate("predicate input", input_bytes, wgpu::BufferUsages::STORAGE)?;
         mask.validate(
             "predicate mask",
