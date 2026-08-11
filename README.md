@@ -242,6 +242,13 @@ key. Primitive participants that read and write must use distinct buffer handles
 Full usage requirements are documented on each API
 at [docs.rs](https://docs.rs/wgpu-primitives).
 
+Applications that own the adapter as well as the device should construct the
+facade with `Primitives::new_for_adapter(&device, &queue, &adapter_info)` so
+measured hardware-specific paths remain available. The
+[repository-only standalone consumer](https://github.com/samjsui/wgpu-primitives/tree/main/validation/particle-app)
+validates this public API boundary and records typed-versus-raw overhead on
+discrete NVIDIA and integrated Intel GPUs.
+
 See the [architecture guide](docs/architecture.md) for the public convenience,
 resident composition, and private kernel/runtime layers. The
 [typed-recorder note](docs/v2-api.md) records the experiment's current evidence

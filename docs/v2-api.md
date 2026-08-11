@@ -59,9 +59,15 @@ kernels.
 
 The in-repository particle pipeline now validates ordinary typed composition,
 array-of-structs ownership, GPU-resident length propagation, and stable payload
-ordering. Promotion out of `v2` still requires:
+ordering. A separate consumer crate now validates application-owned wgpu
+devices, the public crate boundary, and typed-versus-raw overhead on RTX and
+Intel. Promotion out of `v2` still requires:
 
-1. use by at least one external application;
-2. measured reservation and recording overhead on multiple adapters;
-3. existing fixed and GPU-counted paths staying within the 2% release
+1. use by an independently maintained application outside this repository;
+2. continued fixed and GPU-counted performance within the 2% release
    regression budget.
+
+The [standalone consumer report](../benchmarks/2026-08-10-external-particle-consumer.md)
+records the satisfied crate-boundary and multi-adapter overhead gates. Apple
+and Jetson results remain useful coverage, but are not represented by the RTX
+and Intel evidence.
