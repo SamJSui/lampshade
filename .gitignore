@@ -18,6 +18,7 @@ settings.json
 
 # Cargo
 Cargo.lock
+!validation/particle-app/Cargo.lock
 !benchmarks/wgpu-sort-comparison/common/Cargo.lock
 !benchmarks/wgpu-sort-comparison/wgpu-primitives-runner/Cargo.lock
 !benchmarks/wgpu-sort-comparison/wgpu-sort-runner/Cargo.lock

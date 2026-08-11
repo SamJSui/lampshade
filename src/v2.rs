@@ -409,21 +409,41 @@ impl Primitives {
         }
     }
 
-    /// Creates the recorder from the crate's convenience context.
-    pub fn from_context(context: &Context) -> Self {
+    /// Creates the recorder over an existing device and queue with adapter
+    /// metadata available for hardware-specific primitive selection.
+    ///
+    /// Prefer this constructor when the application owns its wgpu context and
+    /// already has the [`wgpu::AdapterInfo`] returned by [`wgpu::Adapter::get_info`].
+    /// [`Self::new`] remains the portable fallback when adapter metadata is not
+    /// available.
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        let context = Context {
+            adapter_info: adapter_info.clone(),
+            device: device.clone(),
+            queue: queue.clone(),
+        };
         Self {
-            device: context.device.clone(),
-            queue: context.queue.clone(),
-            adapter_info: Some(context.adapter_info.clone()),
+            device: device.clone(),
+            queue: queue.clone(),
+            adapter_info: Some(adapter_info.clone()),
             generator: None,
-            compactor: Compactor::from_context(context),
+            compactor: Compactor::from_context(&context),
             key_value_compactor: None,
-            sorter: Sorter::from_context(context),
+            sorter: Sorter::from_context(&context),
             key_value_sorter: None,
-            reducer: Reducer::from_context(context),
+            reducer: Reducer::from_context(&context),
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
         }
+    }
+
+    /// Creates the recorder from the crate's convenience context.
+    pub fn from_context(context: &Context) -> Self {
+        Self::new_for_adapter(&context.device, &context.queue, &context.adapter_info)
     }
 
     /// Prepares the requested pipelines and capacity-dependent GPU workspaces.

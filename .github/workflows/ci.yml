@@ -33,6 +33,11 @@ jobs:
         run: cargo test --lib --tests
       - name: Check examples and benchmarks
         run: cargo check --examples --benches
+      - name: Check standalone particle consumer
+        run: |
+          cargo fmt --manifest-path validation/particle-app/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path validation/particle-app/Cargo.toml -- -D warnings
+          python3 validation/particle-app/run.py --quick --backend vulkan --items 4096 --processes 1 --warmups 1 --iterations 2 --output target/particle-consumer-ci.json
       - name: Check pinned wgpu_sort comparison harness
         run: |
           cargo fmt --manifest-path benchmarks/wgpu-sort-comparison/common/Cargo.toml -- --check
