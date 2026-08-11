@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -26,8 +28,7 @@ pub(super) struct CountedReducer {
     pipelines: CountedReductionPipelines,
     scratch_a: ReusableBuffer,
     scratch_b: ReusableBuffer,
-    plans: ReusableBuffer,
-    dispatch_args: ReusableBuffer,
+    metadata: Arc<Mutex<CountedMetadataPool>>,
 }
 
 #[derive(Clone, Copy)]
@@ -35,6 +36,38 @@ struct CountedProblem {
     capacity_items: u32,
     pass_count: u32,
     plan_stride: u64,
+    plan_bytes: u64,
+    args_bytes: u64,
+}
+
+#[derive(Default)]
+struct CountedMetadataPool {
+    slots: Vec<CountedMetadataSlot>,
+}
+
+struct CountedMetadataSlot {
+    plans: wgpu::Buffer,
+    dispatch_args: wgpu::Buffer,
+    plan_capacity_bytes: u64,
+    args_capacity_bytes: u64,
+    in_use: bool,
+}
+
+struct CountedMetadataLease {
+    pool: Arc<Mutex<CountedMetadataPool>>,
+    slot: usize,
+    plans: wgpu::Buffer,
+    dispatch_args: wgpu::Buffer,
+}
+
+impl Drop for CountedMetadataLease {
+    fn drop(&mut self) {
+        let mut pool = self
+            .pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        pool.slots[self.slot].in_use = false;
+    }
 }
 
 struct CountedReductionPipelines {
@@ -44,7 +77,7 @@ struct CountedReductionPipelines {
     sum: wgpu::ComputePipeline,
     min: wgpu::ComputePipeline,
     max: wgpu::ComputePipeline,
-    identities: wgpu::Buffer,
+    min_identity: wgpu::Buffer,
 }
 
 struct CountedDispatch<'a> {
@@ -66,8 +99,7 @@ impl CountedReducer {
             pipelines: CountedReductionPipelines::new(device),
             scratch_a: ReusableBuffer::default(),
             scratch_b: ReusableBuffer::default(),
-            plans: ReusableBuffer::default(),
-            dispatch_args: ReusableBuffer::default(),
+            metadata: Arc::new(Mutex::new(CountedMetadataPool::default())),
         }
     }
 
@@ -81,7 +113,8 @@ impl CountedReducer {
             PLAN_WORDS * VALUE_SIZE_BYTES,
             alignment.max(VALUE_SIZE_BYTES),
         )?;
-        self.prepare_workspace(capacity, pass_count, plan_stride)
+        let (plan_bytes, args_bytes) = metadata_sizes(pass_count, plan_stride)?;
+        self.prepare_workspace(capacity, pass_count, plan_bytes, args_bytes)
     }
 
     pub(super) fn reduce_gpu_to_gpu(
@@ -263,12 +296,22 @@ impl CountedReducer {
             alignment.max(VALUE_SIZE_BYTES),
         )?;
         if pass_count > 0 {
-            self.prepare_workspace(capacity, pass_count, plan_stride)?;
+            let (plan_bytes, args_bytes) = metadata_sizes(pass_count, plan_stride)?;
+            self.prepare_workspace(capacity, pass_count, plan_bytes, args_bytes)?;
+            return Ok(CountedProblem {
+                capacity_items: capacity,
+                pass_count,
+                plan_stride,
+                plan_bytes,
+                args_bytes,
+            });
         }
         Ok(CountedProblem {
             capacity_items: capacity,
             pass_count,
             plan_stride,
+            plan_bytes: 0,
+            args_bytes: 0,
         })
     }
 
@@ -276,7 +319,8 @@ impl CountedReducer {
         &mut self,
         capacity: u32,
         pass_count: u32,
-        plan_stride: u64,
+        plan_bytes: u64,
+        args_bytes: u64,
     ) -> Result<(), Error> {
         let first_items = reduction_output_items(capacity);
         if pass_count > 1 {
@@ -298,28 +342,57 @@ impl CountedReducer {
                 wgpu::BufferUsages::STORAGE,
             );
         }
-        let plan_bytes = u64::from(pass_count)
-            .checked_mul(plan_stride)
-            .ok_or(Error::SizeOverflow)?;
-        let args_bytes = common::math::checked_byte_size(
-            u64::from(pass_count) * DISPATCH_WORDS,
-            VALUE_SIZE_BYTES,
-        )?;
         self.validate_storage_binding_size(plan_bytes)?;
         self.validate_storage_binding_size(args_bytes)?;
-        self.plans.ensure(
-            &self.device,
-            plan_bytes,
-            "Counted Reduction Plans",
-            wgpu::BufferUsages::STORAGE,
-        );
-        self.dispatch_args.ensure(
-            &self.device,
-            args_bytes,
-            "Counted Reduction Dispatch Arguments",
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
-        );
+        self.ensure_metadata_slot(plan_bytes, args_bytes);
         Ok(())
+    }
+
+    fn ensure_metadata_slot(&self, plan_bytes: u64, args_bytes: u64) {
+        let mut pool = self
+            .metadata
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pool.slots.iter().any(|slot| {
+            !slot.in_use
+                && slot.plan_capacity_bytes >= plan_bytes
+                && slot.args_capacity_bytes >= args_bytes
+        }) {
+            return;
+        }
+        if let Some(slot) = pool.slots.iter_mut().find(|slot| !slot.in_use) {
+            *slot = create_metadata_slot(&self.device, plan_bytes, args_bytes);
+        } else {
+            pool.slots
+                .push(create_metadata_slot(&self.device, plan_bytes, args_bytes));
+        }
+    }
+
+    fn acquire_metadata(&self, plan_bytes: u64, args_bytes: u64) -> CountedMetadataLease {
+        self.ensure_metadata_slot(plan_bytes, args_bytes);
+        let mut pool = self
+            .metadata
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot = pool
+            .slots
+            .iter()
+            .position(|slot| {
+                !slot.in_use
+                    && slot.plan_capacity_bytes >= plan_bytes
+                    && slot.args_capacity_bytes >= args_bytes
+            })
+            .expect("counted reduction metadata slot is reserved");
+        pool.slots[slot].in_use = true;
+        let plans = pool.slots[slot].plans.clone();
+        let dispatch_args = pool.slots[slot].dispatch_args.clone();
+        drop(pool);
+        CountedMetadataLease {
+            pool: Arc::clone(&self.metadata),
+            slot,
+            plans,
+            dispatch_args,
+        }
     }
 
     fn checked_scratch_size(&self, items: u32) -> Result<u64, Error> {
@@ -345,15 +418,13 @@ impl CountedReducer {
             return Ok(());
         }
 
-        let (plans, dispatch_args) = if let Some(plan) = prepared_plan {
-            (plan.reduction_plans(), plan.reduction_dispatch_args())
-        } else {
-            (
-                self.plans.get().expect("counted reduction plans exist"),
-                self.dispatch_args
-                    .get()
-                    .expect("counted reduction dispatch arguments exist"),
-            )
+        let metadata = count
+            .is_some()
+            .then(|| self.acquire_metadata(problem.plan_bytes, problem.args_bytes));
+        let (plans, dispatch_args) = match (prepared_plan, metadata.as_ref()) {
+            (Some(plan), None) => (plan.reduction_plans(), plan.reduction_dispatch_args()),
+            (None, Some(metadata)) => (&metadata.plans, &metadata.dispatch_args),
+            _ => unreachable!("counted reduction metadata source is unambiguous"),
         };
         if let Some(count) = count {
             self.pipelines.prepare_dispatches(
@@ -402,6 +473,9 @@ impl CountedReducer {
             current_input = current_output;
             current_capacity = output_capacity;
         }
+        if let Some(metadata) = metadata {
+            encoder.on_submitted_work_done(move || drop(metadata));
+        }
         Ok(())
     }
 
@@ -448,9 +522,9 @@ impl CountedReductionPipelines {
         let sum = create_pipeline(device, &reduce_layout, U32Reduction::Sum, "lhs + rhs");
         let min = create_pipeline(device, &reduce_layout, U32Reduction::Min, "min(lhs, rhs)");
         let max = create_pipeline(device, &reduce_layout, U32Reduction::Max, "max(lhs, rhs)");
-        let identities = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Counted Reduction Identities"),
-            contents: bytemuck::cast_slice(&[0_u32, u32::MAX, 0]),
+        let min_identity = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Counted Minimum Reduction Identity"),
+            contents: bytemuck::bytes_of(&u32::MAX),
             usage: wgpu::BufferUsages::COPY_SRC,
         });
         Self {
@@ -460,7 +534,7 @@ impl CountedReductionPipelines {
             sum,
             min,
             max,
-            identities,
+            min_identity,
         }
     }
 
@@ -470,13 +544,18 @@ impl CountedReductionPipelines {
         output: BufferRange<'_>,
         operation: U32Reduction,
     ) {
-        encoder.copy_buffer_to_buffer(
-            &self.identities,
-            operation.identity_offset(),
-            output.buffer,
-            output.offset,
-            VALUE_SIZE_BYTES,
-        );
+        match operation {
+            U32Reduction::Min => encoder.copy_buffer_to_buffer(
+                &self.min_identity,
+                0,
+                output.buffer,
+                output.offset,
+                VALUE_SIZE_BYTES,
+            ),
+            U32Reduction::Sum | U32Reduction::Max => {
+                encoder.clear_buffer(output.buffer, output.offset, Some(VALUE_SIZE_BYTES));
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -540,6 +619,7 @@ impl CountedReductionPipelines {
                 pass.dispatch_workgroups(1, 1, 1);
             },
         );
+        encoder.on_submitted_work_done(move || drop((bind_group, config)));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -611,6 +691,7 @@ impl CountedReductionPipelines {
                 pass.dispatch_workgroups_indirect(dispatch_args, dispatch.args_offset);
             },
         );
+        encoder.on_submitted_work_done(move || drop(bind_group));
     }
 }
 
@@ -636,6 +717,39 @@ fn create_pipeline(
         "main",
         Some(&config),
     )
+}
+
+fn metadata_sizes(pass_count: u32, plan_stride: u64) -> Result<(u64, u64), Error> {
+    let plan_bytes = u64::from(pass_count)
+        .checked_mul(plan_stride)
+        .ok_or(Error::SizeOverflow)?;
+    let args_bytes =
+        common::math::checked_byte_size(u64::from(pass_count) * DISPATCH_WORDS, VALUE_SIZE_BYTES)?;
+    Ok((plan_bytes, args_bytes))
+}
+
+fn create_metadata_slot(
+    device: &wgpu::Device,
+    plan_bytes: u64,
+    args_bytes: u64,
+) -> CountedMetadataSlot {
+    CountedMetadataSlot {
+        plans: device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Counted Reduction Plans"),
+            size: plan_bytes,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        }),
+        dispatch_args: device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Counted Reduction Dispatch Arguments"),
+            size: args_bytes,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        }),
+        plan_capacity_bytes: plan_bytes,
+        args_capacity_bytes: args_bytes,
+        in_use: false,
+    }
 }
 
 fn validate_distinct(

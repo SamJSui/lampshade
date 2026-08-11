@@ -38,7 +38,14 @@ impl CompactCore {
     }
 
     pub(crate) fn from_context(context: &Context, item_kind: CompactItemKind) -> Self {
-        Self::new(&context.device, &context.queue, item_kind)
+        Self {
+            pipeline: CompactPipeline::new(&context.device, item_kind),
+            scanner: Scanner::from_context(context),
+            device: context.device.clone(),
+            queue: context.queue.clone(),
+            item_size_bytes: item_kind.size_bytes(),
+            offsets: ReusableBuffer::default(),
+        }
     }
 
     pub(crate) async fn compact_slice<T: bytemuck::Pod>(

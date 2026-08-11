@@ -31,7 +31,7 @@ pub struct ScanPipeline {
 }
 
 impl ScanPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, allow_subgroups: bool) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Scan Layout"),
             entries: &[
@@ -51,7 +51,8 @@ impl ScanPipeline {
 
         let limits = device.limits();
         let max_shared_mem = limits.max_compute_workgroup_storage_size;
-        let subgroups_enabled = device.features().contains(wgpu::Features::SUBGROUP);
+        let subgroups_enabled =
+            allow_subgroups && device.features().contains(wgpu::Features::SUBGROUP);
 
         // Subgroup scans use one coalesced item per lane. The portable fallback
         // amortizes its shared-memory scan across several items per thread.
@@ -218,6 +219,7 @@ impl ScanPipeline {
                 pass.dispatch_workgroups(x, y, 1);
             },
         );
+        encoder.on_submitted_work_done(move || drop(bg));
     }
 
     pub fn dispatch_input(
@@ -281,5 +283,6 @@ impl ScanPipeline {
                 pass.dispatch_workgroups(x, y, 1);
             },
         );
+        encoder.on_submitted_work_done(move || drop(bind_group));
     }
 }

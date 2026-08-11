@@ -14,7 +14,7 @@ pub(crate) struct ReductionPipeline {
     sum_pipeline: wgpu::ComputePipeline,
     min_pipeline: wgpu::ComputePipeline,
     max_pipeline: wgpu::ComputePipeline,
-    identities: wgpu::Buffer,
+    min_identity: wgpu::Buffer,
 }
 
 pub(crate) struct ReductionDispatch<'a> {
@@ -49,9 +49,9 @@ impl ReductionPipeline {
             U32Reduction::Max,
             "max(lhs, rhs)",
         );
-        let identities = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Reduction Identities"),
-            contents: bytemuck::cast_slice(&[0_u32, u32::MAX, 0]),
+        let min_identity = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Minimum Reduction Identity"),
+            contents: bytemuck::bytes_of(&u32::MAX),
             usage: wgpu::BufferUsages::COPY_SRC,
         });
 
@@ -60,7 +60,7 @@ impl ReductionPipeline {
             sum_pipeline,
             min_pipeline,
             max_pipeline,
-            identities,
+            min_identity,
         }
     }
 
@@ -78,13 +78,18 @@ impl ReductionPipeline {
         output: BufferRange<'_>,
         operation: U32Reduction,
     ) {
-        encoder.copy_buffer_to_buffer(
-            &self.identities,
-            operation.identity_offset(),
-            output.buffer,
-            output.offset,
-            VALUE_SIZE_BYTES,
-        );
+        match operation {
+            U32Reduction::Min => encoder.copy_buffer_to_buffer(
+                &self.min_identity,
+                0,
+                output.buffer,
+                output.offset,
+                VALUE_SIZE_BYTES,
+            ),
+            U32Reduction::Sum | U32Reduction::Max => {
+                encoder.clear_buffer(output.buffer, output.offset, Some(VALUE_SIZE_BYTES));
+            }
+        }
     }
 
     pub(crate) fn dispatch(
@@ -146,6 +151,7 @@ impl ReductionPipeline {
                 pass.dispatch_workgroups(groups_x, groups_y, 1);
             },
         );
+        encoder.on_submitted_work_done(move || drop(bind_group));
     }
 }
 

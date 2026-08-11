@@ -24,7 +24,7 @@ $benchmarkRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $benchmarkRoot '..\..')).Path
 $targetRoot = Join-Path $repoRoot 'target\release-regression'
 $safeRepoRoot = $repoRoot.Replace('\', '/')
-$baselineVersion = '0.7.0'
+$baselineVersion = '0.8.0'
 if (-not $OutputPath) {
     $OutputPath = Join-Path $benchmarkRoot 'results\latest.json'
 }
@@ -117,7 +117,7 @@ Build-Runner "crates.io $baselineVersion runner" $baselineManifest $baselineTarg
 
 $suffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
 $candidateExecutable = Join-Path $candidateTarget "release\lampshade-massively-comparison-runner$suffix"
-$baselineExecutable = Join-Path $baselineTarget "release\wgpu-primitives-release-baseline-runner$suffix"
+$baselineExecutable = Join-Path $baselineTarget "release\lampshade-release-baseline-runner$suffix"
 $revision = (& git -c "safe.directory=$safeRepoRoot" -C $repoRoot rev-parse HEAD).Trim()
 $dirty = @(& git -c "safe.directory=$safeRepoRoot" -C $repoRoot status --porcelain).Count -gt 0
 $metadata = cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $repoRoot 'Cargo.toml') | ConvertFrom-Json
@@ -147,7 +147,7 @@ foreach ($itemCount in $Items) {
     foreach ($workload in $Workloads) {
         for ($processIndex = 1; $processIndex -le $Processes; $processIndex++) {
             $sources = @(
-                @{ Source = 'published'; Implementation = 'wgpu-primitives'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion" },
+                @{ Source = 'published'; Implementation = 'lampshade'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion" },
                 @{ Source = 'checkout'; Implementation = 'lampshade'; Executable = $candidateExecutable; Version = "working-tree-$candidateVersion"; Revision = $revision }
             )
             if ($processIndex % 2 -eq 0) { [array]::Reverse($sources) }

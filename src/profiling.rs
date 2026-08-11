@@ -114,7 +114,8 @@ impl TimestampRecorder {
         device: &wgpu::Device,
         submission: wgpu::SubmissionIndex,
     ) -> Result<GpuProfile, Error> {
-        let slice = self.readback_buffer.slice(..);
+        let size_bytes = self.labels.len() as u64 * 2 * TIMESTAMP_SIZE_BYTES;
+        let slice = self.readback_buffer.slice(..size_bytes);
         let (sender, receiver) = oneshot::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result);
@@ -131,11 +132,7 @@ impl TimestampRecorder {
         };
         self.readback_buffer.unmap();
 
-        Ok(build_profile(
-            self.labels,
-            &timestamps,
-            self.timestamp_period_ns,
-        ))
+        build_profile(self.labels, &timestamps, self.timestamp_period_ns)
     }
 }
 
@@ -156,15 +153,29 @@ pub(crate) fn record_compute_pass(
     record(&mut pass);
 }
 
-fn build_profile(labels: Vec<String>, timestamps: &[u64], period_ns: f64) -> GpuProfile {
-    let spans: Vec<_> = labels
-        .into_iter()
-        .zip(timestamps.chunks_exact(2))
-        .map(|(label, timestamps)| GpuTimestampSpan {
+fn build_profile(
+    labels: Vec<String>,
+    timestamps: &[u64],
+    period_ns: f64,
+) -> Result<GpuProfile, Error> {
+    let has_nonzero_timestamp = timestamps.iter().any(|timestamp| *timestamp != 0);
+    let mut previous_end = None;
+    let mut spans = Vec::with_capacity(labels.len());
+    for (label, timestamps) in labels.into_iter().zip(timestamps.chunks_exact(2)) {
+        let beginning = timestamps[0];
+        let end = timestamps[1];
+        let unavailable = has_nonzero_timestamp && beginning == 0 && end == 0;
+        let non_monotonic =
+            end < beginning || previous_end.is_some_and(|previous_end| beginning < previous_end);
+        if unavailable || non_monotonic {
+            return Err(Error::TimestampQueryResultUnavailable { label });
+        }
+        spans.push(GpuTimestampSpan {
             label,
-            duration: ticks_to_duration(timestamps[1].saturating_sub(timestamps[0]), period_ns),
-        })
-        .collect();
+            duration: ticks_to_duration(end - beginning, period_ns),
+        });
+        previous_end = Some(end);
+    }
     let dispatch_time = spans
         .iter()
         .map(|span| span.duration)
@@ -174,11 +185,11 @@ fn build_profile(labels: Vec<String>, timestamps: &[u64], period_ns: f64) -> Gpu
         _ => Duration::ZERO,
     };
 
-    GpuProfile {
+    Ok(GpuProfile {
         gpu_elapsed,
         dispatch_time,
         spans,
-    }
+    })
 }
 
 fn ticks_to_duration(ticks: u64, period_ns: f64) -> Duration {
@@ -195,12 +206,36 @@ mod tests {
             vec!["reduce".to_owned(), "scatter".to_owned()],
             &[10, 20, 25, 45],
             2.0,
-        );
+        )
+        .expect("valid timestamps should build a profile");
 
         assert_eq!(profile.spans.len(), 2);
         assert_eq!(profile.spans[0].duration, Duration::from_nanos(20));
         assert_eq!(profile.spans[1].duration, Duration::from_nanos(40));
         assert_eq!(profile.dispatch_time, Duration::from_nanos(60));
         assert_eq!(profile.gpu_elapsed, Duration::from_nanos(70));
+    }
+
+    #[test]
+    fn rejects_unwritten_or_non_monotonic_timestamp_pairs() {
+        let unwritten = build_profile(
+            vec!["prepare".to_owned(), "reduce".to_owned()],
+            &[10, 20, 0, 0],
+            1.0,
+        );
+        assert!(matches!(
+            unwritten,
+            Err(Error::TimestampQueryResultUnavailable { label }) if label == "reduce"
+        ));
+
+        let non_monotonic = build_profile(
+            vec!["prepare".to_owned(), "reduce".to_owned()],
+            &[10, 20, 15, 25],
+            1.0,
+        );
+        assert!(matches!(
+            non_monotonic,
+            Err(Error::TimestampQueryResultUnavailable { label }) if label == "reduce"
+        ));
     }
 }

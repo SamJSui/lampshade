@@ -16,6 +16,15 @@ release_regression = load_module()
 
 
 class ReleaseRegressionTests(unittest.TestCase):
+    def test_published_runner_targets_previous_lampshade_release(self):
+        manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
+        contents = manifest.read_text(encoding="utf-8")
+
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.8.0")
+        self.assertIn('name = "lampshade-release-baseline-runner"', contents)
+        self.assertIn('lampshade = "=0.8.0"', contents)
+        self.assertNotIn('package = "wgpu-primitives"', contents)
+
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
         runs = [

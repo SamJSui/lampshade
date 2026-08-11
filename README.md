@@ -18,15 +18,18 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.7 and the current checkout,
+runs identical resident workloads against crates.io 0.8 and the current checkout,
 writes raw runs and process medians to JSON, and enforces a 2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
 The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
-verifies the renamed final source against the published 0.7 predecessor.
+verifies the 0.8 rename against its published 0.7 predecessor.
 The [key-only sort report](benchmarks/2026-08-11-key-only-sort.md) records the
 fixed-length `u32` 8-bit path, large-input validation, and its unchanged
 key/value control.
+The [0.9 release report](benchmarks/2026-08-11-lampshade-0.9-release.md)
+records the crates.io 0.8 regression gate, final key-sort/RLE characterization,
+and identical-package validation on RTX, Jetson Orin, Intel, and Apple GPUs.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
@@ -131,24 +134,25 @@ the pinned baseline and reproduction harness.
   GPU-count metadata automatically.
 - Reusable scratch storage and no `unsafe` blocks in library code.
 
-The measurements above were collected under the former `wgpu-primitives`
-package name. The 0.8 rebrand changes package/import names but not kernels or
-timing boundaries.
+The Massively and `wgpu_sort` comparisons above were collected under the former
+`wgpu-primitives` package name. The 0.8 rebrand changed package/import names but
+not those kernels or timing boundaries; newer Lampshade measurements are linked
+separately.
 
 ## Installation
 
-Lampshade 0.8 uses wgpu 30. Tokio is listed because the executable quick start
+Lampshade 0.9 uses wgpu 30. Tokio is listed because the executable quick start
 below uses `#[tokio::main]`; library development dependencies do not propagate
 to applications.
 
 ```toml
 [dependencies]
-lampshade = "0.8"
+lampshade = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 The predecessor was published as `wgpu-primitives = "0.7"`. Existing users can
-move to `lampshade = "0.8"` and change Rust imports from `wgpu_primitives` to
+move to `lampshade = "0.9"` and change Rust imports from `wgpu_primitives` to
 `lampshade`. Because wgpu types appear in the public GPU-buffer APIs, upgrading
 from versions before 0.6 also requires wgpu 30.
 
@@ -195,7 +199,7 @@ final readback.
 
 ## GPU-resident composition
 
-The `pipeline` API below is part of Lampshade 0.8 and is not present in the
+The `pipeline` API below has been stable since Lampshade 0.8 and is not present in the
 published `wgpu-primitives` 0.7 predecessor.
 
 Applications that already own a wgpu device should reuse it and record multiple
@@ -311,9 +315,11 @@ stabilization evidence.
 
 ## Profiling
 
-GPU timestamp spans are available for every primitive when the adapter supports
-timestamp queries. Dispatches also carry stable labels for tools such as NVIDIA
-Nsight Graphics.
+GPU timestamp spans are available for every primitive when the selected device
+enables timestamp queries. `Context::init` intentionally leaves them disabled
+on Apple Metal and integrated NVIDIA Vulkan because those paths produced
+incomplete timestamps or corrupted repeated dispatches. Dispatches still carry
+stable labels for tools such as NVIDIA Nsight Graphics.
 
 ```powershell
 $env:WGPU_BACKEND = 'vulkan' # or 'dx12'

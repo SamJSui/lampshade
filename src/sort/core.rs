@@ -46,7 +46,13 @@ impl RadixSorter {
         let implementation = if variant.uses_eight_bit_pipeline() {
             SortImplementation::EightBit(EightBitSorter::new(device, queue, item_kind))
         } else {
-            SortImplementation::ReduceScan(ReduceScanSorter::new(device, queue, item_kind, variant))
+            SortImplementation::ReduceScan(ReduceScanSorter::new_for_adapter(
+                device,
+                queue,
+                item_kind,
+                variant,
+                adapter_info,
+            ))
         };
         Self { implementation }
     }
@@ -214,10 +220,42 @@ impl ReduceScanSorter {
         item_kind: SortItemKind,
         radix_variant: RadixVariant,
     ) -> Self {
+        Self::new_with_scanner(
+            device,
+            queue,
+            item_kind,
+            radix_variant,
+            Scanner::new(device, queue),
+        )
+    }
+
+    fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        radix_variant: RadixVariant,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        Self::new_with_scanner(
+            device,
+            queue,
+            item_kind,
+            radix_variant,
+            Scanner::new_for_adapter(device, queue, adapter_info),
+        )
+    }
+
+    fn new_with_scanner(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        radix_variant: RadixVariant,
+        scanner: Scanner,
+    ) -> Self {
         Self {
             device: device.clone(),
             queue: queue.clone(),
-            scanner: Scanner::new(device, queue),
+            scanner,
             pipeline: SortPipeline::new(device, item_kind, radix_variant),
             workspace: None,
             item_size: item_kind.size_bytes(),
@@ -421,6 +459,7 @@ impl ReduceScanSorter {
             self.pipeline.bits_per_pass,
             pass_count,
         );
+        let mut bind_groups = Vec::with_capacity(pass_count as usize * 2);
 
         for radix_pass in 0..pass_count {
             let (source, destination) = pass_buffers(
@@ -494,7 +533,11 @@ impl ReduceScanSorter {
                     pass.dispatch_workgroups(x_groups, y_groups, 1);
                 },
             );
+            bind_groups.push(reduce_bind_group);
+            bind_groups.push(scatter_bind_group);
         }
+
+        encoder.on_submitted_work_done(move || drop((bind_groups, uniform)));
 
         Ok(())
     }

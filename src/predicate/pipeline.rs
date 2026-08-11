@@ -1,8 +1,11 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{
     KeyValueField, U32Predicate,
     common::{self, buffers::BufferRange},
     profiling,
 };
+use wgpu::util::DeviceExt;
 
 const BLOCK_SIZE: u32 = 256;
 const PARAMS_SIZE_BYTES: u64 = 32;
@@ -40,6 +43,32 @@ pub(crate) struct PredicatePipeline {
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::ComputePipeline,
     max_workgroups_per_dimension: u32,
+    params: Arc<Mutex<ParameterPool>>,
+}
+
+#[derive(Default)]
+struct ParameterPool {
+    slots: Vec<ParameterSlot>,
+}
+
+struct ParameterSlot {
+    buffer: wgpu::Buffer,
+    in_use: bool,
+}
+
+struct ParameterLease {
+    pool: Arc<Mutex<ParameterPool>>,
+    slot: usize,
+}
+
+impl Drop for ParameterLease {
+    fn drop(&mut self) {
+        let mut pool = self
+            .pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        pool.slots[self.slot].in_use = false;
+    }
 }
 
 pub(crate) struct PredicateDispatch<'a> {
@@ -76,6 +105,7 @@ impl PredicatePipeline {
             bind_group_layout,
             pipeline,
             max_workgroups_per_dimension: device.limits().max_compute_workgroups_per_dimension,
+            params: Arc::new(Mutex::new(ParameterPool::default())),
         }
     }
 
@@ -101,13 +131,8 @@ impl PredicatePipeline {
             0_u32,
             0,
         ];
-        let params = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Predicate Mask Parameters"),
-            size: PARAMS_SIZE_BYTES,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&params, 0, bytemuck::cast_slice(&params_data));
+        let (params, lease) =
+            self.acquire_params(device, queue, bytemuck::cast_slice(&params_data));
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Predicate Mask Bind Group"),
             layout: &self.bind_group_layout,
@@ -144,6 +169,47 @@ impl PredicatePipeline {
         // Keep transient bindings alive through asynchronous execution. This
         // explicit ownership also avoids premature handle reuse on the Jetson
         // Vulkan path while still releasing resources when this submission ends.
-        encoder.on_submitted_work_done(move || drop((bind_group, params)));
+        encoder.on_submitted_work_done(move || drop((bind_group, lease)));
+    }
+
+    fn acquire_params(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        contents: &[u8],
+    ) -> (wgpu::Buffer, ParameterLease) {
+        let mut pool = self
+            .params
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot = pool.slots.iter().position(|slot| !slot.in_use);
+        let slot = match slot {
+            Some(slot) => {
+                pool.slots[slot].in_use = true;
+                queue.write_buffer(&pool.slots[slot].buffer, 0, contents);
+                slot
+            }
+            None => {
+                let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Predicate Mask Parameters"),
+                    contents,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+                pool.slots.push(ParameterSlot {
+                    buffer,
+                    in_use: true,
+                });
+                pool.slots.len() - 1
+            }
+        };
+        let buffer = pool.slots[slot].buffer.clone();
+        drop(pool);
+        (
+            buffer,
+            ParameterLease {
+                pool: Arc::clone(&self.params),
+                slot,
+            },
+        )
     }
 }

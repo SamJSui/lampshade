@@ -10,6 +10,9 @@ pub enum Error {
     DevicePoll(wgpu::PollError),
     ReadbackChannelClosed,
     TimestampQueriesUnsupported,
+    TimestampQueryResultUnavailable {
+        label: String,
+    },
     ElementCountTooLarge {
         count: u64,
     },
@@ -84,6 +87,12 @@ impl fmt::Display for Error {
             }
             Self::TimestampQueriesUnsupported => {
                 f.write_str("the selected GPU adapter does not support timestamp queries")
+            }
+            Self::TimestampQueryResultUnavailable { label } => {
+                write!(
+                    f,
+                    "the GPU did not return a valid timestamp result for {label}"
+                )
             }
             Self::ElementCountTooLarge { count } => {
                 write!(f, "element count {count} exceeds the supported u32 range")

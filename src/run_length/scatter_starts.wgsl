@@ -1,5 +1,6 @@
 @group(0) @binding(0) var<storage, read> input: array<u32>;
-@group(0) @binding(1) var<storage, read_write> heads: array<u32>;
+@group(0) @binding(1) var<storage, read_write> run_starts: array<u32>;
+@group(0) @binding(2) var<storage, read> offsets: array<u32>;
 @group(0) @binding(5) var<storage, read> input_count: array<u32>;
 
 const BLOCK_SIZE: u32 = 256u;
@@ -20,24 +21,20 @@ fn item_index(group_id: vec3<u32>, local_id: vec3<u32>, groups_x: u32) -> u32 {
 }
 
 @compute @workgroup_size(BLOCK_SIZE)
-fn mark_heads(
+fn scatter_starts(
     @builtin(workgroup_id) group_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
 ) {
     let index = item_index(group_id, local_id, num_workgroups.x);
-    if (index >= arrayLength(&input)) {
+    let count = active_items();
+    if (index >= count) {
         return;
     }
 
-    let count = active_items();
-    var is_head = 0u;
-    if (index < count) {
-        if (index == 0u) {
-            is_head = 1u;
-        } else if (input[index] != input[index - 1u]) {
-            is_head = 1u;
-        }
+    let is_head = index == 0u || input[index] != input[index - 1u];
+    if (is_head) {
+        let run_index = offsets[index];
+        run_starts[run_index] = index;
     }
-    heads[index] = is_head;
 }
