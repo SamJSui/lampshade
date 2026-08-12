@@ -408,7 +408,7 @@ impl CountedSorter {
             bind_groups.push(reduce_bind_group);
             bind_groups.push(scatter_bind_group);
         }
-        encoder.on_submitted_work_done(move || drop((bind_groups, uniform)));
+        crate::common::runtime::defer_drop(encoder, (bind_groups, uniform));
         Ok(())
     }
 
@@ -596,7 +596,7 @@ impl CountedSortPipelines {
                 pass.dispatch_workgroups(1, 1, 1);
             },
         );
-        encoder.on_submitted_work_done(move || drop((bind_group, config)));
+        crate::common::runtime::defer_drop(encoder, (bind_group, config));
     }
 
     #[allow(clippy::too_many_arguments)]

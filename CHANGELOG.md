@@ -5,6 +5,16 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+### Fixed
+
+- Restore `wasm32-unknown-unknown` library compilation by retaining transient
+  WebGPU resources in thread-local storage until submitted work completes.
+
+### Changed
+
+- Move the published-release performance baseline to Lampshade 0.11.0 so
+  future WGPU 29 changes are compared against the current release.
+
 ## 0.11.0 - 2026-08-12
 
 ### Added

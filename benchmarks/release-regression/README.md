@@ -7,7 +7,7 @@ crates are not.
 This harness compares the current Lampshade checkout against its last published
 predecessor using the same deterministic inputs, public resident APIs,
 completion boundary, correctness checks, and process-median aggregation. The
-baseline runner depends on crates.io `lampshade = "=0.10.1"` and wgpu 29; the
+baseline runner depends on crates.io `lampshade = "=0.11.0"` and wgpu 29; the
 candidate runner depends on the Lampshade repository checkout.
 
 This is now a same-runtime regression gate: the published baseline and current

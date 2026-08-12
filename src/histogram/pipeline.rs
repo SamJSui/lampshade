@@ -117,6 +117,6 @@ impl HistogramPipeline {
                 pass.dispatch_workgroups(groups_x, groups_y, 1);
             },
         );
-        encoder.on_submitted_work_done(move || drop((bind_group, params)));
+        crate::common::runtime::defer_drop(encoder, (bind_group, params));
     }
 }

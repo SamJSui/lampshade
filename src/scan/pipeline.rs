@@ -219,7 +219,7 @@ impl ScanPipeline {
                 pass.dispatch_workgroups(x, y, 1);
             },
         );
-        encoder.on_submitted_work_done(move || drop(bg));
+        crate::common::runtime::defer_drop(encoder, bg);
     }
 
     pub fn dispatch_input(
@@ -283,6 +283,6 @@ impl ScanPipeline {
                 pass.dispatch_workgroups(x, y, 1);
             },
         );
-        encoder.on_submitted_work_done(move || drop(bind_group));
+        crate::common::runtime::defer_drop(encoder, bind_group);
     }
 }

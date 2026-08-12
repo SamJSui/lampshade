@@ -169,7 +169,7 @@ impl PredicatePipeline {
         // Keep transient bindings alive through asynchronous execution. This
         // explicit ownership also avoids premature handle reuse on the Jetson
         // Vulkan path while still releasing resources when this submission ends.
-        encoder.on_submitted_work_done(move || drop((bind_group, lease)));
+        crate::common::runtime::defer_drop(encoder, (bind_group, lease));
     }
 
     fn acquire_params(

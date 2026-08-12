@@ -25,7 +25,7 @@ $benchmarkRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $benchmarkRoot '..\..')).Path
 $targetRoot = Join-Path $repoRoot 'target\release-regression'
 $safeRepoRoot = $repoRoot.Replace('\', '/')
-$baselineVersion = '0.10.1'
+$baselineVersion = '0.11.0'
 if (-not $OutputPath) {
     $OutputPath = Join-Path $benchmarkRoot 'results\latest.json'
 }
