@@ -25,4 +25,4 @@ pub use profiling::{GpuProfile, GpuTimestampSpan};
 pub use reduce::{Reducer, U32Reduction};
 pub use run_length::{RunLengthEncoder, RunLengthOutputBuffers};
 pub use scan::Scanner;
-pub use sort::{KeyValue, KeyValueSorter, Sorter};
+pub use sort::{KeyValue, KeyValueSoaSorter, KeyValueSorter, Sorter};

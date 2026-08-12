@@ -18,7 +18,7 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.8 and the current checkout,
+runs identical resident workloads against crates.io 0.9 and the current checkout,
 writes raw runs and process medians to JSON, and enforces a 2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
@@ -30,9 +30,20 @@ key/value control.
 The [0.9 release report](benchmarks/2026-08-11-lampshade-0.9-release.md)
 records the crates.io 0.8 regression gate, final key-sort/RLE characterization,
 and identical-package validation on RTX, Jetson Orin, Intel, and Apple GPUs.
+The [WGPU 29 candidate report](benchmarks/2026-08-11-wgpu29-release.md)
+records an RTX pass and the accepted WGPU 29 Metal completion-boundary cost.
+Starting with 0.10, WGPU 29 is Lampshade's compatibility baseline; the 0.9
+release and `release/wgpu30` preserve the WGPU 30 line. The adjacent
+[downstream spike report](benchmarks/2026-08-12-downstream-adoption-spikes.md)
+separates promising Gaussian-splatting integrations from release readiness.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
+
+The comparison tables below are historical pre-0.10 measurements using the
+runtime versions stated in their linked reports. They remain algorithmic
+baselines, not evidence for the WGPU 29 release candidate; the 0.10 regression
+and downstream integration reports supersede them where available.
 
 ### Against Massively 0.96
 
@@ -141,20 +152,24 @@ separately.
 
 ## Installation
 
-Lampshade 0.9 uses wgpu 30. Tokio is listed because the executable quick start
+Published Lampshade 0.9 uses wgpu 30. Lampshade 0.10 moves the public API to
+wgpu 29 so its buffers compose directly with current graphics projects. Until
+0.10 is published, use this checkout for integration testing. Tokio is listed
+because the executable quick start
 below uses `#[tokio::main]`; library development dependencies do not propagate
 to applications.
 
 ```toml
 [dependencies]
-lampshade = "0.9"
+lampshade = { path = "../lampshade" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 The predecessor was published as `wgpu-primitives = "0.7"`. Existing users can
-move to `lampshade = "0.9"` and change Rust imports from `wgpu_primitives` to
-`lampshade`. Because wgpu types appear in the public GPU-buffer APIs, upgrading
-from versions before 0.6 also requires wgpu 30.
+move to Lampshade and change Rust imports from `wgpu_primitives` to `lampshade`.
+Choose Lampshade 0.9 or the `release/wgpu30` branch for wgpu 30. Use Lampshade
+0.10 onward for wgpu 29; wgpu buffer types from different major versions are
+not interchangeable.
 
 ## Quick start
 
@@ -236,6 +251,12 @@ recorder.reduce(sorted, sum, U32Reduction::Sum)?;
 drop(recorder);
 queue.submit(Some(encoder.finish()));
 ```
+
+This recording boundary is especially important on WGPU 29 Metal. On the
+tested M3 Pro, an explicit submit plus `Device::poll(Wait)` cost about 1.53 ms
+even for an empty command buffer. Record the whole GPU workflow and synchronize
+only for a required host readback; calling a host-returning convenience method
+for every primitive repeatedly pays that runtime cost.
 
 [`resident_pipeline.rs`](examples/resident_pipeline.rs) composes `u32`
 predicate, compaction, sort, and reduction. The

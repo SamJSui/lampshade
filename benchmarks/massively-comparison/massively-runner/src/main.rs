@@ -39,6 +39,9 @@ fn run() -> Result<(), AnyError> {
     let (samples_ms, output_items) = match config.workload {
         Workload::ReduceSum => run_reduce(&exec, &config)?,
         Workload::SortBounded16 | Workload::SortFullWidth => run_sort(&exec, &config)?,
+        Workload::SortCountedFullWidth => {
+            return Err("sort_counted_full_width is a Lampshade release-gate workload".into());
+        }
         Workload::ExclusiveScan => run_scan(&exec, &config)?,
         Workload::Compact50 => run_compact(&exec, &config)?,
     };

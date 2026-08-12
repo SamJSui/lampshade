@@ -143,7 +143,7 @@ async fn run() {
         .expect("readback channel closed")
         .expect("failed to map pipeline readback");
     let result = {
-        let mapped = slice.get_mapped_range().expect("readback is mapped");
+        let mapped = slice.get_mapped_range();
         bytemuck::cast_slice::<u8, u32>(&mapped).to_vec()
     };
     readback.unmap();

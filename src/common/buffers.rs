@@ -228,7 +228,7 @@ pub async fn download_buffer<T: bytemuck::Pod>(
     receiver.await.map_err(|_| Error::ReadbackChannelClosed)??;
 
     let result = {
-        let data = buffer_slice.get_mapped_range()?;
+        let data = buffer_slice.get_mapped_range();
         bytemuck::cast_slice(&data).to_vec()
     };
     staging_buffer.unmap();

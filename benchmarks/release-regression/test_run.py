@@ -20,10 +20,28 @@ class ReleaseRegressionTests(unittest.TestCase):
         manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
         contents = manifest.read_text(encoding="utf-8")
 
-        self.assertEqual(release_regression.BASELINE_VERSION, "0.8.0")
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.9.0")
         self.assertIn('name = "lampshade-release-baseline-runner"', contents)
-        self.assertIn('lampshade = "=0.8.0"', contents)
+        self.assertIn('lampshade = "=0.9.0"', contents)
         self.assertNotIn('package = "wgpu-primitives"', contents)
+
+    def test_runtime_stack_comes_from_the_locked_dependency_graph(self):
+        manifest = (
+            Path(__file__).parents[1]
+            / "massively-comparison"
+            / "lampshade-runner"
+            / "Cargo.toml"
+        )
+
+        self.assertEqual(
+            release_regression.resolved_wgpu_stack(manifest),
+            "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+        )
+
+    def test_candidate_version_does_not_require_a_root_lockfile(self):
+        manifest = Path(__file__).parents[2] / "Cargo.toml"
+
+        self.assertEqual(release_regression.package_version(manifest), "0.10.0")
 
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
@@ -84,6 +102,16 @@ class ReleaseRegressionTests(unittest.TestCase):
 
         self.assertTrue(release_regression.passes_gate([], [slow_same_adapter], 1, True))
         self.assertFalse(release_regression.passes_gate([], [different_adapter], 1, True))
+
+    def test_characterization_gate_ignores_timing_but_requires_complete_runs(self):
+        slow_same_adapter = {"adapter_match": True, "passed": False}
+
+        self.assertTrue(release_regression.passes_gate([], [slow_same_adapter], 1, True))
+        self.assertFalse(
+            release_regression.passes_gate(
+                [{"error": "runner failed"}], [slow_same_adapter], 1, True
+            )
+        )
 
 
 if __name__ == "__main__":

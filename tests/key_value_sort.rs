@@ -1,6 +1,6 @@
 mod support;
 
-use lampshade::{Error, KeyValue, KeyValueSorter};
+use lampshade::{Error, KeyValue, KeyValueSoaSorter, KeyValueSorter};
 use wgpu::util::DeviceExt;
 
 const SORT_SIZES: [usize; 18] = [
@@ -220,6 +220,203 @@ async fn counted_key_value_sort_uses_the_gpu_resident_prefix_and_stays_stable() 
             KeyValue::new(7, 70),
         ]
     );
+}
+
+#[tokio::test]
+async fn native_soa_counted_sort_is_stable_for_a_gpu_selected_prefix() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let Some(mut sorter) =
+        KeyValueSoaSorter::new_for_adapter(&context.device, &context.adapter_info)
+    else {
+        return;
+    };
+    let capacity = 65_537_u32;
+    let active = 65_521_u32;
+    let keys: Vec<_> = support::random_u32(capacity as usize, 0x50A5_0A11)
+        .into_iter()
+        .map(|key| key & 0xff)
+        .collect();
+    let values: Vec<_> = (0..capacity).collect();
+    let key_buffer = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Sort Keys"),
+            contents: bytemuck::cast_slice(&keys),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
+    let value_buffer = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Sort Values"),
+            contents: bytemuck::cast_slice(&values),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Sort Count"),
+            contents: bytemuck::bytes_of(&active),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort_counted(&mut encoder, &key_buffer, &value_buffer, &count, capacity)
+        .expect("native SoA counted sort records");
+    context.queue.submit(Some(encoder.finish()));
+
+    let actual_keys = support::read_pod::<u32>(&context, &key_buffer, active as usize).await;
+    let actual_values = support::read_pod::<u32>(&context, &value_buffer, active as usize).await;
+    let mut expected: Vec<_> = keys[..active as usize]
+        .iter()
+        .copied()
+        .zip(values[..active as usize].iter().copied())
+        .collect();
+    expected.sort_by_key(|&(key, _)| key);
+    assert_eq!(
+        actual_keys
+            .into_iter()
+            .zip(actual_values)
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
+
+#[tokio::test]
+async fn native_soa_counted_sort_clamps_oversized_counts_and_accepts_zero() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let Some(mut sorter) =
+        KeyValueSoaSorter::new_for_adapter(&context.device, &context.adapter_info)
+    else {
+        return;
+    };
+    let keys = [9_u32, 1, 1, 7, 0, 7, 3];
+    let values: Vec<u32> = (0..keys.len() as u32).collect();
+    let key_buffer = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Clamp Keys"),
+            contents: bytemuck::cast_slice(&keys),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+        });
+    let value_buffer = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Clamp Values"),
+            contents: bytemuck::cast_slice(&values),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+        });
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Clamp Count"),
+            contents: bytemuck::bytes_of(&u32::MAX),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort_counted(
+            &mut encoder,
+            &key_buffer,
+            &value_buffer,
+            &count,
+            keys.len() as u32,
+        )
+        .expect("oversized count is clamped");
+    context.queue.submit(Some(encoder.finish()));
+    let actual_keys = support::read_pod::<u32>(&context, &key_buffer, keys.len()).await;
+    let actual_values = support::read_pod::<u32>(&context, &value_buffer, keys.len()).await;
+    let mut expected: Vec<_> = keys.into_iter().zip(values.iter().copied()).collect();
+    expected.sort_by_key(|&(key, _)| key);
+    assert_eq!(
+        actual_keys
+            .into_iter()
+            .zip(actual_values)
+            .collect::<Vec<_>>(),
+        expected
+    );
+
+    context
+        .queue
+        .write_buffer(&count, 0, bytemuck::bytes_of(&0_u32));
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort_counted(
+            &mut encoder,
+            &key_buffer,
+            &value_buffer,
+            &count,
+            keys.len() as u32,
+        )
+        .expect("zero GPU count records");
+    context.queue.submit(Some(encoder.finish()));
+    assert_eq!(
+        support::read_pod::<u32>(&context, &key_buffer, keys.len()).await,
+        expected.iter().map(|&(key, _)| key).collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn native_soa_reserved_sort_accepts_zero_capacity_without_workspace() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let Some(mut sorter) =
+        KeyValueSoaSorter::new_for_adapter(&context.device, &context.adapter_info)
+    else {
+        return;
+    };
+    let keys = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Zero-Capacity SoA Keys"),
+        size: 4,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+    let values = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Zero-Capacity SoA Values"),
+        size: 4,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Zero-Capacity SoA Count"),
+            contents: bytemuck::bytes_of(&u32::MAX),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+    sorter
+        .prepare_counted_from_word(&keys, &values, &count, 0, 0)
+        .expect("zero-capacity plan requires no workspace");
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_reserved_sort_counted_from_word(&mut encoder, &keys, &values, &count, 0, 0)
+        .expect("zero-capacity reserved recording is a no-op");
+    let submission = context.queue.submit(Some(encoder.finish()));
+    context
+        .device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        })
+        .expect("zero-capacity submission completes");
 }
 
 #[tokio::test]

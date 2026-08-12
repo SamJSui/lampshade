@@ -9,18 +9,20 @@ import hashlib
 import json
 import os
 import platform
+import re
 import statistics
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-BASELINE_VERSION = "0.8.0"
+BASELINE_VERSION = "0.9.0"
 DEFAULT_ITEMS = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_WORKLOADS = (
     "reduce_sum",
     "sort_bounded16",
     "sort_full_width",
+    "sort_counted_full_width",
     "exclusive_scan",
     "compact_50",
 )
@@ -162,6 +164,32 @@ def build_runner(manifest: Path, target: Path) -> None:
     )
 
 
+def resolved_wgpu_stack(manifest: Path) -> str:
+    lock_text = manifest.with_name("Cargo.lock").read_text(encoding="utf-8")
+    names = ("wgpu", "wgpu-core", "wgpu-hal", "wgpu-types")
+    versions = {}
+    for name in names:
+        matched = re.search(
+            rf'\[\[package\]\]\s+name = "{re.escape(name)}"\s+version = "([^"]+)"',
+            lock_text,
+        )
+        if matched is None:
+            raise ValueError(f"missing {name} in {manifest.with_name('Cargo.lock')}")
+        versions[name] = matched.group(1)
+    return "; ".join(f"{name} {versions[name]}" for name in names)
+
+
+def package_version(manifest: Path) -> str:
+    manifest_text = manifest.read_text(encoding="utf-8")
+    package = re.search(r"(?ms)^\[package\]\s+(.*?)(?=^\[|\Z)", manifest_text)
+    if package is None:
+        raise ValueError(f"missing [package] in {manifest}")
+    version = re.search(r'^version\s*=\s*"([^"]+)"', package.group(1), re.MULTILINE)
+    if version is None:
+        raise ValueError(f"missing package version in {manifest}")
+    return version.group(1)
+
+
 def sampling(items: int, quick: bool) -> tuple[int, int, int]:
     if quick:
         return 1, 0, 3
@@ -176,6 +204,7 @@ def run_one(
     implementation: str,
     version: str,
     revision: str,
+    runtime_stack: str,
     backend: str,
     items: int,
     workload: str,
@@ -196,6 +225,7 @@ def run_one(
             "MASSIVELY_BENCH_IMPLEMENTATION_NAME": implementation,
             "MASSIVELY_BENCH_IMPLEMENTATION_VERSION": version,
             "MASSIVELY_BENCH_IMPLEMENTATION_REVISION": revision,
+            "MASSIVELY_BENCH_RUNTIME_STACK": runtime_stack,
         }
     )
     completed = subprocess.run(executable, env=env, text=True, capture_output=True)
@@ -232,6 +262,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threshold-percent", type=float, default=2.0)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--quick", action="store_true")
+    parser.add_argument(
+        "--characterize",
+        action="store_true",
+        help="record formal cross-runtime timings without enforcing the timing threshold",
+    )
     return parser.parse_args()
 
 
@@ -255,6 +290,8 @@ def main() -> int:
     build_runner(candidate_manifest, candidate_target)
     print(f"Building crates.io {BASELINE_VERSION} runner...", file=sys.stderr)
     build_runner(baseline_manifest, baseline_target)
+    published_runtime_stack = resolved_wgpu_stack(baseline_manifest)
+    checkout_runtime_stack = resolved_wgpu_stack(candidate_manifest)
     suffix = ".exe" if os.name == "nt" else ""
     candidate_executable = candidate_target / "release" / f"lampshade-massively-comparison-runner{suffix}"
     baseline_executable = baseline_target / "release" / f"lampshade-release-baseline-runner{suffix}"
@@ -267,8 +304,7 @@ def main() -> int:
             repo_root,
         )
     )
-    metadata = json.loads(command_output(["cargo", "metadata", "--no-deps", "--format-version", "1"], repo_root))
-    candidate_version = metadata["packages"][0]["version"]
+    candidate_version = package_version(repo_root / "Cargo.toml")
     source_files, source_manifest_sha256 = source_manifest(repo_root)
 
     runs: list[dict[str, Any]] = []
@@ -277,12 +313,12 @@ def main() -> int:
         for workload in args.workloads:
             for process_index in range(1, args.processes + 1):
                 sources = [
-                    ("published", "lampshade", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}"),
-                    ("checkout", "lampshade", candidate_executable, f"working-tree-{candidate_version}", revision),
+                    ("published", "lampshade", baseline_executable, f"crates.io-{BASELINE_VERSION}", f"v{BASELINE_VERSION}", published_runtime_stack),
+                    ("checkout", "lampshade", candidate_executable, f"working-tree-{candidate_version}", revision, checkout_runtime_stack),
                 ]
                 if process_index % 2 == 0:
                     sources.reverse()
-                for source, implementation, executable, version, source_revision in sources:
+                for source, implementation, executable, version, source_revision, runtime_stack in sources:
                     print(f"{source} {workload} items={items} process={process_index}", file=sys.stderr)
                     try:
                         runs.append(
@@ -292,6 +328,7 @@ def main() -> int:
                                 implementation,
                                 version,
                                 source_revision,
+                                runtime_stack,
                                 args.backend,
                                 items,
                                 workload,
@@ -313,7 +350,10 @@ def main() -> int:
     aggregates = aggregate_runs(runs)
     comparisons = compare_aggregates(aggregates, args.threshold_percent)
     expected_comparisons = len(args.items) * len(args.workloads)
-    gate_passed = passes_gate(failures, comparisons, expected_comparisons, args.quick)
+    timing_gate_disabled = args.quick or args.characterize
+    gate_passed = passes_gate(
+        failures, comparisons, expected_comparisons, timing_gate_disabled
+    )
     result = {
         "schema_version": 1,
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -334,17 +374,22 @@ def main() -> int:
             "processes": args.processes,
             "threshold_percent": args.threshold_percent,
             "quick": args.quick,
+            "characterize": args.characterize,
         },
         "methodology": {
             "timing": "identical public resident API and completion boundary per source",
             "aggregation": "median of independent process medians",
-            "gate": "candidate increase must not exceed threshold_percent",
+            "gate": (
+                "not evaluated: cross-runtime characterization"
+                if args.characterize
+                else "candidate increase must not exceed threshold_percent"
+            ),
         },
         "runs": runs,
         "failures": failures,
         "aggregates": aggregates,
         "comparisons": comparisons,
-        "gate_evaluated": not args.quick,
+        "gate_evaluated": not timing_gate_disabled,
         "gate_passed": gate_passed,
     }
     output = args.output or benchmark_root / "results" / "latest.json"
@@ -355,7 +400,7 @@ def main() -> int:
 
     print(f"{'workload':<20} {'items':>10} {'published':>11} {'checkout':>11} {'change':>9} {'gate':>6}")
     for row in comparisons:
-        gate = "n/a" if args.quick else ("pass" if row["passed"] else "FAIL")
+        gate = "n/a" if timing_gate_disabled else ("pass" if row["passed"] else "FAIL")
         print(
             f"{row['workload']:<20} {row['items']:>10} {row['published_ms']:>11.3f} "
             f"{row['checkout_ms']:>11.3f} {row['change_percent']:>8.2f}% "

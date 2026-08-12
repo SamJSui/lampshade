@@ -178,7 +178,11 @@ impl KeyValueSorter {
     }
 
     pub(crate) fn reserve_counted(&mut self, capacity: u32) -> Result<(), Error> {
-        self.counted().reserve(capacity)
+        if let Some(sorter) = self.core.eight_bit_mut() {
+            sorter.reserve_counted(capacity)
+        } else {
+            self.counted().reserve(capacity)
+        }
     }
 
     /// Sorts a capacity-bounded prefix of key-value records selected by a
@@ -194,8 +198,7 @@ impl KeyValueSorter {
         count: &wgpu::Buffer,
         capacity: u32,
     ) -> Result<(), Error> {
-        self.counted()
-            .sort_gpu_to_gpu(input, output, count, capacity, u32::BITS)
+        self.sort_counted_gpu_to_gpu_with_key_bits(input, output, count, capacity, u32::BITS)
     }
 
     /// Sorts a GPU-counted key-value prefix using a trusted key-width bound.
@@ -207,8 +210,12 @@ impl KeyValueSorter {
         capacity: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
-        self.counted()
-            .sort_gpu_to_gpu(input, output, count, capacity, key_bits)
+        if let Some(sorter) = self.core.eight_bit_mut() {
+            sorter.sort_counted_gpu_to_gpu(input, output, count, 0, capacity, key_bits)
+        } else {
+            self.counted()
+                .sort_gpu_to_gpu(input, output, count, capacity, key_bits)
+        }
     }
 
     /// Records a capacity-bounded key-value sort whose exact length remains on
@@ -221,8 +228,7 @@ impl KeyValueSorter {
         count: &wgpu::Buffer,
         capacity: u32,
     ) -> Result<(), Error> {
-        self.counted()
-            .record_sort(encoder, input, output, count, capacity, u32::BITS)
+        self.record_sort_counted_with_key_bits(encoder, input, output, count, capacity, u32::BITS)
     }
 
     /// Records a GPU-counted key-value sort with a trusted key-width bound.
@@ -235,8 +241,12 @@ impl KeyValueSorter {
         capacity: u32,
         key_bits: u32,
     ) -> Result<(), Error> {
-        self.counted()
-            .record_sort(encoder, input, output, count, capacity, key_bits)
+        if let Some(sorter) = self.core.eight_bit_mut() {
+            sorter.record_sort_counted(encoder, input, output, count, 0, capacity, key_bits)
+        } else {
+            self.counted()
+                .record_sort(encoder, input, output, count, capacity, key_bits)
+        }
     }
 
     /// Records a GPU-counted key-value sort using shared prepared count
@@ -289,9 +299,14 @@ impl KeyValueSorter {
         count: &wgpu::Buffer,
         capacity: u32,
     ) -> Result<GpuProfile, Error> {
-        self.counted()
-            .profile_sort(input, output, count, capacity, u32::BITS)
-            .await
+        self.profile_sort_counted_gpu_to_gpu_with_key_bits(
+            input,
+            output,
+            count,
+            capacity,
+            u32::BITS,
+        )
+        .await
     }
 
     /// Profiles a GPU-counted key-value sort using a trusted key-width bound.
@@ -303,9 +318,15 @@ impl KeyValueSorter {
         capacity: u32,
         key_bits: u32,
     ) -> Result<GpuProfile, Error> {
-        self.counted()
-            .profile_sort(input, output, count, capacity, key_bits)
-            .await
+        if let Some(sorter) = self.core.eight_bit_mut() {
+            sorter
+                .profile_sort_counted(input, output, count, 0, capacity, key_bits)
+                .await
+        } else {
+            self.counted()
+                .profile_sort(input, output, count, capacity, key_bits)
+                .await
+        }
     }
 
     fn counted(&mut self) -> &mut CountedSorter {
