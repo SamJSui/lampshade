@@ -18,6 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install Vulkan software adapter
         run: |
@@ -27,6 +28,8 @@ jobs:
         run: cargo fmt --all --check
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Check WebAssembly library target
+        run: cargo check --target wasm32-unknown-unknown --lib
       - name: Run unit and GPU integration tests
         env:
           WGPU_BACKEND: vulkan

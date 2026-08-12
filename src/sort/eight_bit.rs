@@ -506,9 +506,7 @@ impl EightBitSorter {
                 },
             );
         }
-        encoder.on_submitted_work_done(move || {
-            drop((params, prepare, histogram, prefix, scatter));
-        });
+        crate::common::runtime::defer_drop(encoder, (params, prepare, histogram, prefix, scatter));
         Ok(())
     }
 
@@ -651,7 +649,7 @@ impl EightBitSorter {
             bindings.prefix.clone(),
             bindings.scatter.clone(),
         );
-        encoder.on_submitted_work_done(move || drop(keepalive));
+        crate::common::runtime::defer_drop(encoder, keepalive);
         Ok(())
     }
 

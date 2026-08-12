@@ -21,9 +21,9 @@ class ReleaseRegressionTests(unittest.TestCase):
         manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
         contents = manifest.read_text(encoding="utf-8")
 
-        self.assertEqual(release_regression.BASELINE_VERSION, "0.10.1")
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.11.0")
         self.assertIn('name = "lampshade-release-baseline-runner"', contents)
-        self.assertIn('lampshade = "=0.10.1"', contents)
+        self.assertIn('lampshade = "=0.11.0"', contents)
         self.assertNotIn('package = "wgpu-primitives"', contents)
 
     def test_runtime_stack_comes_from_the_locked_dependency_graph(self):

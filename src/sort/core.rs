@@ -544,7 +544,7 @@ impl ReduceScanSorter {
             bind_groups.push(scatter_bind_group);
         }
 
-        encoder.on_submitted_work_done(move || drop((bind_groups, uniform)));
+        crate::common::runtime::defer_drop(encoder, (bind_groups, uniform));
 
         Ok(())
     }

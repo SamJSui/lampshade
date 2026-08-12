@@ -441,9 +441,9 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "lampshade"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3a480ddfa3f958b84784306b18c4ab1456bdcbf03dab865740de25f12d10990"
+checksum = "22185d9dc3b39c8b8abdcaacdeec33e08162fad6d17874374b38a1682dba26ab"
 dependencies = [
  "bytemuck",
  "futures",

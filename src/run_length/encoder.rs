@@ -431,7 +431,7 @@ impl RunLengthEncoder {
             .scatter(encoder, &bind_group, capacity, profiler.as_deref_mut());
         self.pipeline
             .finalize(encoder, &bind_group, capacity, profiler);
-        encoder.on_submitted_work_done(move || drop(bind_group));
+        crate::common::runtime::defer_drop(encoder, bind_group);
         Ok(())
     }
 

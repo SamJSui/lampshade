@@ -474,7 +474,7 @@ impl CountedReducer {
             current_capacity = output_capacity;
         }
         if let Some(metadata) = metadata {
-            encoder.on_submitted_work_done(move || drop(metadata));
+            crate::common::runtime::defer_drop(encoder, metadata);
         }
         Ok(())
     }
@@ -619,7 +619,7 @@ impl CountedReductionPipelines {
                 pass.dispatch_workgroups(1, 1, 1);
             },
         );
-        encoder.on_submitted_work_done(move || drop((bind_group, config)));
+        crate::common::runtime::defer_drop(encoder, (bind_group, config));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -691,7 +691,7 @@ impl CountedReductionPipelines {
                 pass.dispatch_workgroups_indirect(dispatch_args, dispatch.args_offset);
             },
         );
-        encoder.on_submitted_work_done(move || drop(bind_group));
+        crate::common::runtime::defer_drop(encoder, bind_group);
     }
 }
 

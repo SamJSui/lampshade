@@ -3,6 +3,62 @@ use crate::{
     profiling::{GpuProfile, TimestampRecorder},
 };
 
+#[cfg(target_arch = "wasm32")]
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+};
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static NEXT_KEEPALIVE_ID: Cell<u64> = const { Cell::new(0) };
+    static SUBMISSION_KEEPALIVES: RefCell<BTreeMap<u64, Box<dyn Any>>> =
+        RefCell::new(BTreeMap::new());
+}
+
+#[cfg(target_arch = "wasm32")]
+struct SubmissionKeepaliveToken(u64);
+
+#[cfg(target_arch = "wasm32")]
+impl Drop for SubmissionKeepaliveToken {
+    fn drop(&mut self) {
+        SUBMISSION_KEEPALIVES.with(|keepalives| {
+            let removed = keepalives.borrow_mut().remove(&self.0);
+            debug_assert!(removed.is_some());
+        });
+    }
+}
+
+/// Retain transient command resources until their encoded work has completed.
+///
+/// Native wgpu handles are `Send`, so the completion callback can own them
+/// directly. WebGPU handles are intentionally thread-bound; on wasm the
+/// callback instead owns a numeric token and releases the resources from
+/// thread-local storage on the browser's event-loop thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn defer_drop<T: Send + 'static>(encoder: &wgpu::CommandEncoder, value: T) {
+    encoder.on_submitted_work_done(move || drop(value));
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn defer_drop<T: 'static>(encoder: &wgpu::CommandEncoder, value: T) {
+    let id = NEXT_KEEPALIVE_ID.with(|next| {
+        let id = next.get();
+        next.set(
+            id.checked_add(1)
+                .expect("submission keepalive id exhausted"),
+        );
+        id
+    });
+    SUBMISSION_KEEPALIVES.with(|keepalives| {
+        let previous = keepalives.borrow_mut().insert(id, Box::new(value));
+        debug_assert!(previous.is_none());
+    });
+    let token = SubmissionKeepaliveToken(id);
+    encoder.on_submitted_work_done(move || drop(token));
+}
+
 /// One command encoder that will be submitted as a unit.
 ///
 /// This private type standardizes immediate primitive execution while leaving
