@@ -64,7 +64,7 @@ struct SoaBindings {
 ///
 /// This backend is available only when Lampshade's validated 8-bit subgroup
 /// route is supported. The supplied key and value buffers are sorted in place.
-pub struct KeyValueSoaSorter {
+pub(super) struct NativeKeyValueSoaSorter {
     device: wgpu::Device,
     histogram_layout: wgpu::BindGroupLayout,
     prefix_layout: wgpu::BindGroupLayout,
@@ -869,7 +869,11 @@ impl CountedEightBitState {
     }
 }
 
-impl KeyValueSoaSorter {
+impl NativeKeyValueSoaSorter {
+    pub(super) fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
     /// Creates the native separate-buffer sorter when the adapter and enabled
     /// device features satisfy the validated 8-bit subgroup contract.
     pub fn new_for_adapter(
@@ -968,22 +972,6 @@ impl KeyValueSoaSorter {
         }
         let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
         self.ensure_workspace(capacity_bytes)
-    }
-
-    /// Stably sorts the clamped GPU-counted prefix in place.
-    ///
-    /// Keys are compared as unsigned integers. All three buffers require
-    /// STORAGE usage and distinct handles. Data beyond the clamped count is
-    /// unspecified.
-    pub fn record_sort_counted(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        keys: &wgpu::Buffer,
-        values: &wgpu::Buffer,
-        count: &wgpu::Buffer,
-        capacity: u32,
-    ) -> Result<(), Error> {
-        self.record_sort_counted_from_word(encoder, keys, values, count, 0, capacity)
     }
 
     /// Records a counted separate-buffer sort using a u32 count word within an

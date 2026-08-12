@@ -138,6 +138,8 @@ the pinned baseline and reproduction harness.
 - Stable compaction of `u32` values and `KeyValue` records.
 - Adjacent `u32` run-length encoding with a GPU-resident run count.
 - Stable radix sort for `u32` values and `(u32 key, u32 value)` pairs.
+- Stable in-place radix sort for separate `u32` key/value buffers, with a
+  native NVIDIA Vulkan path and a transparent portable bridge.
 - Explicit key-width bounds that skip unnecessary radix passes.
 - Slice APIs for simple upload/execute/readback workflows.
 - GPU-buffer APIs for composing work in one command encoder.
@@ -170,6 +172,44 @@ move to Lampshade and change Rust imports from `wgpu_primitives` to `lampshade`.
 Choose Lampshade 0.9 or the `release/wgpu30` branch for wgpu 30. Use Lampshade
 0.10 onward for wgpu 29; wgpu buffer types from different major versions are
 not interchangeable.
+
+### Separate key/value buffers
+
+`KeyValueSoaSorter` keeps keys and payloads in the caller's separate buffers.
+The fixed-count API owns its tiny count buffer, so renderers with a CPU-known
+item count do not need to manufacture GPU metadata:
+
+```rust
+let mut sorter = lampshade::KeyValueSoaSorter::new(&device, &queue);
+sorter.prepare_sort(&keys, &values, item_count)?;
+
+// Per frame: record into the application's existing command encoder.
+sorter.record_reserved_sort(&mut encoder, &keys, &values, item_count)?;
+```
+
+For GPU-produced lengths, use `prepare_counted_from_word` and
+`record_reserved_sort_counted_from_word`; the selected prefix never returns to
+the CPU. On a validated NVIDIA Vulkan device with fixed 32-wide subgroups,
+Lampshade uses its native four-pass SoA kernel. Other adapters use the same
+public interface via a pack → portable stable sort → unpack bridge. That
+fallback preserves correctness and composition, but it uses two internal AoS
+bridge buffers plus the portable sorter's workspace and is not presented as a
+performance win.
+
+Applications that create their own device can opt into the native path without
+hard-coding Lampshade's feature and limit contract:
+
+```rust
+let soa = lampshade::KeyValueSoaSorter::requirements(&adapter);
+let required_features = soa.features(application_features);
+let required_limits = soa.limits(application_limits);
+
+let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+    required_features,
+    required_limits,
+    ..Default::default()
+}).await?;
+```
 
 ## Quick start
 

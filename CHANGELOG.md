@@ -5,6 +5,22 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+### Added
+
+- Add a fixed-count `KeyValueSoaSorter` API that owns the count metadata needed
+  by the native GPU-counted kernel, removing that workaround from downstream
+  renderers.
+- Add `KeyValueSoaSorter::requirements` to merge the native SoA feature and
+  compute-limit contract into an application's existing wgpu device request.
+- Add a transparent portable SoA backend that packs separate key/value buffers,
+  invokes the existing stable key/value sorter, and unpacks the selected prefix
+  without CPU readback.
+
+### Changed
+
+- Keep `new_for_adapter` as a compatibility alias while making
+  `KeyValueSoaSorter::new` the portable, adapter-selected constructor.
+
 ## 0.10.1 - 2026-08-12
 
 ### Changed

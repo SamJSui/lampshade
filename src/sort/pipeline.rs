@@ -1,7 +1,7 @@
 use crate::common::{self, capabilities::AdapterCapabilities};
 
-const EIGHT_BIT_BLOCK_SIZE: u32 = 256;
-const EIGHT_BIT_WORKGROUP_STORAGE_BYTES: u32 = 16_388;
+pub(super) const EIGHT_BIT_BLOCK_SIZE: u32 = 256;
+pub(super) const EIGHT_BIT_WORKGROUP_STORAGE_BYTES: u32 = 16_388;
 const WIDE_RADIX_BUCKET_GROUPS: u32 = 4;
 const WIDE_RADIX_BYTES_PER_BUCKET_GROUP: u32 = 16;
 

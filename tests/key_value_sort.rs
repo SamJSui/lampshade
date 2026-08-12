@@ -291,7 +291,7 @@ async fn native_soa_counted_sort_clamps_oversized_counts_and_accepts_zero() {
         return;
     };
     let Some(mut sorter) =
-        KeyValueSoaSorter::new_for_adapter(&context.device, &context.adapter_info)
+        KeyValueSoaSorter::new_native_for_adapter(&context.device, &context.adapter_info)
     else {
         return;
     };
@@ -376,7 +376,7 @@ async fn native_soa_reserved_sort_accepts_zero_capacity_without_workspace() {
         return;
     };
     let Some(mut sorter) =
-        KeyValueSoaSorter::new_for_adapter(&context.device, &context.adapter_info)
+        KeyValueSoaSorter::new_native_for_adapter(&context.device, &context.adapter_info)
     else {
         return;
     };
@@ -417,6 +417,227 @@ async fn native_soa_reserved_sort_accepts_zero_capacity_without_workspace() {
             timeout: None,
         })
         .expect("zero-capacity submission completes");
+}
+
+#[tokio::test]
+async fn soa_fixed_sort_hides_the_count_buffer_and_preserves_stability() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    let mut sorter = KeyValueSoaSorter::from_context(&context);
+    let keys: Vec<_> = support::random_u32(65_537, 0xF1CE_D50A)
+        .into_iter()
+        .map(|key| key & 0xff)
+        .collect();
+    let values: Vec<_> = (0..keys.len() as u32).collect();
+    let (key_buffer, value_buffer) = create_soa_buffers(&context.device, &keys, &values);
+
+    sorter
+        .prepare_sort(&key_buffer, &value_buffer, keys.len() as u32)
+        .expect("fixed SoA sort prepares without a caller count buffer");
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_reserved_sort(&mut encoder, &key_buffer, &value_buffer, keys.len() as u32)
+        .expect("prepared fixed SoA sort records");
+    context.queue.submit(Some(encoder.finish()));
+
+    assert_soa_prefix(
+        &context,
+        &key_buffer,
+        &value_buffer,
+        &keys,
+        &values,
+        keys.len(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn portable_soa_backend_matches_fixed_and_gpu_counted_contracts() {
+    let Some(context) = support::gpu_context_without_optional_features().await else {
+        return;
+    };
+    let mut sorter = KeyValueSoaSorter::new(&context.device, &context.queue);
+    assert!(!sorter.is_accelerated());
+
+    let keys: Vec<_> = support::random_u32(4_097, 0xB81D_6E50)
+        .into_iter()
+        .map(|key| key & 0x3f)
+        .collect();
+    let values: Vec<_> = (0..keys.len() as u32).collect();
+    let (key_buffer, value_buffer) = create_soa_buffers(&context.device, &keys, &values);
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort(&mut encoder, &key_buffer, &value_buffer, keys.len() as u32)
+        .expect("fixed sort uses the portable bridge");
+    context.queue.submit(Some(encoder.finish()));
+    assert_soa_prefix(
+        &context,
+        &key_buffer,
+        &value_buffer,
+        &keys,
+        &values,
+        keys.len(),
+    )
+    .await;
+
+    let counted_keys: Vec<_> = support::random_u32(4_097, 0xC0A7_ED50)
+        .into_iter()
+        .map(|key| key & 0xff)
+        .collect();
+    let counted_values: Vec<_> = (0..counted_keys.len() as u32).collect();
+    let active = 2_049_u32;
+    let (counted_key_buffer, counted_value_buffer) =
+        create_soa_buffers(&context.device, &counted_keys, &counted_values);
+    let count_words = [u32::MAX, active, 17, 23];
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Portable SoA Count Words"),
+            contents: bytemuck::cast_slice(&count_words),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort_counted_from_word(
+            &mut encoder,
+            &counted_key_buffer,
+            &counted_value_buffer,
+            &count,
+            1,
+            counted_keys.len() as u32,
+        )
+        .expect("GPU-counted sort uses the portable bridge");
+    context.queue.submit(Some(encoder.finish()));
+    assert_soa_prefix(
+        &context,
+        &counted_key_buffer,
+        &counted_value_buffer,
+        &counted_keys,
+        &counted_values,
+        active as usize,
+    )
+    .await;
+
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    sorter
+        .record_sort(&mut encoder, &key_buffer, &value_buffer, keys.len() as u32)
+        .expect("fixed plan is rebuilt after a counted sort changes bindings");
+    context.queue.submit(Some(encoder.finish()));
+    assert_soa_prefix(
+        &context,
+        &key_buffer,
+        &value_buffer,
+        &keys,
+        &values,
+        keys.len(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn portable_soa_backend_rejects_all_caller_buffer_aliases() {
+    let Some(context) = support::gpu_context_without_optional_features().await else {
+        return;
+    };
+    let mut sorter = KeyValueSoaSorter::new_portable(&context.device, &context.queue);
+    let data = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Aliased Portable SoA Data"),
+            contents: bytemuck::cast_slice(&[1_u32]),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let other = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Distinct Portable SoA Data"),
+            contents: bytemuck::cast_slice(&[1_u32]),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+    for (keys, values, count, first, second) in [
+        (&data, &data, &other, "sort keys", "sort values"),
+        (&data, &other, &data, "sort keys", "sort item count"),
+        (&other, &data, &data, "sort values", "sort item count"),
+    ] {
+        let mut encoder = context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let error = sorter
+            .record_sort_counted(&mut encoder, keys, values, count, 1)
+            .expect_err("aliased SoA buffers must be rejected before recording");
+        assert!(matches!(
+            error,
+            Error::BufferAlias {
+                first: actual_first,
+                second: actual_second,
+            } if actual_first == first && actual_second == second
+        ));
+    }
+}
+
+#[tokio::test]
+async fn portable_soa_consumes_a_count_written_earlier_in_the_same_encoder() {
+    let Some(context) = support::gpu_context_without_optional_features().await else {
+        return;
+    };
+    let keys = [9_u32, 2, 2, 1, 0, 8, 7];
+    let values: Vec<_> = (0..keys.len() as u32).collect();
+    let active = 4_u32;
+    let (key_buffer, value_buffer) = create_soa_buffers(&context.device, &keys, &values);
+    let produced_count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Portable SoA Produced Count"),
+            contents: bytemuck::bytes_of(&active),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+    let count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Portable SoA Consumed Count"),
+            contents: bytemuck::bytes_of(&0_u32),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+    let mut sorter = KeyValueSoaSorter::new_portable(&context.device, &context.queue);
+    sorter
+        .prepare_counted_from_word(&key_buffer, &value_buffer, &count, 0, keys.len() as u32)
+        .expect("portable SoA counted plan prepares");
+
+    let mut encoder = context
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_buffer_to_buffer(&produced_count, 0, &count, 0, size_of::<u32>() as u64);
+    sorter
+        .record_reserved_sort_counted_from_word(
+            &mut encoder,
+            &key_buffer,
+            &value_buffer,
+            &count,
+            0,
+            keys.len() as u32,
+        )
+        .expect("portable SoA consumes the earlier count write");
+    context.queue.submit(Some(encoder.finish()));
+
+    assert_soa_prefix(
+        &context,
+        &key_buffer,
+        &value_buffer,
+        &keys,
+        &values,
+        active as usize,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -624,4 +845,50 @@ fn create_sort_output(device: &wgpu::Device, len: usize) -> wgpu::Buffer {
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     })
+}
+
+fn create_soa_buffers(
+    device: &wgpu::Device,
+    keys: &[u32],
+    values: &[u32],
+) -> (wgpu::Buffer, wgpu::Buffer) {
+    assert_eq!(keys.len(), values.len());
+    let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
+    (
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Keys"),
+            contents: bytemuck::cast_slice(keys),
+            usage,
+        }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SoA Values"),
+            contents: bytemuck::cast_slice(values),
+            usage,
+        }),
+    )
+}
+
+async fn assert_soa_prefix(
+    context: &lampshade::Context,
+    key_buffer: &wgpu::Buffer,
+    value_buffer: &wgpu::Buffer,
+    keys: &[u32],
+    values: &[u32],
+    active: usize,
+) {
+    let actual_keys = support::read_pod::<u32>(context, key_buffer, active).await;
+    let actual_values = support::read_pod::<u32>(context, value_buffer, active).await;
+    let mut expected: Vec<_> = keys[..active]
+        .iter()
+        .copied()
+        .zip(values[..active].iter().copied())
+        .collect();
+    expected.sort_by_key(|&(key, _)| key);
+    assert_eq!(
+        actual_keys
+            .into_iter()
+            .zip(actual_values)
+            .collect::<Vec<_>>(),
+        expected
+    );
 }
