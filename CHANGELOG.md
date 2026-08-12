@@ -5,6 +5,15 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+## 0.10.1 - 2026-08-12
+
+### Changed
+
+- Replace the pre-release path dependency in the README with the published
+  Lampshade 0.10 and wgpu 29 dependencies.
+- Move the published-release regression baseline to Lampshade 0.10 so future
+  gates compare wgpu 29 against the same wgpu 29 runtime stack.
+
 ## 0.10.0 - 2026-08-12
 
 ### Added

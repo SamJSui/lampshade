@@ -1,4 +1,5 @@
 import importlib.util
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -20,28 +21,46 @@ class ReleaseRegressionTests(unittest.TestCase):
         manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
         contents = manifest.read_text(encoding="utf-8")
 
-        self.assertEqual(release_regression.BASELINE_VERSION, "0.9.0")
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.10.0")
         self.assertIn('name = "lampshade-release-baseline-runner"', contents)
-        self.assertIn('lampshade = "=0.9.0"', contents)
+        self.assertIn('lampshade = "=0.10.0"', contents)
         self.assertNotIn('package = "wgpu-primitives"', contents)
 
     def test_runtime_stack_comes_from_the_locked_dependency_graph(self):
-        manifest = (
+        candidate_manifest = (
             Path(__file__).parents[1]
             / "massively-comparison"
             / "lampshade-runner"
             / "Cargo.toml"
         )
+        baseline_manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
 
         self.assertEqual(
-            release_regression.resolved_wgpu_stack(manifest),
+            release_regression.resolved_wgpu_stack(candidate_manifest),
+            "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+        )
+        self.assertEqual(
+            release_regression.resolved_wgpu_stack(baseline_manifest),
             "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
         )
 
     def test_candidate_version_does_not_require_a_root_lockfile(self):
         manifest = Path(__file__).parents[2] / "Cargo.toml"
 
-        self.assertEqual(release_regression.package_version(manifest), "0.10.0")
+        self.assertEqual(release_regression.package_version(manifest), "0.10.1")
+
+    def test_path_consumers_lock_the_current_checkout_version(self):
+        root = Path(__file__).parents[2]
+        locks = [
+            root / "validation" / "particle-app" / "Cargo.lock",
+            root / "benchmarks" / "massively-comparison" / "lampshade-runner" / "Cargo.lock",
+            root / "benchmarks" / "wgpu-sort-comparison" / "lampshade-runner" / "Cargo.lock",
+        ]
+
+        for lock in locks:
+            packages = tomllib.loads(lock.read_text(encoding="utf-8"))["package"]
+            versions = [package["version"] for package in packages if package["name"] == "lampshade"]
+            self.assertEqual(versions, ["0.10.1"], lock)
 
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}

@@ -7,13 +7,12 @@ crates are not.
 This harness compares the current Lampshade checkout against its last published
 predecessor using the same deterministic inputs, public resident APIs,
 completion boundary, correctness checks, and process-median aggregation. The
-baseline runner depends on crates.io `lampshade = "=0.9.0"` and wgpu 30; the
+baseline runner depends on crates.io `lampshade = "=0.10.0"` and wgpu 29; the
 candidate runner depends on the Lampshade repository checkout.
 
-For the 0.10 migration, this is a cross-runtime characterization. Its Metal
-timing failures are intentionally retained and accepted; do not relabel them as
-a passing same-stack regression gate. After 0.10 is published, update the
-baseline runner to crates.io 0.10 so future gates compare wgpu 29 with wgpu 29.
+This is now a same-runtime regression gate: the published baseline and current
+checkout both use wgpu 29. Historical 0.9/wgpu 30 to 0.10/wgpu 29 artifacts
+remain migration characterizations rather than same-stack performance gates.
 
 The default matrix covers the established reduction, fixed key/value sort,
 scan, and compaction controls plus the counted full-width key/value path changed
@@ -41,9 +40,8 @@ python3 benchmarks/release-regression/run.py --quick
 The Python entry point selects Metal on macOS and Vulkan elsewhere unless
 `--backend` is supplied explicitly.
 
-For the accepted 0.9/wgpu 30 to 0.10/wgpu 29 migration, preserve formal Metal
-measurements without treating the different runtime stack as the next-release
-threshold gate:
+For a deliberate future cross-runtime migration, preserve measurements without
+treating the different runtime stacks as a next-release threshold gate:
 
 ```bash
 python3 benchmarks/release-regression/run.py --backend metal --characterize
