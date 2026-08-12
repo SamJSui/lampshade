@@ -19,6 +19,8 @@ pub enum Workload {
     SortBounded16,
     #[serde(rename = "sort_full_width")]
     SortFullWidth,
+    #[serde(rename = "sort_counted_full_width")]
+    SortCountedFullWidth,
     #[serde(rename = "exclusive_scan")]
     ExclusiveScan,
     #[serde(rename = "compact_50")]
@@ -31,6 +33,7 @@ impl Workload {
             Self::ReduceSum => "reduce_sum",
             Self::SortBounded16 => "sort_bounded16",
             Self::SortFullWidth => "sort_full_width",
+            Self::SortCountedFullWidth => "sort_counted_full_width",
             Self::ExclusiveScan => "exclusive_scan",
             Self::Compact50 => "compact_50",
         }
@@ -53,10 +56,11 @@ impl FromStr for Workload {
             "reduce_sum" => Ok(Self::ReduceSum),
             "sort_bounded16" => Ok(Self::SortBounded16),
             "sort_full_width" => Ok(Self::SortFullWidth),
+            "sort_counted_full_width" => Ok(Self::SortCountedFullWidth),
             "exclusive_scan" => Ok(Self::ExclusiveScan),
             "compact_50" => Ok(Self::Compact50),
             _ => Err(ConfigError(format!(
-                "MASSIVELY_BENCH_WORKLOAD must be reduce_sum, sort_bounded16, sort_full_width, exclusive_scan, or compact_50; got {value:?}"
+                "MASSIVELY_BENCH_WORKLOAD must be reduce_sum, sort_bounded16, sort_full_width, sort_counted_full_width, exclusive_scan, or compact_50; got {value:?}"
             ))),
         }
     }
@@ -120,7 +124,9 @@ impl SortInput {
     pub fn generate(items: u32, workload: Workload) -> Self {
         assert!(matches!(
             workload,
-            Workload::SortBounded16 | Workload::SortFullWidth
+            Workload::SortBounded16
+                | Workload::SortFullWidth
+                | Workload::SortCountedFullWidth
         ));
         let mut state = GENERATOR_BASE_SEED ^ items;
         let mut keys = Vec::with_capacity(items as usize);
@@ -129,7 +135,7 @@ impl SortInput {
             state = xorshift32(state);
             keys.push(match workload {
                 Workload::SortBounded16 => state & 0xffff,
-                Workload::SortFullWidth => state,
+                Workload::SortFullWidth | Workload::SortCountedFullWidth => state,
                 _ => unreachable!(),
             });
             values.push(index);
@@ -292,10 +298,17 @@ pub fn public_buffer_memory(
     let primary = match (implementation, workload) {
         ("wgpu-primitives" | "lampshade", Workload::ReduceSum) => 4 * items + 8,
         ("massively", Workload::ReduceSum) => 4 * items,
-        ("wgpu-primitives" | "lampshade", Workload::SortBounded16 | Workload::SortFullWidth) => {
+        (
+            "wgpu-primitives" | "lampshade",
+            Workload::SortBounded16 | Workload::SortFullWidth,
+        ) => {
             16 * items
         }
-        ("massively", Workload::SortBounded16 | Workload::SortFullWidth) => 12 * items,
+        ("wgpu-primitives" | "lampshade", Workload::SortCountedFullWidth) => 16 * items + 4,
+        (
+            "massively",
+            Workload::SortBounded16 | Workload::SortFullWidth | Workload::SortCountedFullWidth,
+        ) => 12 * items,
         (_, Workload::ExclusiveScan) => 8 * items,
         (_, Workload::Compact50) => {
             12 * items + u64::from(matches!(implementation, "wgpu-primitives" | "lampshade")) * 4

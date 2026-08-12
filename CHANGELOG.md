@@ -5,6 +5,35 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+### Added
+
+- Add a native stable structure-of-arrays radix sorter for separate `u32` key
+  and value buffers whose exact item count remains GPU-resident.
+- Cache counted-sort bindings so prepared per-frame recording performs no
+  buffer, bind-group, or pipeline creation.
+
+### Changed
+
+- Move the public GPU runtime from wgpu 30 to wgpu 29 for compatibility with
+  the strongest identified graphics and simulation adoption targets. Because
+  wgpu types appear in Lampshade's public API, this is a breaking 0.10 change;
+  the 0.9 release and `release/wgpu30` branch preserve the wgpu 30 line.
+- Route counted `KeyValue` sorting through the four-pass 8-bit backend on
+  compatible discrete NVIDIA Vulkan adapters; portable adapters retain the
+  existing counted sorter.
+- Remove `Error::MapRange`, which has no wgpu 29 equivalent because mapped
+  range access is infallible in that release. This is a public enum change.
+
+### Performance
+
+- Add source-pinned RTX regression evidence against Lampshade 0.9/wgpu 30 and
+  downstream sorter-stage evidence for `wgpu-3dgs-viewer`; reports distinguish
+  algorithmic gains from the WGPU runtime version.
+- Record the M3 Pro migration result: correctness passes, but the WGPU 29
+  completion boundary makes host-synchronized Metal workloads slower than the
+  0.9/wgpu 30 migration control. This is accepted as the 0.10 wgpu 29 baseline;
+  future release gates compare against the previous wgpu 29 Lampshade release.
+
 ## 0.9.0 - 2026-08-11
 
 ### Added

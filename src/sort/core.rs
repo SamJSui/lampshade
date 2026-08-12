@@ -24,6 +24,13 @@ enum SortImplementation {
 }
 
 impl RadixSorter {
+    pub(crate) fn eight_bit_mut(&mut self) -> Option<&mut EightBitSorter> {
+        match &mut self.implementation {
+            SortImplementation::EightBit(sorter) => Some(sorter),
+            SortImplementation::ReduceScan(_) => None,
+        }
+    }
+
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, item_kind: SortItemKind) -> Self {
         Self {
             implementation: SortImplementation::ReduceScan(ReduceScanSorter::new(

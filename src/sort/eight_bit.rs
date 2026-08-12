@@ -6,7 +6,7 @@ use crate::common::buffers::BufferRange;
 use crate::common::runtime::{CommandSession, ProfileSession};
 use crate::profiling::{self, GpuProfile, TimestampRecorder};
 
-use super::pipeline::SortItemKind;
+use super::pipeline::{RadixVariant, SortItemKind};
 
 const BLOCK_SIZE: u32 = 256;
 const ITEMS_PER_THREAD: u32 = 7;
@@ -30,11 +30,65 @@ struct EightBitWorkspace {
     dispatch_args: wgpu::Buffer,
 }
 
+struct CountedEightBitState {
+    prepare_layout: wgpu::BindGroupLayout,
+    prepare: wgpu::ComputePipeline,
+    uniforms: wgpu::Buffer,
+}
+
+struct SoaWorkspace {
+    capacity_bytes: u64,
+    scratch_keys: wgpu::Buffer,
+    scratch_values: wgpu::Buffer,
+    histogram: wgpu::Buffer,
+    offsets: wgpu::Buffer,
+    partition_state: wgpu::Buffer,
+    dispatch_args: wgpu::Buffer,
+}
+
+struct SoaBindings {
+    keys: wgpu::Buffer,
+    values: wgpu::Buffer,
+    count: wgpu::Buffer,
+    count_word: u32,
+    capacity: u32,
+    workspace_capacity: u64,
+    _params: wgpu::Buffer,
+    prepare: wgpu::BindGroup,
+    histogram: wgpu::BindGroup,
+    prefix: wgpu::BindGroup,
+    scatter: Vec<wgpu::BindGroup>,
+}
+
+/// Records a stable, GPU-counted sort of separate u32 key and value buffers.
+///
+/// This backend is available only when Lampshade's validated 8-bit subgroup
+/// route is supported. The supplied key and value buffers are sorted in place.
+pub struct KeyValueSoaSorter {
+    device: wgpu::Device,
+    histogram_layout: wgpu::BindGroupLayout,
+    prefix_layout: wgpu::BindGroupLayout,
+    scatter_layout: wgpu::BindGroupLayout,
+    histogram: wgpu::ComputePipeline,
+    prefix: wgpu::ComputePipeline,
+    scatter: wgpu::ComputePipeline,
+    counted: CountedEightBitState,
+    workspace: Option<SoaWorkspace>,
+    bindings: Option<SoaBindings>,
+}
+
 #[derive(Clone, Copy)]
 struct PreparedSort {
     num_items: u32,
     num_tiles: u32,
     size_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct PreparedCountedSort {
+    capacity_bytes: u64,
+    count_bytes: u64,
+    pass_count: u32,
 }
 
 struct CachedBindings {
@@ -58,6 +112,7 @@ pub struct EightBitSorter {
     item_size_bytes: u64,
     workspace: Option<EightBitWorkspace>,
     cached_bindings: Option<CachedBindings>,
+    counted: Option<CountedEightBitState>,
 }
 
 impl EightBitSorter {
@@ -70,6 +125,7 @@ impl EightBitSorter {
             item_size_bytes: item_kind.size_bytes(),
             workspace: None,
             cached_bindings: None,
+            counted: None,
         }
     }
 
@@ -144,6 +200,316 @@ impl EightBitSorter {
         };
         let pass_count = pass_count_for_key_bits(key_bits);
         self.record_commands(encoder, input, output, problem, pass_count, None)
+    }
+
+    pub(crate) fn sort_counted_gpu_to_gpu(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        let mut commands = CommandSession::new(&self.device, Some("8-bit Counted Radix Sort"));
+        self.record_sort_counted(
+            commands.encoder(),
+            input,
+            output,
+            count,
+            count_word,
+            capacity,
+            key_bits,
+        )?;
+        commands.submit(&self.queue);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn record_sort_counted(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        self.record_sort_counted_ranges(
+            encoder,
+            BufferRange::whole(input),
+            BufferRange::whole(output),
+            BufferRange::whole(count),
+            count_word,
+            capacity,
+            key_bits,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn record_sort_counted_ranges(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        count: BufferRange<'_>,
+        count_word: u32,
+        capacity: u32,
+        key_bits: u32,
+    ) -> Result<(), Error> {
+        let Some(problem) =
+            self.prepare_counted_sort(input, output, count, count_word, capacity, key_bits)?
+        else {
+            return Ok(());
+        };
+
+        let input = BufferRange {
+            size: problem.capacity_bytes,
+            ..input
+        };
+        let output = BufferRange {
+            size: problem.capacity_bytes,
+            ..output
+        };
+        let count = BufferRange {
+            size: problem.count_bytes,
+            ..count
+        };
+        self.record_counted_commands(
+            encoder,
+            input,
+            output,
+            count,
+            count_word,
+            capacity,
+            problem.pass_count,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn profile_sort_counted(
+        &mut self,
+        input: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+        key_bits: u32,
+    ) -> Result<GpuProfile, Error> {
+        let input = BufferRange::whole(input);
+        let output = BufferRange::whole(output);
+        let count = BufferRange::whole(count);
+        let Some(problem) =
+            self.prepare_counted_sort(input, output, count, count_word, capacity, key_bits)?
+        else {
+            return Ok(GpuProfile::empty());
+        };
+        let input = BufferRange {
+            size: problem.capacity_bytes,
+            ..input
+        };
+        let output = BufferRange {
+            size: problem.capacity_bytes,
+            ..output
+        };
+        let count = BufferRange {
+            size: problem.count_bytes,
+            ..count
+        };
+        let mut profile = ProfileSession::new(
+            &self.device,
+            &self.queue,
+            problem.pass_count + 3,
+            "Profiled 8-bit Counted Radix Sort",
+        )?;
+        let (encoder, profiler) = profile.recording();
+        self.record_counted_commands(
+            encoder,
+            input,
+            output,
+            count,
+            count_word,
+            capacity,
+            problem.pass_count,
+            profiler,
+        )?;
+        profile.finish(&self.device, &self.queue).await
+    }
+
+    fn prepare_counted_sort(
+        &mut self,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        count: BufferRange<'_>,
+        count_word: u32,
+        capacity: u32,
+        key_bits: u32,
+    ) -> Result<Option<PreparedCountedSort>, Error> {
+        if key_bits > u32::BITS {
+            return Err(Error::InvalidKeyBits { bits: key_bits });
+        }
+        validate_counted_distinct(input, output, count)?;
+        let count_bytes = u64::from(count_word)
+            .checked_add(1)
+            .and_then(|words| words.checked_mul(size_of::<u32>() as u64))
+            .ok_or(Error::SizeOverflow)?;
+        count.validate("sort item count", count_bytes, wgpu::BufferUsages::STORAGE)?;
+        count.validate_storage_offset(&self.device, "sort item count")?;
+        count.validate_storage_binding_size(&self.device, count_bytes)?;
+        let capacity_bytes =
+            common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
+        input.validate("sort input", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
+        output.validate("sort output", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
+        input.validate_storage_offset(&self.device, "sort input")?;
+        output.validate_storage_offset(&self.device, "sort output")?;
+        for range in [input, output] {
+            range.validate_storage_binding_size(&self.device, capacity_bytes)?;
+        }
+        if capacity == 0 {
+            return Ok(None);
+        }
+        let max_items =
+            element_count_limit(self.device.limits().max_compute_workgroups_per_dimension);
+        if capacity > max_items {
+            return Err(Error::RadixElementCountLimitExceeded {
+                count: capacity,
+                limit: max_items,
+            });
+        }
+        self.ensure_workspace(capacity_bytes)?;
+        self.ensure_counted_state();
+        Ok(Some(PreparedCountedSort {
+            capacity_bytes,
+            count_bytes,
+            pass_count: pass_count_for_key_bits(key_bits),
+        }))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_counted_commands(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        input: BufferRange<'_>,
+        output: BufferRange<'_>,
+        count: BufferRange<'_>,
+        count_word: u32,
+        capacity: u32,
+        pass_count: u32,
+        mut profiler: Option<&mut TimestampRecorder>,
+    ) -> Result<(), Error> {
+        let workspace = self.workspace.as_ref().expect("sort workspace is prepared");
+        let counted = self
+            .counted
+            .as_ref()
+            .expect("counted sort pipeline is prepared");
+        let params_data = [capacity, pass_count, count_word, 0, 0, 0, 0, 0];
+        let params = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("8-bit Counted Sort Parameters"),
+                contents: bytemuck::cast_slice(&params_data),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let prepare = counted.create_prepare_bind_group(&self.device, count, &params);
+        let histogram = self.pipelines.create_histogram_bind_group(
+            &self.device,
+            input,
+            &workspace.histogram,
+            &counted.uniforms,
+        );
+        let prefix = self.pipelines.create_prefix_bind_group(
+            &self.device,
+            &workspace.histogram,
+            &workspace.offsets,
+            &workspace.dispatch_args,
+            &counted.uniforms,
+        );
+        let uniform_stride = u64::from(self.device.limits().min_uniform_buffer_offset_alignment)
+            .max(UNIFORM_SIZE_BYTES);
+        let scatter: Vec<_> = (0..pass_count)
+            .map(|pass| {
+                let (source, destination) =
+                    pass_buffers(pass, pass_count, input, output, &workspace.scratch);
+                self.pipelines.create_scatter_bind_group(
+                    &self.device,
+                    source,
+                    destination,
+                    workspace,
+                    &counted.uniforms,
+                    u64::from(pass) * uniform_stride,
+                )
+            })
+            .collect();
+
+        encoder.clear_buffer(&workspace.histogram, 0, None);
+        encoder.clear_buffer(&workspace.partition_state, 0, None);
+        profiling::record_compute_pass(
+            encoder,
+            "8-bit Counted Radix Preparation",
+            profiler
+                .is_some()
+                .then(|| "counted.radix.prepare".to_owned()),
+            profiler.as_deref_mut(),
+            |pass| {
+                pass.set_pipeline(&counted.prepare);
+                pass.set_bind_group(0, &prepare, &[]);
+                pass.dispatch_workgroups(1, 1, 1);
+            },
+        );
+        profiling::record_compute_pass(
+            encoder,
+            "8-bit Counted Radix Histogram",
+            profiler
+                .is_some()
+                .then(|| "counted.radix.histogram".to_owned()),
+            profiler.as_deref_mut(),
+            |pass| {
+                pass.set_pipeline(&self.pipelines.histogram);
+                pass.set_bind_group(0, &histogram, &[]);
+                pass.dispatch_workgroups(
+                    capacity.div_ceil(ITEMS_PER_TILE).min(MAX_HISTOGRAM_GROUPS),
+                    1,
+                    1,
+                );
+            },
+        );
+        profiling::record_compute_pass(
+            encoder,
+            "8-bit Counted Radix Prefix",
+            profiler
+                .is_some()
+                .then(|| "counted.radix.prefix".to_owned()),
+            profiler.as_deref_mut(),
+            |pass| {
+                pass.set_pipeline(&self.pipelines.prefix);
+                pass.set_bind_group(0, &prefix, &[]);
+                pass.dispatch_workgroups(1, 1, 1);
+            },
+        );
+        for (radix_pass, bind_group) in scatter.iter().enumerate() {
+            profiling::record_compute_pass(
+                encoder,
+                "8-bit Counted Radix Scatter",
+                profiler
+                    .is_some()
+                    .then(|| format!("counted.radix.{radix_pass:02}.scatter")),
+                profiler.as_deref_mut(),
+                |pass| {
+                    pass.set_pipeline(&self.pipelines.scatter);
+                    pass.set_bind_group(0, bind_group, &[]);
+                    pass.dispatch_workgroups_indirect(
+                        &workspace.dispatch_args,
+                        radix_pass as u64 * 3 * size_of::<u32>() as u64,
+                    );
+                },
+            );
+        }
+        encoder.on_submitted_work_done(move || {
+            drop((params, prepare, histogram, prefix, scatter));
+        });
+        Ok(())
     }
 
     pub async fn profile_sort_gpu_to_gpu(
@@ -410,6 +776,13 @@ impl EightBitSorter {
         Ok(())
     }
 
+    fn ensure_counted_state(&mut self) {
+        if self.counted.is_some() {
+            return;
+        }
+        self.counted = Some(CountedEightBitState::new(&self.device));
+    }
+
     pub(crate) fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
         if capacity == 0 {
             return Ok(());
@@ -417,6 +790,11 @@ impl EightBitSorter {
         let size_bytes =
             common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
         self.ensure_workspace(size_bytes)
+    }
+
+    pub(crate) fn reserve_counted(&mut self, capacity: u32) -> Result<(), Error> {
+        self.ensure_counted_state();
+        self.reserve(capacity)
     }
 }
 
@@ -427,6 +805,611 @@ struct EightBitPipelines {
     histogram: wgpu::ComputePipeline,
     prefix: wgpu::ComputePipeline,
     scatter: wgpu::ComputePipeline,
+}
+
+impl CountedEightBitState {
+    fn new(device: &wgpu::Device) -> Self {
+        let prepare_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("8-bit Counted Preparation Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, true, false),
+                common::buffers::bind_entry(1, false, false),
+                common::buffers::bind_entry(2, false, true),
+            ],
+        });
+        let source = include_str!("counted_prepare_8bit.wgsl").replace(
+            "{{UNIFORM_STRIDE_WORDS}}",
+            &(u64::from(device.limits().min_uniform_buffer_offset_alignment)
+                .max(UNIFORM_SIZE_BYTES)
+                / size_of::<u32>() as u64)
+                .to_string(),
+        );
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("8-bit Counted Preparation Shader"),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
+        });
+        let prepare = create_pipeline(
+            device,
+            "8-bit Counted Preparation Pipeline",
+            &prepare_layout,
+            &shader,
+            "main",
+        );
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("8-bit Counted Sort Uniforms"),
+            size: u64::from(device.limits().min_uniform_buffer_offset_alignment)
+                .max(UNIFORM_SIZE_BYTES)
+                * u64::from(MAX_PASS_COUNT),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        });
+        Self {
+            prepare_layout,
+            prepare,
+            uniforms,
+        }
+    }
+
+    fn create_prepare_bind_group(
+        &self,
+        device: &wgpu::Device,
+        count: BufferRange<'_>,
+        params: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        create_bind_group(
+            device,
+            &self.prepare_layout,
+            "8-bit Counted Preparation Bind Group",
+            &[
+                range_buffer(0, count),
+                entire_buffer(1, &self.uniforms),
+                uniform_binding(2, params, 0),
+            ],
+        )
+    }
+}
+
+impl KeyValueSoaSorter {
+    /// Creates the native separate-buffer sorter when the adapter and enabled
+    /// device features satisfy the validated 8-bit subgroup contract.
+    pub fn new_for_adapter(
+        device: &wgpu::Device,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Option<Self> {
+        let variant = RadixVariant::for_adapter(
+            SortItemKind::KeyValue,
+            adapter_info,
+            device.features(),
+            &device.limits(),
+        );
+        variant.uses_eight_bit_pipeline().then(|| Self::new(device))
+    }
+
+    fn new(device: &wgpu::Device) -> Self {
+        let histogram_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("8-bit SoA Histogram Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, true, false),
+                common::buffers::bind_entry(1, false, false),
+                common::buffers::bind_entry(2, false, true),
+            ],
+        });
+        let prefix_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("8-bit SoA Prefix Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, false, false),
+                common::buffers::bind_entry(1, false, false),
+                common::buffers::bind_entry(2, false, false),
+                common::buffers::bind_entry(3, false, true),
+            ],
+        });
+        let scatter_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("8-bit SoA Scatter Layout"),
+            entries: &[
+                common::buffers::bind_entry(0, true, false),
+                common::buffers::bind_entry(1, true, false),
+                common::buffers::bind_entry(2, false, false),
+                common::buffers::bind_entry(3, false, false),
+                common::buffers::bind_entry(4, true, false),
+                common::buffers::bind_entry(5, false, false),
+                common::buffers::bind_entry(6, false, true),
+            ],
+        });
+        let histogram_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("8-bit SoA Histogram Shader"),
+            source: wgpu::ShaderSource::Wgsl(
+                item_shader(include_str!("histogram_8bit.wgsl"), SortItemKind::Key).into(),
+            ),
+        });
+        let prefix_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("8-bit SoA Prefix Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("prefix_8bit.wgsl").into()),
+        });
+        let scatter_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("8-bit SoA Scatter Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("scatter_8bit_soa.wgsl").into()),
+        });
+        Self {
+            histogram: create_pipeline(
+                device,
+                "8-bit SoA Histogram Pipeline",
+                &histogram_layout,
+                &histogram_shader,
+                "main_histogram",
+            ),
+            prefix: create_pipeline(
+                device,
+                "8-bit SoA Prefix Pipeline",
+                &prefix_layout,
+                &prefix_shader,
+                "main_prefix",
+            ),
+            scatter: create_pipeline(
+                device,
+                "8-bit SoA Scatter Pipeline",
+                &scatter_layout,
+                &scatter_shader,
+                "main_scatter",
+            ),
+            histogram_layout,
+            prefix_layout,
+            scatter_layout,
+            counted: CountedEightBitState::new(device),
+            device: device.clone(),
+            workspace: None,
+            bindings: None,
+        }
+    }
+
+    /// Prepares all buffers required to record a sort up to the given capacity.
+    pub fn reserve(&mut self, capacity: u32) -> Result<(), Error> {
+        if capacity == 0 {
+            return Ok(());
+        }
+        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
+        self.ensure_workspace(capacity_bytes)
+    }
+
+    /// Stably sorts the clamped GPU-counted prefix in place.
+    ///
+    /// Keys are compared as unsigned integers. All three buffers require
+    /// STORAGE usage and distinct handles. Data beyond the clamped count is
+    /// unspecified.
+    pub fn record_sort_counted(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        self.record_sort_counted_from_word(encoder, keys, values, count, 0, capacity)
+    }
+
+    /// Records a counted separate-buffer sort using a u32 count word within an
+    /// aligned GPU metadata buffer.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_sort_counted_from_word(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let count_bytes = u64::from(count_word)
+            .checked_add(1)
+            .and_then(|words| words.checked_mul(4))
+            .ok_or(Error::SizeOverflow)?;
+        let count_range = BufferRange::whole(count);
+        count_range.validate("sort item count", count_bytes, wgpu::BufferUsages::STORAGE)?;
+        count_range.validate_storage_binding_size(&self.device, count_bytes)?;
+        self.record_sort_counted_impl(encoder, keys, values, count_range, count_word, capacity)
+    }
+
+    /// Records a previously reserved counted separate-buffer sort without
+    /// allocating workspace or compiling pipelines.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_reserved_sort_counted_from_word(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
+        let Some(_) = self.validate_inputs(keys, values, count, count_word, capacity)? else {
+            return Ok(());
+        };
+        let workspace = self.workspace.as_ref().ok_or(Error::BufferTooSmall {
+            name: "sort workspace",
+            required: capacity_bytes,
+            actual: 0,
+        })?;
+        if workspace.capacity_bytes < capacity_bytes {
+            return Err(Error::BufferTooSmall {
+                name: "sort workspace",
+                required: capacity_bytes,
+                actual: workspace.capacity_bytes,
+            });
+        }
+        if !self.bindings_match(keys, values, count, count_word, capacity) {
+            return Err(Error::BufferTooSmall {
+                name: "sort binding plan",
+                required: 1,
+                actual: 0,
+            });
+        }
+        self.record_commands(encoder, capacity)
+    }
+
+    /// Prepares a reusable binding plan for allocation-free command recording.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_counted_from_word(
+        &mut self,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
+        if capacity != 0 {
+            self.ensure_workspace(capacity_bytes)?;
+        }
+        let Some((keys, values, count)) =
+            self.validate_inputs(keys, values, count, count_word, capacity)?
+        else {
+            return Ok(());
+        };
+        self.ensure_bindings(keys, values, count, count_word, capacity);
+        Ok(())
+    }
+
+    fn record_sort_counted_impl(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: BufferRange<'_>,
+        count_word: u32,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
+        if capacity != 0 {
+            self.ensure_workspace(capacity_bytes)?;
+        }
+        let Some((keys, values, count)) =
+            self.validate_inputs(keys, values, count.buffer, count_word, capacity)?
+        else {
+            return Ok(());
+        };
+        self.ensure_bindings(keys, values, count, count_word, capacity);
+        self.record_commands(encoder, capacity)
+    }
+
+    fn validate_inputs<'a>(
+        &self,
+        keys: &'a wgpu::Buffer,
+        values: &'a wgpu::Buffer,
+        count_buffer: &'a wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+    ) -> Result<Option<(BufferRange<'a>, BufferRange<'a>, BufferRange<'a>)>, Error> {
+        let count_bytes = u64::from(count_word)
+            .checked_add(1)
+            .and_then(|words| words.checked_mul(4))
+            .ok_or(Error::SizeOverflow)?;
+        let count = BufferRange {
+            buffer: count_buffer,
+            offset: 0,
+            size: count_bytes,
+        };
+        count.validate("sort item count", count_bytes, wgpu::BufferUsages::STORAGE)?;
+        for (first, first_name, second, second_name) in [
+            (keys, "sort keys", values, "sort values"),
+            (keys, "sort keys", count_buffer, "sort item count"),
+            (values, "sort values", count_buffer, "sort item count"),
+        ] {
+            if first == second {
+                return Err(Error::BufferAlias {
+                    first: first_name,
+                    second: second_name,
+                });
+            }
+        }
+        let capacity_bytes = common::math::checked_byte_size(u64::from(capacity), 4)?;
+        let keys = BufferRange::whole(keys);
+        let values = BufferRange::whole(values);
+        keys.validate("sort keys", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
+        values.validate("sort values", capacity_bytes, wgpu::BufferUsages::STORAGE)?;
+        for (range, name, size) in [
+            (keys, "sort keys", capacity_bytes),
+            (values, "sort values", capacity_bytes),
+            (count, "sort item count", count_bytes),
+        ] {
+            range.validate_storage_offset(&self.device, name)?;
+            range.validate_storage_binding_size(&self.device, size)?;
+        }
+        if capacity == 0 {
+            return Ok(None);
+        }
+        let max_items =
+            element_count_limit(self.device.limits().max_compute_workgroups_per_dimension);
+        if capacity > max_items {
+            return Err(Error::RadixElementCountLimitExceeded {
+                count: capacity,
+                limit: max_items,
+            });
+        }
+        Ok(Some((
+            BufferRange {
+                size: capacity_bytes,
+                ..keys
+            },
+            BufferRange {
+                size: capacity_bytes,
+                ..values
+            },
+            count,
+        )))
+    }
+
+    fn ensure_bindings(
+        &mut self,
+        keys: BufferRange<'_>,
+        values: BufferRange<'_>,
+        count: BufferRange<'_>,
+        count_word: u32,
+        capacity: u32,
+    ) {
+        if self.bindings_match(
+            keys.buffer,
+            values.buffer,
+            count.buffer,
+            count_word,
+            capacity,
+        ) {
+            return;
+        }
+        let workspace = self.workspace.as_ref().expect("SoA workspace is prepared");
+        let params_data = [capacity, MAX_PASS_COUNT, count_word, 0, 0, 0, 0, 0];
+        let params = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("8-bit SoA Counted Parameters"),
+                contents: bytemuck::cast_slice(&params_data),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let prepare = self
+            .counted
+            .create_prepare_bind_group(&self.device, count, &params);
+        let histogram = create_bind_group(
+            &self.device,
+            &self.histogram_layout,
+            "8-bit SoA Histogram Bind Group",
+            &[
+                range_buffer(0, keys),
+                entire_buffer(1, &workspace.histogram),
+                uniform_binding(2, &self.counted.uniforms, 0),
+            ],
+        );
+        let prefix = create_bind_group(
+            &self.device,
+            &self.prefix_layout,
+            "8-bit SoA Prefix Bind Group",
+            &[
+                entire_buffer(0, &workspace.histogram),
+                entire_buffer(1, &workspace.offsets),
+                entire_buffer(2, &workspace.dispatch_args),
+                uniform_binding(3, &self.counted.uniforms, 0),
+            ],
+        );
+        let uniform_stride = u64::from(self.device.limits().min_uniform_buffer_offset_alignment)
+            .max(UNIFORM_SIZE_BYTES);
+        let scatter: Vec<_> = (0..MAX_PASS_COUNT)
+            .map(|radix_pass| {
+                let (source_keys, source_values, destination_keys, destination_values) =
+                    soa_pass_buffers(radix_pass, keys, values, workspace);
+                create_bind_group(
+                    &self.device,
+                    &self.scatter_layout,
+                    "8-bit SoA Scatter Bind Group",
+                    &[
+                        range_buffer(0, source_keys),
+                        range_buffer(1, source_values),
+                        range_buffer(2, destination_keys),
+                        range_buffer(3, destination_values),
+                        entire_buffer(4, &workspace.offsets),
+                        entire_buffer(5, &workspace.partition_state),
+                        uniform_binding(
+                            6,
+                            &self.counted.uniforms,
+                            u64::from(radix_pass) * uniform_stride,
+                        ),
+                    ],
+                )
+            })
+            .collect();
+
+        self.bindings = Some(SoaBindings {
+            keys: keys.buffer.clone(),
+            values: values.buffer.clone(),
+            count: count.buffer.clone(),
+            count_word,
+            capacity,
+            workspace_capacity: workspace.capacity_bytes,
+            _params: params,
+            prepare,
+            histogram,
+            prefix,
+            scatter,
+        });
+    }
+
+    fn bindings_match(
+        &self,
+        keys: &wgpu::Buffer,
+        values: &wgpu::Buffer,
+        count: &wgpu::Buffer,
+        count_word: u32,
+        capacity: u32,
+    ) -> bool {
+        let workspace_capacity = self
+            .workspace
+            .as_ref()
+            .map_or(0, |workspace| workspace.capacity_bytes);
+        self.bindings.as_ref().is_some_and(|bindings| {
+            bindings.keys == *keys
+                && bindings.values == *values
+                && bindings.count == *count
+                && bindings.count_word == count_word
+                && bindings.capacity == capacity
+                && bindings.workspace_capacity == workspace_capacity
+        })
+    }
+
+    fn record_commands(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        capacity: u32,
+    ) -> Result<(), Error> {
+        let workspace = self.workspace.as_ref().expect("SoA workspace is prepared");
+        let bindings = self
+            .bindings
+            .as_ref()
+            .expect("SoA sort bindings are prepared");
+        encoder.clear_buffer(&workspace.histogram, 0, None);
+        encoder.clear_buffer(&workspace.partition_state, 0, None);
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("8-bit SoA Counted Preparation"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.counted.prepare);
+        pass.set_bind_group(0, &bindings.prepare, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+        drop(pass);
+
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("8-bit SoA Histogram"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.histogram);
+        pass.set_bind_group(0, &bindings.histogram, &[]);
+        pass.dispatch_workgroups(
+            capacity.div_ceil(ITEMS_PER_TILE).min(MAX_HISTOGRAM_GROUPS),
+            1,
+            1,
+        );
+        drop(pass);
+
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("8-bit SoA Prefix"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.prefix);
+        pass.set_bind_group(0, &bindings.prefix, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+        drop(pass);
+
+        for (radix_pass, bind_group) in bindings.scatter.iter().enumerate() {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("8-bit SoA Scatter"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.scatter);
+            pass.set_bind_group(0, bind_group, &[]);
+            pass.dispatch_workgroups_indirect(
+                &workspace.dispatch_args,
+                radix_pass as u64 * 3 * size_of::<u32>() as u64,
+            );
+        }
+        Ok(())
+    }
+
+    fn ensure_workspace(&mut self, requested_bytes: u64) -> Result<(), Error> {
+        if self
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.capacity_bytes >= requested_bytes)
+        {
+            return Ok(());
+        }
+        let capacity_bytes = workspace_capacity(requested_bytes, 4)?;
+        let max_items = capacity_bytes / 4;
+        let max_tiles = max_items.div_ceil(u64::from(ITEMS_PER_TILE));
+        let partition_entries = max_tiles
+            .checked_mul(u64::from(BUCKET_COUNT))
+            .and_then(|entries| entries.checked_add(TILE_COUNTER_COUNT))
+            .ok_or(Error::SizeOverflow)?;
+        let partition_bytes = common::math::checked_align_to(
+            common::math::checked_byte_size(partition_entries, 4)?,
+            256,
+        )?;
+        for requested in [capacity_bytes, partition_bytes] {
+            common::buffers::validate_storage_binding_size(&self.device, requested)?;
+        }
+        let digit_table_bytes = u64::from(MAX_PASS_COUNT * BUCKET_COUNT) * 4;
+        self.workspace = Some(SoaWorkspace {
+            capacity_bytes,
+            scratch_keys: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                capacity_bytes,
+            ),
+            scratch_values: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                capacity_bytes,
+            ),
+            histogram: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                digit_table_bytes,
+            ),
+            offsets: common::buffers::create_empty_storage_buffer(&self.device, digit_table_bytes),
+            partition_state: common::buffers::create_empty_storage_buffer(
+                &self.device,
+                partition_bytes,
+            ),
+            dispatch_args: self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("8-bit SoA Dispatch Arguments"),
+                size: DISPATCH_ARGS_SIZE_BYTES,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
+                mapped_at_creation: false,
+            }),
+        });
+        self.bindings = None;
+        Ok(())
+    }
+}
+
+fn soa_pass_buffers<'a>(
+    radix_pass: u32,
+    keys: BufferRange<'a>,
+    values: BufferRange<'a>,
+    workspace: &'a SoaWorkspace,
+) -> (
+    BufferRange<'a>,
+    BufferRange<'a>,
+    BufferRange<'a>,
+    BufferRange<'a>,
+) {
+    let scratch_keys = BufferRange {
+        buffer: &workspace.scratch_keys,
+        offset: 0,
+        size: keys.size,
+    };
+    let scratch_values = BufferRange {
+        buffer: &workspace.scratch_values,
+        offset: 0,
+        size: values.size,
+    };
+    if radix_pass.is_multiple_of(2) {
+        (keys, values, scratch_keys, scratch_values)
+    } else {
+        (scratch_keys, scratch_values, keys, values)
+    }
 }
 
 impl EightBitPipelines {
@@ -708,6 +1691,26 @@ fn pass_buffer_slots(radix_pass: u32, pass_count: u32) -> (BufferSlot, BufferSlo
 fn pass_count_for_key_bits(key_bits: u32) -> u32 {
     debug_assert!(key_bits <= u32::BITS);
     key_bits.max(1).div_ceil(RADIX_BITS)
+}
+
+fn validate_counted_distinct(
+    input: BufferRange<'_>,
+    output: BufferRange<'_>,
+    count: BufferRange<'_>,
+) -> Result<(), Error> {
+    for (first, first_name, second, second_name) in [
+        (input, "sort input", output, "sort output"),
+        (input, "sort input", count, "sort item count"),
+        (output, "sort output", count, "sort item count"),
+    ] {
+        if first.buffer == second.buffer {
+            return Err(Error::BufferAlias {
+                first: first_name,
+                second: second_name,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn element_count_limit(max_compute_workgroups_per_dimension: u32) -> u32 {

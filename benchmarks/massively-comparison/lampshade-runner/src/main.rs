@@ -14,6 +14,25 @@ use wgpu::util::DeviceExt;
 
 type AnyError = Box<dyn std::error::Error>;
 
+trait IntoMappedRange {
+    fn into_mapped_range(self) -> Result<wgpu::BufferView, AnyError>;
+}
+
+impl IntoMappedRange for wgpu::BufferView {
+    fn into_mapped_range(self) -> Result<wgpu::BufferView, AnyError> {
+        Ok(self)
+    }
+}
+
+impl<E> IntoMappedRange for Result<wgpu::BufferView, E>
+where
+    E: std::error::Error + 'static,
+{
+    fn into_mapped_range(self) -> Result<wgpu::BufferView, AnyError> {
+        self.map_err(Into::into)
+    }
+}
+
 fn main() {
     if let Err(error) = pollster::block_on(run()) {
         eprintln!("Primitive comparison runner failed: {error}");
@@ -27,6 +46,7 @@ async fn run() -> Result<(), AnyError> {
     let (samples_ms, output_items) = match config.workload {
         Workload::ReduceSum => run_reduce(&context, &config)?,
         Workload::SortBounded16 | Workload::SortFullWidth => run_sort(&context, &config)?,
+        Workload::SortCountedFullWidth => run_counted_sort(&context, &config)?,
         Workload::ExclusiveScan => run_scan(&context, &config)?,
         Workload::Compact50 => run_compact(&context, &config)?,
     };
@@ -42,7 +62,10 @@ async fn run() -> Result<(), AnyError> {
             "MASSIVELY_BENCH_IMPLEMENTATION_REVISION",
             "working-tree",
         ),
-        runtime_stack: "wgpu 30.0.0".into(),
+        runtime_stack: runtime_metadata(
+            "MASSIVELY_BENCH_RUNTIME_STACK",
+            "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+        ),
         adapter: adapter_metadata(&context),
         config: config.clone(),
         generator: GeneratorMetadata::current(),
@@ -202,7 +225,7 @@ fn reduce_to_host(
     })?;
     receiver.recv()??;
     let value = {
-        let mapped = slice.get_mapped_range()?;
+        let mapped = slice.get_mapped_range().into_mapped_range()?;
         bytemuck::cast_slice::<u8, u32>(&mapped)[0]
     };
     staging.unmap();
@@ -258,7 +281,8 @@ fn reduce_to_host_timed(
 
     let receive_started = Instant::now();
     receiver.recv()??;
-    let value = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range()?)[0];
+    let value =
+        bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range().into_mapped_range()?)[0];
     staging.unmap();
     let receive_and_read_ms = receive_started.elapsed().as_secs_f64() * 1_000.0;
     let phases = ReductionReadbackPhases {
@@ -323,6 +347,67 @@ fn run_sort(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, u3
         Ok(())
     })?;
     Ok((samples, config.items))
+}
+
+fn run_counted_sort(
+    context: &Context,
+    config: &BenchmarkConfig,
+) -> Result<(Vec<f64>, u32), AnyError> {
+    let logical = SortInput::generate(config.items, config.workload);
+    let input: Vec<_> = logical
+        .keys
+        .iter()
+        .copied()
+        .zip(logical.values.iter().copied())
+        .map(|(key, value)| KeyValue::new(key, value))
+        .collect();
+    let gpu_input = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Release Regression Counted Sort Input"),
+            contents: bytemuck::cast_slice(&input),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let gpu_output = context.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Release Regression Counted Sort Output"),
+        size: gpu_input.size(),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let gpu_count = context
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Release Regression Counted Sort Count"),
+            contents: bytemuck::bytes_of(&config.items),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+    let mut sorter = KeyValueSorter::from_context(context);
+
+    sorter.sort_counted_gpu_to_gpu(&gpu_input, &gpu_output, &gpu_count, config.items)?;
+    wait_for_gpu(&context.device)?;
+    let actual =
+        read_buffer::<KeyValue>(&context.device, &context.queue, &gpu_output, config.items)?;
+    validate_key_values(&logical, &actual)?;
+    drop(actual);
+
+    let samples = warm_and_sample(config, || {
+        sorter.sort_counted_gpu_to_gpu(&gpu_input, &gpu_output, &gpu_count, config.items)?;
+        wait_for_gpu(&context.device)?;
+        Ok(())
+    })?;
+    Ok((samples, config.items))
+}
+
+fn validate_key_values(logical: &SortInput, actual: &[KeyValue]) -> Result<(), AnyError> {
+    for (position, pair) in actual.iter().enumerate() {
+        let original = pair.value as usize;
+        if original >= logical.keys.len() || logical.keys[original] != pair.key {
+            return Err(format!("sort key/value association mismatch at output {position}").into());
+        }
+    }
+    let output_values: Vec<_> = actual.iter().map(|pair| pair.value).collect();
+    logical.validate_values(&output_values)?;
+    Ok(())
 }
 
 fn run_scan(context: &Context, config: &BenchmarkConfig) -> Result<(Vec<f64>, u32), AnyError> {
@@ -462,7 +547,7 @@ fn read_buffer<T: bytemuck::Pod>(
         timeout: None,
     })?;
     receiver.recv()??;
-    let values = bytemuck::cast_slice(&slice.get_mapped_range()?).to_vec();
+    let values = bytemuck::cast_slice(&slice.get_mapped_range().into_mapped_range()?).to_vec();
     staging.unmap();
     Ok(values)
 }

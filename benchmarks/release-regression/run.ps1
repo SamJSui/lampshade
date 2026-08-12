@@ -1,14 +1,15 @@
 param(
     [long[]]$Items = @(1000000, 10000000, 100000000),
-    [ValidateSet('reduce_sum', 'sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50')]
-    [string[]]$Workloads = @('reduce_sum', 'sort_bounded16', 'sort_full_width', 'exclusive_scan', 'compact_50'),
+    [ValidateSet('reduce_sum', 'sort_bounded16', 'sort_full_width', 'sort_counted_full_width', 'exclusive_scan', 'compact_50')]
+    [string[]]$Workloads = @('reduce_sum', 'sort_bounded16', 'sort_full_width', 'sort_counted_full_width', 'exclusive_scan', 'compact_50'),
     [ValidateRange(1, 20)]
     [int]$Processes = 3,
     [string]$Backend,
     [ValidateRange(0, 100)]
     [double]$ThresholdPercent = 2.0,
     [string]$OutputPath,
-    [switch]$Quick
+    [switch]$Quick,
+    [switch]$Characterize
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,7 +25,7 @@ $benchmarkRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $benchmarkRoot '..\..')).Path
 $targetRoot = Join-Path $repoRoot 'target\release-regression'
 $safeRepoRoot = $repoRoot.Replace('\', '/')
-$baselineVersion = '0.8.0'
+$baselineVersion = '0.9.0'
 if (-not $OutputPath) {
     $OutputPath = Join-Path $benchmarkRoot 'results\latest.json'
 }
@@ -71,9 +72,33 @@ function Build-Runner {
     finally { $env:CARGO_TARGET_DIR = $previousTarget }
 }
 
+function Get-WgpuRuntimeStack {
+    param([string]$Manifest)
+    $lockPath = Join-Path (Split-Path -Parent $Manifest) 'Cargo.lock'
+    $lockText = [System.IO.File]::ReadAllText($lockPath)
+    $parts = foreach ($name in @('wgpu', 'wgpu-core', 'wgpu-hal', 'wgpu-types')) {
+        $pattern = '(?ms)\[\[package\]\]\s+name = "' + [regex]::Escape($name) + '"\s+version = "([^"]+)"'
+        $matched = [regex]::Match($lockText, $pattern)
+        if (-not $matched.Success) { throw "Missing $name in $lockPath." }
+        "$name $($matched.Groups[1].Value)"
+    }
+    return $parts -join '; '
+}
+
+function Get-PackageVersion {
+    param([string]$Manifest)
+    $manifestText = [System.IO.File]::ReadAllText($Manifest)
+    $package = [regex]::Match($manifestText, '(?ms)^\[package\]\s+(.*?)(?=^\[|\z)')
+    if (-not $package.Success) { throw "Missing [package] in $Manifest." }
+    $version = [regex]::Match($package.Groups[1].Value, '(?m)^version\s*=\s*"([^"]+)"')
+    if (-not $version.Success) { throw "Missing package version in $Manifest." }
+    return $version.Groups[1].Value
+}
+
 function Invoke-Runner {
     param(
         [string]$Executable, [string]$Implementation, [string]$Version, [string]$Revision,
+        [string]$RuntimeStack,
         [long]$ItemCount, [string]$Workload, [int]$Warmups,
         [long]$WarmupMs, [int]$Samples, [int]$ProcessIndex
     )
@@ -82,7 +107,8 @@ function Invoke-Runner {
         'MASSIVELY_BENCH_WARMUPS', 'MASSIVELY_BENCH_WARMUP_MS',
         'MASSIVELY_BENCH_SAMPLES', 'MASSIVELY_BENCH_PROCESS_INDEX',
         'MASSIVELY_BENCH_IMPLEMENTATION_NAME',
-        'MASSIVELY_BENCH_IMPLEMENTATION_VERSION', 'MASSIVELY_BENCH_IMPLEMENTATION_REVISION'
+        'MASSIVELY_BENCH_IMPLEMENTATION_VERSION', 'MASSIVELY_BENCH_IMPLEMENTATION_REVISION',
+        'MASSIVELY_BENCH_RUNTIME_STACK'
     )
     $previous = @{}
     foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
@@ -97,6 +123,7 @@ function Invoke-Runner {
         $env:MASSIVELY_BENCH_IMPLEMENTATION_NAME = $Implementation
         $env:MASSIVELY_BENCH_IMPLEMENTATION_VERSION = $Version
         $env:MASSIVELY_BENCH_IMPLEMENTATION_REVISION = $Revision
+        $env:MASSIVELY_BENCH_RUNTIME_STACK = $RuntimeStack
         $output = @(& $Executable 2>&1)
         if ($LASTEXITCODE -ne 0) { throw (($output | ForEach-Object ToString) -join [Environment]::NewLine) }
         $json = $output | ForEach-Object ToString | Where-Object { $_.TrimStart().StartsWith('{') } | Select-Object -Last 1
@@ -114,14 +141,15 @@ $candidateTarget = Join-Path $targetRoot 'checkout'
 $baselineTarget = Join-Path $targetRoot 'published'
 Build-Runner 'checkout runner' $candidateManifest $candidateTarget
 Build-Runner "crates.io $baselineVersion runner" $baselineManifest $baselineTarget
+$publishedRuntimeStack = Get-WgpuRuntimeStack $baselineManifest
+$checkoutRuntimeStack = Get-WgpuRuntimeStack $candidateManifest
 
 $suffix = if ($env:OS -eq 'Windows_NT') { '.exe' } else { '' }
 $candidateExecutable = Join-Path $candidateTarget "release\lampshade-massively-comparison-runner$suffix"
 $baselineExecutable = Join-Path $baselineTarget "release\lampshade-release-baseline-runner$suffix"
 $revision = (& git -c "safe.directory=$safeRepoRoot" -C $repoRoot rev-parse HEAD).Trim()
 $dirty = @(& git -c "safe.directory=$safeRepoRoot" -C $repoRoot status --porcelain).Count -gt 0
-$metadata = cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $repoRoot 'Cargo.toml') | ConvertFrom-Json
-$candidateVersion = $metadata.packages[0].version
+$candidateVersion = Get-PackageVersion (Join-Path $repoRoot 'Cargo.toml')
 $sourceRoots = @(
     'Cargo.toml', 'src', 'benchmarks/massively-comparison/common',
     'benchmarks/massively-comparison/lampshade-runner', 'benchmarks/release-regression'
@@ -147,14 +175,14 @@ foreach ($itemCount in $Items) {
     foreach ($workload in $Workloads) {
         for ($processIndex = 1; $processIndex -le $Processes; $processIndex++) {
             $sources = @(
-                @{ Source = 'published'; Implementation = 'lampshade'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion" },
-                @{ Source = 'checkout'; Implementation = 'lampshade'; Executable = $candidateExecutable; Version = "working-tree-$candidateVersion"; Revision = $revision }
+                @{ Source = 'published'; Implementation = 'lampshade'; Executable = $baselineExecutable; Version = "crates.io-$baselineVersion"; Revision = "v$baselineVersion"; RuntimeStack = $publishedRuntimeStack },
+                @{ Source = 'checkout'; Implementation = 'lampshade'; Executable = $candidateExecutable; Version = "working-tree-$candidateVersion"; Revision = $revision; RuntimeStack = $checkoutRuntimeStack }
             )
             if ($processIndex % 2 -eq 0) { [array]::Reverse($sources) }
             foreach ($source in $sources) {
                 Write-Host "$($source.Source) $workload items=$itemCount process=$processIndex"
                 try {
-                    $result = Invoke-Runner $source.Executable $source.Implementation $source.Version $source.Revision $itemCount $workload $sampling.Warmups $sampling.WarmupMs $sampling.Samples $processIndex
+                    $result = Invoke-Runner $source.Executable $source.Implementation $source.Version $source.Revision $source.RuntimeStack $itemCount $workload $sampling.Warmups $sampling.WarmupMs $sampling.Samples $processIndex
                     $runs.Add([pscustomobject][ordered]@{ source = $source.Source; result = $result })
                 }
                 catch {
@@ -204,7 +232,8 @@ foreach ($case in $cases) {
 
 $expected = $Items.Count * $Workloads.Count
 $adaptersPassed = @($comparisons | Where-Object { -not $_.adapter_match }).Count -eq 0
-$regressionPassed = [bool]$Quick -or @($comparisons | Where-Object { -not $_.passed }).Count -eq 0
+$timingGateDisabled = [bool]$Quick -or [bool]$Characterize
+$regressionPassed = $timingGateDisabled -or @($comparisons | Where-Object { -not $_.passed }).Count -eq 0
 $gatePassed = $failures.Count -eq 0 -and $comparisons.Count -eq $expected -and $adaptersPassed -and $regressionPassed
 $artifact = [pscustomobject][ordered]@{
     schema_version = 1; generated_at_utc = [DateTime]::UtcNow.ToString('o')
@@ -215,17 +244,17 @@ $artifact = [pscustomobject][ordered]@{
         source_manifest_algorithm = "SHA-256 of ordered '<LF-normalized file SHA-256>  <path>\n' entries"
         source_manifest_sha256 = $sourceManifest; source_files = $sourceFiles
     }
-    config = @{ backend = $Backend; items = $Items; workloads = $Workloads; processes = $Processes; threshold_percent = $ThresholdPercent; quick = [bool]$Quick }
-    methodology = @{ timing = 'identical public resident API and completion boundary per source'; aggregation = 'median of independent process medians'; gate = 'candidate increase must not exceed threshold_percent' }
+    config = @{ backend = $Backend; items = $Items; workloads = $Workloads; processes = $Processes; threshold_percent = $ThresholdPercent; quick = [bool]$Quick; characterize = [bool]$Characterize }
+    methodology = @{ timing = 'identical public resident API and completion boundary per source'; aggregation = 'median of independent process medians'; gate = $(if ($Characterize) { 'not evaluated: cross-runtime characterization' } else { 'candidate increase must not exceed threshold_percent' }) }
     runs = $runs; failures = $failures; aggregates = $aggregates; comparisons = $comparisons
-    gate_evaluated = -not [bool]$Quick; gate_passed = $gatePassed
+    gate_evaluated = -not $timingGateDisabled; gate_passed = $gatePassed
 }
 $directory = Split-Path -Parent $OutputPath
 New-Item -ItemType Directory -Force -Path $directory | Out-Null
 $artifact | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $OutputPath -Encoding utf8
 $displayComparisons = $comparisons | Select-Object workload, items, published_ms, checkout_ms, change_percent, @{
     Name = 'gate'
-    Expression = { if ($Quick) { 'n/a' } elseif ($_.passed) { 'pass' } else { 'FAIL' } }
+    Expression = { if ($timingGateDisabled) { 'n/a' } elseif ($_.passed) { 'pass' } else { 'FAIL' } }
 }
 $displayComparisons | Format-Table -AutoSize
 Write-Host "Machine-readable results: $OutputPath"

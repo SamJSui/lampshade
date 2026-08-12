@@ -66,7 +66,6 @@ pub async fn gpu_context_without_optional_features() -> Option<Context> {
                         power_preference: wgpu::PowerPreference::HighPerformance,
                         compatible_surface: None,
                         force_fallback_adapter: false,
-                        apply_limit_buckets: false,
                     })
                     .await
                 {
@@ -154,9 +153,7 @@ pub async fn read_pod<T: bytemuck::Pod>(
         .expect("GPU test readback map failed");
 
     let result = {
-        let mapped = slice
-            .get_mapped_range()
-            .expect("test readback buffer is mapped");
+        let mapped = slice.get_mapped_range();
         bytemuck::cast_slice(&mapped).to_vec()
     };
     staging.unmap();

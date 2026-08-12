@@ -6,7 +6,6 @@ pub enum Error {
     RequestAdapter(wgpu::RequestAdapterError),
     RequestDevice(wgpu::RequestDeviceError),
     BufferMap(wgpu::BufferAsyncError),
-    MapRange(wgpu::MapRangeError),
     DevicePoll(wgpu::PollError),
     ReadbackChannelClosed,
     TimestampQueriesUnsupported,
@@ -80,7 +79,6 @@ impl fmt::Display for Error {
             Self::RequestAdapter(error) => write!(f, "failed to request a GPU adapter: {error}"),
             Self::RequestDevice(error) => write!(f, "failed to request a GPU device: {error}"),
             Self::BufferMap(error) => write!(f, "failed to map a GPU readback buffer: {error}"),
-            Self::MapRange(error) => write!(f, "failed to access a mapped GPU buffer: {error}"),
             Self::DevicePoll(error) => write!(f, "failed while waiting for GPU work: {error}"),
             Self::ReadbackChannelClosed => {
                 f.write_str("GPU readback completed without reporting its mapping result")
@@ -188,12 +186,6 @@ impl From<wgpu::RequestDeviceError> for Error {
 impl From<wgpu::BufferAsyncError> for Error {
     fn from(error: wgpu::BufferAsyncError) -> Self {
         Self::BufferMap(error)
-    }
-}
-
-impl From<wgpu::MapRangeError> for Error {
-    fn from(error: wgpu::MapRangeError) -> Self {
-        Self::MapRange(error)
     }
 }
 
