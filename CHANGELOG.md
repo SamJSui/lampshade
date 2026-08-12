@@ -5,6 +5,8 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+## 0.10.0 - 2026-08-12
+
 ### Added
 
 - Add a native stable structure-of-arrays radix sorter for separate `u32` key
