@@ -51,6 +51,10 @@ name = "key_value_sort"
 harness = false
 
 [[bench]]
+name = "key_value_soa"
+harness = false
+
+[[bench]]
 name = "compact"
 harness = false
 
