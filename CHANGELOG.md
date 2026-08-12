@@ -5,6 +5,8 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+## 0.11.0 - 2026-08-12
+
 ### Added
 
 - Add a fixed-count `KeyValueSoaSorter` API that owns the count metadata needed
@@ -20,6 +22,12 @@ the `wgpu-primitives` package name.
 
 - Keep `new_for_adapter` as a compatibility alias while making
   `KeyValueSoaSorter::new` the portable, adapter-selected constructor.
+
+### Performance
+
+- Record the clean 0.10.1-to-0.11 RTX regression gate, targeted noisy-row
+  recheck, and physical SoA correctness validation on NVIDIA Vulkan, Apple
+  Metal, and Intel Vulkan.
 
 ## 0.10.1 - 2026-08-12
 
