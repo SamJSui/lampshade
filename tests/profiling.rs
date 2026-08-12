@@ -1,7 +1,7 @@
 mod support;
 
 use lampshade::{
-    Compactor, Error, GpuProfile, Histogram, KeyValue, KeyValueField, KeyValueSorter,
+    ArgminByKey, Compactor, Error, GpuProfile, Histogram, KeyValue, KeyValueField, KeyValueSorter,
     MaskGenerator, Reducer, RunLengthEncoder, RunLengthOutputBuffers, Scanner, Sorter,
     U32Predicate, U32Reduction,
 };
@@ -490,6 +490,48 @@ async fn profiles_gpu_count_preparation_and_indirect_work() {
 }
 
 #[tokio::test]
+async fn profiles_argmin_hierarchy() {
+    let Some(context) = support::gpu_context().await else {
+        return;
+    };
+    if !timestamp_queries_available(&context) {
+        eprintln!("skipping argmin profile test because the adapter lacks timestamp queries");
+        return;
+    }
+    let input: Vec<_> = support::random_u32(65_537, 0xA261_0001)
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| KeyValue::new(key, index as u32))
+        .collect();
+    let expected = input
+        .iter()
+        .copied()
+        .min_by_key(|item| (item.key, item.value))
+        .unwrap();
+    let gpu_input = storage_buffer(&context.device, "Profile Argmin Input", &input);
+    let gpu_output = output_buffer(
+        &context.device,
+        "Profile Argmin Output",
+        ArgminByKey::output_buffer_size(),
+    );
+    let mut selector = ArgminByKey::from_context(&context);
+    let profile = selector
+        .profile_argmin_gpu_to_gpu(&gpu_input, &gpu_output, input.len() as u32)
+        .await
+        .expect("profiled argmin failed");
+
+    assert_eq!(
+        support::read_pod::<KeyValue>(&context, &gpu_output, 1).await,
+        [expected]
+    );
+    assert_eq!(profile.spans.len(), 3);
+    for (level, span) in profile.spans.iter().enumerate() {
+        assert_eq!(span.label, format!("argmin_by_key.level.{level}"));
+    }
+    assert_timestamps_contain_dispatches(&profile);
+}
+
+#[tokio::test]
 async fn profiles_key_and_key_value_radix_stages() {
     const PORTABLE_RADIX_PASS_COUNT: usize = 16;
 
@@ -766,5 +808,26 @@ async fn trivial_profiles_complete_without_timestamp_dispatches() -> Result<(), 
     assert!(profile.spans.is_empty());
     assert!(profile.gpu_elapsed.is_zero());
     assert_eq!(support::read_u32(&context, &rle_count, 1).await, [0]);
+
+    let argmin_input = storage_buffer(
+        &context.device,
+        "Empty Argmin Profile Input",
+        &[KeyValue::new(1, 2)],
+    );
+    let argmin_output = output_buffer(
+        &context.device,
+        "Empty Argmin Profile Output",
+        ArgminByKey::output_buffer_size(),
+    );
+    let mut argmin = ArgminByKey::from_context(&context);
+    let profile = argmin
+        .profile_argmin_gpu_to_gpu(&argmin_input, &argmin_output, 0)
+        .await?;
+    assert!(profile.spans.is_empty());
+    assert!(profile.gpu_elapsed.is_zero());
+    assert_eq!(
+        support::read_pod::<KeyValue>(&context, &argmin_output, 1).await,
+        [KeyValue::new(u32::MAX, u32::MAX)]
+    );
     Ok(())
 }

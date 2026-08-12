@@ -14,6 +14,7 @@ include = [
     "src/**/*.wgsl",
     "tests/**/*.rs",
     "benches/**/*.rs",
+    "benches/**/*.wgsl",
     "benchmarks/**/*.md",
     "benchmarks/*.json",
     "docs/**/*.md",
@@ -84,4 +85,8 @@ harness = false
 
 [[bench]]
 name = "run_length"
+harness = false
+
+[[bench]]
+name = "argmin"
 harness = false

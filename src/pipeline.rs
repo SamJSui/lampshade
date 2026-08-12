@@ -9,9 +9,10 @@
 use std::{marker::PhantomData, ops::Range};
 
 use crate::{
-    Compactor, Context, CountedSortDispatch, Error, GpuCountPlan, KeyValue, KeyValueCompactor,
-    KeyValueField, KeyValueSorter, MaskGenerator, Reducer, RunLengthEncoder, Sorter, U32Predicate,
-    U32Reduction, common::buffers::BufferRange, run_length::RunLengthOutputRanges,
+    ArgminByKey, Compactor, Context, CountedSortDispatch, Error, GpuCountPlan, KeyValue,
+    KeyValueCompactor, KeyValueField, KeyValueSorter, MaskGenerator, Reducer, RunLengthEncoder,
+    Sorter, U32Predicate, U32Reduction, common::buffers::BufferRange,
+    run_length::RunLengthOutputRanges,
 };
 
 mod sealed {
@@ -297,6 +298,7 @@ pub struct WorkspaceRequirements {
     fixed_reduce: bool,
     counted_reduce: bool,
     run_length_encode: bool,
+    argmin_by_key: bool,
 }
 
 impl WorkspaceRequirements {
@@ -314,6 +316,7 @@ impl WorkspaceRequirements {
             fixed_reduce: false,
             counted_reduce: false,
             run_length_encode: false,
+            argmin_by_key: false,
         }
     }
 
@@ -376,6 +379,12 @@ impl WorkspaceRequirements {
         self.run_length_encode = true;
         self
     }
+
+    /// Reserves argmin-by-key reduction workspace.
+    pub const fn argmin_by_key(mut self) -> Self {
+        self.argmin_by_key = true;
+        self
+    }
 }
 
 struct CachedCountPlan {
@@ -397,6 +406,7 @@ pub struct Primitives {
     key_value_sorter: Option<KeyValueSorter>,
     reducer: Option<Reducer>,
     run_length_encoder: Option<RunLengthEncoder>,
+    argmin_by_key: Option<ArgminByKey>,
     count_plans: Vec<CachedCountPlan>,
     prepared_count_plans: Vec<usize>,
 }
@@ -415,6 +425,7 @@ impl Primitives {
             key_value_sorter: None,
             reducer: None,
             run_length_encoder: None,
+            argmin_by_key: None,
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
         }
@@ -443,6 +454,7 @@ impl Primitives {
             key_value_sorter: None,
             reducer: None,
             run_length_encoder: None,
+            argmin_by_key: None,
             count_plans: Vec::new(),
             prepared_count_plans: Vec::new(),
         }
@@ -489,6 +501,9 @@ impl Primitives {
         }
         if requirements.run_length_encode {
             self.run_length_encoder().reserve(capacity)?;
+        }
+        if requirements.argmin_by_key {
+            self.argmin_by_key().reserve(capacity)?;
         }
         Ok(())
     }
@@ -597,6 +612,11 @@ impl Primitives {
         self.run_length_encoder
             .as_mut()
             .expect("run-length encoder is initialized")
+    }
+
+    fn argmin_by_key(&mut self) -> &mut ArgminByKey {
+        self.argmin_by_key
+            .get_or_insert_with(|| ArgminByKey::new(&self.device, &self.queue))
     }
 
     fn key_value_compactor(&mut self) -> &mut KeyValueCompactor {
@@ -986,6 +1006,44 @@ impl Recorder<'_, '_> {
                         operation,
                     )
             }
+        }
+    }
+
+    /// Selects the lexicographically smallest key-value record.
+    ///
+    /// The output contains one record. A GPU-counted empty input writes
+    /// `(u32::MAX, u32::MAX)`.
+    pub fn argmin_by_key(
+        &mut self,
+        input: GpuSlice<'_, KeyValue>,
+        output: GpuSliceMut<'_, KeyValue>,
+    ) -> Result<(), Error> {
+        if output.capacity < 1 {
+            return Err(Error::BufferTooSmall {
+                name: "argmin output view",
+                required: size_of::<KeyValue>() as u64,
+                actual: 0,
+            });
+        }
+        match input.extent {
+            Extent::Fixed(num_items) => self.primitives.argmin_by_key().record_argmin_ranges(
+                self.encoder,
+                input.range(),
+                output.range(),
+                num_items,
+                None,
+            ),
+            Extent::Gpu(count) => self
+                .primitives
+                .argmin_by_key()
+                .record_argmin_counted_ranges(
+                    self.encoder,
+                    input.range(),
+                    output.range(),
+                    count.range(),
+                    input.capacity,
+                    None,
+                ),
         }
     }
 

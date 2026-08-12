@@ -5,6 +5,12 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+### Added
+
+- Lexicographic `ArgminByKey` selection for fixed and GPU-counted `KeyValue`
+  buffers, including slice, immediate, recording, timestamp-profiling, typed
+  pipeline, validation, example, and raw-kernel comparison coverage.
+
 ### Fixed
 
 - Restore `wasm32-unknown-unknown` library compilation by retaining transient

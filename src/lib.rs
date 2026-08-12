@@ -1,5 +1,6 @@
 mod common;
 
+pub mod argmin;
 pub mod compact;
 pub mod context;
 pub mod count;
@@ -15,6 +16,7 @@ pub mod sort;
 #[deprecated(since = "0.8.0", note = "use `lampshade::pipeline` instead")]
 pub mod v2;
 
+pub use argmin::ArgminByKey;
 pub use compact::{Compactor, KeyValueCompactor};
 pub use context::Context;
 pub use count::{CountedSortDispatch, GpuCountPlan};
