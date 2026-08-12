@@ -147,6 +147,10 @@ commit `b186c140e7a11b6ea9a2d48bcdecb7263f059d4d` was measured with
 `c2ad9e7ec13a6d8525d65e2be7dc64f90a5faa29ff00de3cdac34a666d12dc44`
 on both adapters.
 
+The pull-request tip differs from that measured commit only by the checked-in
+benchmark evidence, documentation, and a release-harness unit-test scoping fix;
+no Cargo dependency, runtime implementation, Rust kernel, or WGSL changed.
+
 - RTX/Vulkan: all 15 fixed controls at 1M, 10M, and 100M stayed between
   -2.42% and +0.92% versus 0.9/wgpu 30. GPU-counted full-width sorting improved
   82.68%, 82.83%, and 85.33%. The complete three-process artifact is

@@ -33,15 +33,15 @@ class ReleaseRegressionTests(unittest.TestCase):
             / "Cargo.toml"
         )
 
-    def test_candidate_version_does_not_require_a_root_lockfile(self):
-        manifest = Path(__file__).parents[2] / "Cargo.toml"
-
-        self.assertEqual(release_regression.package_version(manifest), "0.10.0")
-
         self.assertEqual(
             release_regression.resolved_wgpu_stack(manifest),
             "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
         )
+
+    def test_candidate_version_does_not_require_a_root_lockfile(self):
+        manifest = Path(__file__).parents[2] / "Cargo.toml"
+
+        self.assertEqual(release_regression.package_version(manifest), "0.10.0")
 
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
