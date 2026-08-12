@@ -137,8 +137,31 @@ retained as exploratory history.
 The M3 artifact originally labeled the candidate runtime using the manifest's
 `29.0.1` lower bound. Its committed runner lock actually resolved `wgpu 29.0.3`
 with core, HAL, and types `29.0.4`; the `runtime_stack` metadata was corrected
-without changing samples, aggregates, or its source manifest. The final 0.10
-candidate aligns the full stack on `29.0.4` and requires clean-commit reruns.
+without changing samples, aggregates, or its source manifest.
+
+## Clean WGPU 29.0.4 baseline
+
+The final candidate aligns wgpu, core, HAL, and types on `29.0.4`. Clean source
+commit `b186c140e7a11b6ea9a2d48bcdecb7263f059d4d` was measured with
+`dirty = false` and normalized source-manifest SHA-256
+`c2ad9e7ec13a6d8525d65e2be7dc64f90a5faa29ff00de3cdac34a666d12dc44`
+on both adapters.
+
+- RTX/Vulkan: all 15 fixed controls at 1M, 10M, and 100M stayed between
+  -2.42% and +0.92% versus 0.9/wgpu 30. GPU-counted full-width sorting improved
+  82.68%, 82.83%, and 85.33%. The complete three-process artifact is
+  `2026-08-12-wgpu29-rtx-clean-baseline.json`.
+- M3 Pro/Metal: the full required-GPU suite passed. The five-process migration
+  characterization again exposed the WGPU 29 completion cost. At 10M, bounded
+  and GPU-counted sort differed by +0.70% and +0.65%, full-width sort by +6.61%,
+  and host-synchronized reduction/scan/compaction remained substantially
+  slower. The complete artifact is
+  `2026-08-12-wgpu29-m3-clean-baseline.json`.
+
+Both artifacts have `characterize = true` and `gate_evaluated = false` because
+they compare different WGPU major stacks. They establish the migration record
+and clean 0.10 source identity; they do not convert the Metal deltas into a
+passing performance gate.
 
 ## Baseline policy
 
