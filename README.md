@@ -18,8 +18,9 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.9 and the current checkout,
-writes raw runs and process medians to JSON, and enforces a 2% regression budget.
+runs identical resident workloads against crates.io 0.10 on WGPU 29 and the
+current checkout, writes raw runs and process medians to JSON, and enforces a
+2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
 The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
@@ -152,16 +153,15 @@ separately.
 
 ## Installation
 
-Published Lampshade 0.9 uses wgpu 30. Lampshade 0.10 moves the public API to
-wgpu 29 so its buffers compose directly with current graphics projects. Until
-0.10 is published, use this checkout for integration testing. Tokio is listed
-because the executable quick start
-below uses `#[tokio::main]`; library development dependencies do not propagate
-to applications.
+Lampshade 0.10 uses wgpu 29 so its buffers compose directly with current
+graphics projects. Tokio is listed because the executable quick start below
+uses `#[tokio::main]`; library development dependencies do not propagate to
+applications.
 
 ```toml
 [dependencies]
-lampshade = { path = "../lampshade" }
+lampshade = "0.10"
+wgpu = "29"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
