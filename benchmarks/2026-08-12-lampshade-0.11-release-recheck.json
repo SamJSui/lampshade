@@ -1,0 +1,1505 @@
+﻿{
+    "schema_version":  1,
+    "generated_at_utc":  "2026-08-12T21:46:19.5734496Z",
+    "host":  {
+                 "architecture":  "X64",
+                 "hostname":  "DESKTOP-IMC2LBD"
+             },
+    "baseline":  {
+                     "version":  "0.10.1",
+                     "source":  "crates.io"
+                 },
+    "candidate":  {
+                      "source_files":  [
+                                           {
+                                               "path":  "Cargo.toml",
+                                               "sha256":  "5a8794eb6d0615c5788d63b63e984fe684bf27cf7d32114ef0301026656a3e4d"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/common/Cargo.lock",
+                                               "sha256":  "7d9c82656888ddc796ef3f168f7ff1f89522f6810a2a091bedae73228bd19a51"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/common/Cargo.toml",
+                                               "sha256":  "2e82e45d21d7eba70a23ef6341c122a10dc576ba4e57cf02a0cd3ba7748bd313"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/common/src/lib.rs",
+                                               "sha256":  "b7bba6649d3f479b7409f3845f78a4367f0a71764b6d2a1d54da9f6bbd87855d"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/lampshade-runner/Cargo.lock",
+                                               "sha256":  "fc41d6aba0593cfe3b2d9ed0993def7cc105276d4d463722d5bd83f9dec01e89"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/lampshade-runner/Cargo.toml",
+                                               "sha256":  "f62952074f20cab7d7491da3d526b5aaad3541ba01f9e35458fc5b84fd4e4050"
+                                           },
+                                           {
+                                               "path":  "benchmarks/massively-comparison/lampshade-runner/src/main.rs",
+                                               "sha256":  "921e568146c8413cc0320dce98abf5470b5aed536ea590664d41754a3d23605b"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/README.md",
+                                               "sha256":  "eb0f98e46c67925f2ce404ee1424e20937deb61489e766006d06970ab005bd99"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/published-runner/Cargo.lock",
+                                               "sha256":  "4eb74364b79682df460733cfd36c7059613d1ed285057f281aa0b3ec85d96f9f"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/published-runner/Cargo.toml",
+                                               "sha256":  "1d8462ff361dae971418cf4209dd2bcc3bcfb5f523c38599ff58c69134c843cb"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/published-runner/src/main.rs",
+                                               "sha256":  "708efd3de4db0059e79788a38141f0a62cb3b1bc3cff6534d78b6030e9211d67"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/run.ps1",
+                                               "sha256":  "2b0463cceb5cfe761d735b0bb9d0b8032ecf2815f45eeaeb47828488a5132712"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/run.py",
+                                               "sha256":  "576f55bf2d43ab788fcaec58b4880caa9dafb3e145980dea97778e8f3c2afdce"
+                                           },
+                                           {
+                                               "path":  "benchmarks/release-regression/test_run.py",
+                                               "sha256":  "b12b21d8ffaf2eb6cf1f6e72248ee932e0d85abfc5ece2ed0c7dcebc3e083fa6"
+                                           },
+                                           {
+                                               "path":  "src/common/buffers.rs",
+                                               "sha256":  "e6a52c1339624711e351d9096d4d8e3facbc690f267fc93579b2d48d386ad788"
+                                           },
+                                           {
+                                               "path":  "src/common/capabilities.rs",
+                                               "sha256":  "b029ed49976b78db4b467811e850376ebb8bc953abdd0736f7c991bb57177ad3"
+                                           },
+                                           {
+                                               "path":  "src/common/math.rs",
+                                               "sha256":  "3ea35b4c031925a1e004066de6b9857aaf7d5ffe1edabf84e23d5f4ded015158"
+                                           },
+                                           {
+                                               "path":  "src/common/mod.rs",
+                                               "sha256":  "dc67e95eddf9fc33052b53a0cf408b9eaa6f412e20198b8c1042ea5b4df7a8e7"
+                                           },
+                                           {
+                                               "path":  "src/common/runtime.rs",
+                                               "sha256":  "c0e75be8c7c6058b055847f9b000ed0fefce52ff1f7d99d4f1186fa9b6ad11a3"
+                                           },
+                                           {
+                                               "path":  "src/common/shader.rs",
+                                               "sha256":  "3dc672b6a1dbd35c1f0d77f85a68b77fbc274034c5f5326567ff637dd0bbfb73"
+                                           },
+                                           {
+                                               "path":  "src/common/workspace.rs",
+                                               "sha256":  "5bc2246c2f20f2dbdb3d3e11985a720c228c1d9492b949aefa51ae517c253bb6"
+                                           },
+                                           {
+                                               "path":  "src/compact/compact.wgsl",
+                                               "sha256":  "07c124a97be60f3d03835139d7e4ffaa42f6b6d4695f5427a8272342d6314eb9"
+                                           },
+                                           {
+                                               "path":  "src/compact/compactor.rs",
+                                               "sha256":  "6f3cfe64591c61dd59ac19ae69cd61ed3b38ecedeeb0f0dbc8beae38b378e835"
+                                           },
+                                           {
+                                               "path":  "src/compact/core.rs",
+                                               "sha256":  "b45c1999fa354482d25460f78069cda647314bec2e7c2b81dbcf55c3a6863567"
+                                           },
+                                           {
+                                               "path":  "src/compact/key_value_compactor.rs",
+                                               "sha256":  "293cc9086a0645f06103078235c66d0671b4d03a47dbf9603cfb707edefe60ab"
+                                           },
+                                           {
+                                               "path":  "src/compact/mod.rs",
+                                               "sha256":  "b579e67708eee9b4da3a40815d0bc324fcaaf31a5c3e11c2c3fbe0c5c5c41e9a"
+                                           },
+                                           {
+                                               "path":  "src/compact/pipeline.rs",
+                                               "sha256":  "c2ff8e84c842bd75028561b02483620334d54de88c50733e4c6483f30be4473f"
+                                           },
+                                           {
+                                               "path":  "src/context.rs",
+                                               "sha256":  "790793bc2139c4c9f0365b81bb9260199e1f9e5a32d5745a87ce2219d9a0391f"
+                                           },
+                                           {
+                                               "path":  "src/count.rs",
+                                               "sha256":  "d87e2fe1a6dfa8837941224d458f88a1580fb4e3ef58b081c0183e76db1fb1b2"
+                                           },
+                                           {
+                                               "path":  "src/count_prepare.wgsl",
+                                               "sha256":  "3f0505476ea2a6df73238a05ce17b881c638213237a2a05103c5d223644c8bf9"
+                                           },
+                                           {
+                                               "path":  "src/error.rs",
+                                               "sha256":  "a25236c2b747c43d62e58be87b14dc70e7501188bcfa3eddffa6ba075183f22b"
+                                           },
+                                           {
+                                               "path":  "src/histogram/counter.rs",
+                                               "sha256":  "65220bbd45ea230d5637afd0eddb92679b88ed38ec02850bdd3ea0044e19d043"
+                                           },
+                                           {
+                                               "path":  "src/histogram/histogram.wgsl",
+                                               "sha256":  "d288ceeb7376a1fb5dc7f406478e8dd2eefe77429b5f91f25b099781f6f97397"
+                                           },
+                                           {
+                                               "path":  "src/histogram/mod.rs",
+                                               "sha256":  "7b61222978138cdff8ab94aafb01ed4c6a9231e2fc48da3fddbfccca1521df30"
+                                           },
+                                           {
+                                               "path":  "src/histogram/pipeline.rs",
+                                               "sha256":  "bec4d09babc986f5ac255b8bfce676fb878a81083fb919d74bcd0d00bc8ee0cb"
+                                           },
+                                           {
+                                               "path":  "src/lib.rs",
+                                               "sha256":  "b2ccc8f880d9accf6af010d66586ff9a101d8b1e81c776bc106cc062e0eddc0b"
+                                           },
+                                           {
+                                               "path":  "src/pipeline.rs",
+                                               "sha256":  "197013b974a2b6006e261a13e4b68bcf7c1a136464cffe86dfde25061f0ea77b"
+                                           },
+                                           {
+                                               "path":  "src/predicate/generator.rs",
+                                               "sha256":  "71dc7f383da09e6f6cceb4eb998052d5799bf40068b2556c2da6da5b217c7e44"
+                                           },
+                                           {
+                                               "path":  "src/predicate/mod.rs",
+                                               "sha256":  "66e6db107d368dfe33859679e706a88374df553fe037ff46ab6c620a40de383d"
+                                           },
+                                           {
+                                               "path":  "src/predicate/pipeline.rs",
+                                               "sha256":  "d9bb53d6aafaa67133ecb20caa88c72b22c07e885e7c66758e8b54041129faf8"
+                                           },
+                                           {
+                                               "path":  "src/predicate/predicate.wgsl",
+                                               "sha256":  "0cf68e109b7f83e0ac69d4c0029b35a83ba7c747fe15d5bcd9a5fd7dade6273f"
+                                           },
+                                           {
+                                               "path":  "src/profiling.rs",
+                                               "sha256":  "99dbb7c02356cde006258229f53fd08aa5885934dcfdd90bd73921ff632b1da1"
+                                           },
+                                           {
+                                               "path":  "src/reduce/counted.rs",
+                                               "sha256":  "e9d6dad231fb6576e1b54dc66c5888a549522b3235cced8536e2bf5f97058f10"
+                                           },
+                                           {
+                                               "path":  "src/reduce/counted.wgsl",
+                                               "sha256":  "be55757c26508afce484f722ff5684ec125a6b36ffda049fecb266c20725aa2b"
+                                           },
+                                           {
+                                               "path":  "src/reduce/counted_prepare.wgsl",
+                                               "sha256":  "a2ef463a8ad022de6e820f6c92e33a329900237009117c3ec01f21fb6de8e52b"
+                                           },
+                                           {
+                                               "path":  "src/reduce/mod.rs",
+                                               "sha256":  "122d057bf97565ef9a600158aed88626bccbb5864a00fb1bfbc2f7ec03534b1f"
+                                           },
+                                           {
+                                               "path":  "src/reduce/pipeline.rs",
+                                               "sha256":  "d0aee758acba8762617a9d2818de46695c98dccb6d3deb23ca1143cd8503d95d"
+                                           },
+                                           {
+                                               "path":  "src/reduce/reduce.wgsl",
+                                               "sha256":  "4db93c87086c072005d781737d8e9249c7de10814dfee3e1ad2fc0a7a480cbeb"
+                                           },
+                                           {
+                                               "path":  "src/reduce/reducer.rs",
+                                               "sha256":  "75c5bee094db7332b87dbab784eacb16b11e15a17dd28907cba38e4316545476"
+                                           },
+                                           {
+                                               "path":  "src/run_length/encoder.rs",
+                                               "sha256":  "64e4f918605d03f35bfdb64c9b133ee3168aa8ba3e055ec5ebd76bfa85cecfde"
+                                           },
+                                           {
+                                               "path":  "src/run_length/mod.rs",
+                                               "sha256":  "6b67495c740a3cb9cc7c5999c4d7412a09f154b715ee71344f83c647174052e1"
+                                           },
+                                           {
+                                               "path":  "src/run_length/pipeline.rs",
+                                               "sha256":  "2b257f0573d1f8cf3eed296d7f52a7b094b15b7c20c045c0446a40d569da6874"
+                                           },
+                                           {
+                                               "path":  "src/run_length/run_length.wgsl",
+                                               "sha256":  "b61bae1d18221428a4c04f41bbdaf3e46b7d3b45c66a47514456644b50f64532"
+                                           },
+                                           {
+                                               "path":  "src/run_length/run_length_finalize.wgsl",
+                                               "sha256":  "57e50f1d2f7360d1d96fe4aac0a0ba70a0782348aca09f952759eed4dd9be79e"
+                                           },
+                                           {
+                                               "path":  "src/run_length/scatter_starts.wgsl",
+                                               "sha256":  "010d754db9975ea2f82451c2deaf27f0e4c113855aadb024f6d02ea812827974"
+                                           },
+                                           {
+                                               "path":  "src/scan/add.wgsl",
+                                               "sha256":  "f8fed0ffa1d70ee6a20a4c54a983f7676127faeaee32686080c666780164de3c"
+                                           },
+                                           {
+                                               "path":  "src/scan/mod.rs",
+                                               "sha256":  "912c07de8c2298ca4e65c04bd24c2e2e1519a57a9ee4ef616b917eb4e28a0ddc"
+                                           },
+                                           {
+                                               "path":  "src/scan/pipeline.rs",
+                                               "sha256":  "7b9b83f4e8e9227dd29808d821f5e1ff1b8e5f7107e35dd0278e7713c47bbca2"
+                                           },
+                                           {
+                                               "path":  "src/scan/scan.wgsl",
+                                               "sha256":  "206caa467037a4aa211bd0b98e7a3e569d4c5eb77d4dea5c632036ab8a81d75d"
+                                           },
+                                           {
+                                               "path":  "src/scan/scan_input.wgsl",
+                                               "sha256":  "a03bead7859fe1c3fe255b5f20387e62cd89ba1c8ddd9161c46be391f99d7d80"
+                                           },
+                                           {
+                                               "path":  "src/scan/scan_input_subgroup.wgsl",
+                                               "sha256":  "2c82666006eb35f4584b28e93126bc3db6719809d55695f263d660655d99c4fd"
+                                           },
+                                           {
+                                               "path":  "src/scan/scan_subgroup.wgsl",
+                                               "sha256":  "8c3fb2fc635b301cd1c8c2e88cb1347ffc20ebab9f9ccad995147adf8d4a079d"
+                                           },
+                                           {
+                                               "path":  "src/scan/scanner.rs",
+                                               "sha256":  "97dcedb7b2a89de23c5f1e1bae9460429624f777d8354513a6bd7f30b519d8a4"
+                                           },
+                                           {
+                                               "path":  "src/sort/core.rs",
+                                               "sha256":  "a134cb6f0dc278dc9a672f8a1c7db59144c2e43c1865bd0107b79e5e0451396b"
+                                           },
+                                           {
+                                               "path":  "src/sort/counted.rs",
+                                               "sha256":  "f5136717ddd6398eb2fe280d00d59b84e04825a3e1dad38fc5c3e042932b0c59"
+                                           },
+                                           {
+                                               "path":  "src/sort/counted.wgsl",
+                                               "sha256":  "2aa5ff30f3e045a7b2c8485d430b30ab990ce9448e53a25637ead0c44452ee5c"
+                                           },
+                                           {
+                                               "path":  "src/sort/counted_prepare.wgsl",
+                                               "sha256":  "79e61feca2c04be0c461fcf30b3b652aadd0c63c59e4beee401f36b3356d7f3f"
+                                           },
+                                           {
+                                               "path":  "src/sort/counted_prepare_8bit.wgsl",
+                                               "sha256":  "7d03b63e600d599396518f2b15cb41677f6a487791a094c99452c7e60ac8022c"
+                                           },
+                                           {
+                                               "path":  "src/sort/eight_bit.rs",
+                                               "sha256":  "7c4152042799f674fafa28514a538ea5e761a5bcadc5dbe2c86890541f2caa6f"
+                                           },
+                                           {
+                                               "path":  "src/sort/histogram_8bit.wgsl",
+                                               "sha256":  "322ebd666d3e5d4339acf72f8fd2c957d46e8d4dc7b5594f6e276d7df83ddc1d"
+                                           },
+                                           {
+                                               "path":  "src/sort/key_value_sorter.rs",
+                                               "sha256":  "fcd6f7c111bbff09faa461271dc89c8bd79c108b4373adb4fdccab75dbb6c92c"
+                                           },
+                                           {
+                                               "path":  "src/sort/mod.rs",
+                                               "sha256":  "e49fbe6e05693f97a72ee428c159c22e003ac54d0833a0bcb83b7108a08e1880"
+                                           },
+                                           {
+                                               "path":  "src/sort/pipeline.rs",
+                                               "sha256":  "02a3f1148452d916e0852110b9aeac8bd55d33b4c1b402ca816e8305d6cc35c0"
+                                           },
+                                           {
+                                               "path":  "src/sort/prefix_8bit.wgsl",
+                                               "sha256":  "38c97e0e2c65e5a5924790d3cd1e62b76369147fb9fa9a8a830630d711828a87"
+                                           },
+                                           {
+                                               "path":  "src/sort/scatter_8bit.wgsl",
+                                               "sha256":  "c238355c4df15a9a0c8aa0ca1df0ff7173619030f50c2fa218752cefe1eadf47"
+                                           },
+                                           {
+                                               "path":  "src/sort/scatter_8bit_soa.wgsl",
+                                               "sha256":  "de7681bf71953cc06e644b8ae2cf75bbf44f682f15a8a5dd06fbae9933d7ca9a"
+                                           },
+                                           {
+                                               "path":  "src/sort/soa.rs",
+                                               "sha256":  "55015da8387982a2f45d0b9f054cf5e111198237443293bfad3001c8b6b4e7c0"
+                                           },
+                                           {
+                                               "path":  "src/sort/soa_pack.wgsl",
+                                               "sha256":  "1fe32c938f8162089590336db91c20988c6b7519a739f026fcb41d69e2e35408"
+                                           },
+                                           {
+                                               "path":  "src/sort/soa_unpack.wgsl",
+                                               "sha256":  "e79f00bf54ef640a9df029dee6840437f6e6a464d047bea80edca4a1405ccc7c"
+                                           },
+                                           {
+                                               "path":  "src/sort/sort.wgsl",
+                                               "sha256":  "c8dca3046c0bf61ae214040d2cdba6693d6d1e4579b9f57fe186ea7e5843ef77"
+                                           },
+                                           {
+                                               "path":  "src/sort/sort_wide.wgsl",
+                                               "sha256":  "1af2a3efccee2db29d037c6c8caf88c5cd4a25817cde7ae38dfd1f0cb8a5148e"
+                                           },
+                                           {
+                                               "path":  "src/sort/sorter.rs",
+                                               "sha256":  "24a697ebcc7ae84d5aac9b9554dfecd6bb4ba23d2913b5465218c47f31e53a6e"
+                                           },
+                                           {
+                                               "path":  "src/v2.rs",
+                                               "sha256":  "c1ad18e0f4b548980d15dd898c110aa03c07fd819955c24bdcf8bd72f7de64ec"
+                                           }
+                                       ],
+                      "version":  "0.11.0",
+                      "source_manifest_algorithm":  "SHA-256 of ordered \u0027\u003cLF-normalized file SHA-256\u003e  \u003cpath\u003e\\n\u0027 entries",
+                      "revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                      "dirty":  false,
+                      "source_manifest_sha256":  "5958426ab9c7369923b3d6117df6edca90eb91e4c21d8b2c8d4c16b46953d78c"
+                  },
+    "config":  {
+                   "backend":  "vulkan",
+                   "quick":  false,
+                   "processes":  9,
+                   "threshold_percent":  2,
+                   "characterize":  false,
+                   "workloads":  [
+                                     "sort_full_width"
+                                 ],
+                   "items":  [
+                                 100000000
+                             ]
+               },
+    "methodology":  {
+                        "timing":  "identical public resident API and completion boundary per source",
+                        "gate":  "candidate increase must not exceed threshold_percent",
+                        "aggregation":  "median of independent process medians"
+                    },
+    "runs":  [
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  1
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.667899999999998,
+                                                       15.938299999999998,
+                                                       15.7429,
+                                                       15.8877,
+                                                       15.879299999999999,
+                                                       15.638200000000001,
+                                                       15.655800000000001
+                                                   ],
+                                    "median_ms":  15.7429,
+                                    "throughput_items_per_second":  6352069821.951483,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  1
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.5533,
+                                                       15.5693,
+                                                       15.9873,
+                                                       15.7091,
+                                                       15.4959,
+                                                       15.708799999999998,
+                                                       15.6828
+                                                   ],
+                                    "median_ms":  15.6828,
+                                    "throughput_items_per_second":  6376412375.341138,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  2
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       16.0258,
+                                                       15.7845,
+                                                       16.0042,
+                                                       15.736400000000001,
+                                                       16.009900000000002,
+                                                       15.68,
+                                                       15.4418
+                                                   ],
+                                    "median_ms":  15.7845,
+                                    "throughput_items_per_second":  6335328961.956349,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  2
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.9855,
+                                                       16.0417,
+                                                       15.7419,
+                                                       15.761899999999999,
+                                                       15.766399999999999,
+                                                       15.742200000000002,
+                                                       16.208199999999998
+                                                   ],
+                                    "median_ms":  15.766399999999999,
+                                    "throughput_items_per_second":  6342601989.039984,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  3
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.9522,
+                                                       15.753,
+                                                       15.662100000000002,
+                                                       15.382,
+                                                       15.6371,
+                                                       15.4178,
+                                                       15.6148
+                                                   ],
+                                    "median_ms":  15.6371,
+                                    "throughput_items_per_second":  6395047675.080418,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  3
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.8411,
+                                                       16.6054,
+                                                       16.0427,
+                                                       15.8101,
+                                                       16.0365,
+                                                       15.6575,
+                                                       15.626399999999999
+                                                   ],
+                                    "median_ms":  15.8411,
+                                    "throughput_items_per_second":  6312692931.677724,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  4
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.9947,
+                                                       15.8004,
+                                                       15.763200000000001,
+                                                       16.0664,
+                                                       16.0834,
+                                                       15.746199999999998,
+                                                       15.681000000000001
+                                                   ],
+                                    "median_ms":  15.8004,
+                                    "throughput_items_per_second":  6328953697.37475,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  4
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.718,
+                                                       15.980999999999998,
+                                                       15.723500000000001,
+                                                       15.996599999999999,
+                                                       15.753699999999998,
+                                                       16.0118,
+                                                       15.446200000000001
+                                                   ],
+                                    "median_ms":  15.753699999999998,
+                                    "throughput_items_per_second":  6347715139.935381,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  5
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       16.0552,
+                                                       15.677300000000002,
+                                                       15.566,
+                                                       15.5953,
+                                                       15.4262,
+                                                       15.719299999999999,
+                                                       15.826199999999998
+                                                   ],
+                                    "median_ms":  15.677300000000002,
+                                    "throughput_items_per_second":  6378649384.779266,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  5
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.677900000000001,
+                                                       15.5814,
+                                                       15.6127,
+                                                       15.4192,
+                                                       15.589,
+                                                       15.378,
+                                                       15.635199999999998
+                                                   ],
+                                    "median_ms":  15.589,
+                                    "throughput_items_per_second":  6414779652.318943,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  6
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.6269,
+                                                       15.5525,
+                                                       15.7779,
+                                                       15.608500000000001,
+                                                       15.753799999999998,
+                                                       15.759200000000002,
+                                                       15.5189
+                                                   ],
+                                    "median_ms":  15.6269,
+                                    "throughput_items_per_second":  6399221854.6224785,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  6
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       16.615399999999998,
+                                                       16.0268,
+                                                       15.4934,
+                                                       15.5064,
+                                                       15.731100000000001,
+                                                       15.4957,
+                                                       15.6772
+                                                   ],
+                                    "median_ms":  15.6772,
+                                    "throughput_items_per_second":  6378690072.206772,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  7
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.861,
+                                                       15.661499999999998,
+                                                       15.950700000000001,
+                                                       15.7051,
+                                                       15.6629,
+                                                       16.4376,
+                                                       15.6923
+                                                   ],
+                                    "median_ms":  15.7051,
+                                    "throughput_items_per_second":  6367358374.031365,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  7
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.743299999999998,
+                                                       15.6722,
+                                                       15.741000000000001,
+                                                       16.1895,
+                                                       15.855899999999998,
+                                                       15.6326,
+                                                       15.8126
+                                                   ],
+                                    "median_ms":  15.743299999999998,
+                                    "throughput_items_per_second":  6351908430.888061,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  8
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.896299999999998,
+                                                       15.668999999999999,
+                                                       15.747400000000003,
+                                                       16.0474,
+                                                       15.495,
+                                                       15.6192,
+                                                       15.6234
+                                                   ],
+                                    "median_ms":  15.668999999999999,
+                                    "throughput_items_per_second":  6382028208.564682,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  8
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.641800000000002,
+                                                       15.4243,
+                                                       16.1,
+                                                       15.3326,
+                                                       15.4127,
+                                                       15.440199999999999,
+                                                       15.3664
+                                                   ],
+                                    "median_ms":  15.4243,
+                                    "throughput_items_per_second":  6483276388.55572,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "published",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "crates.io-0.10.1",
+                                    "implementation_revision":  "v0.10.1",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  9
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       15.6764,
+                                                       15.5043,
+                                                       15.705400000000001,
+                                                       15.4608,
+                                                       15.736699999999999,
+                                                       15.5023,
+                                                       15.7026
+                                                   ],
+                                    "median_ms":  15.6764,
+                                    "throughput_items_per_second":  6379015590.314103,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 },
+                 {
+                     "source":  "checkout",
+                     "result":  {
+                                    "schema_version":  1,
+                                    "implementation":  "lampshade",
+                                    "implementation_version":  "working-tree-0.11.0",
+                                    "implementation_revision":  "55d0375485dcf0ba9523e765c6f3ce76c8209025",
+                                    "runtime_stack":  "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+                                    "adapter":  {
+                                                    "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                                    "vendor":  4318,
+                                                    "device":  9989,
+                                                    "device_type":  "DiscreteGpu",
+                                                    "backend":  "Vulkan",
+                                                    "driver":  "NVIDIA",
+                                                    "driver_info":  "591.86",
+                                                    "subgroup_min_size":  32,
+                                                    "subgroup_max_size":  32
+                                                },
+                                    "config":  {
+                                                   "items":  100000000,
+                                                   "workload":  "sort_full_width",
+                                                   "warmups":  2,
+                                                   "warmup_ms":  2000,
+                                                   "samples":  7,
+                                                   "process_index":  9
+                                               },
+                                    "generator":  {
+                                                      "name":  "xorshift32-v1",
+                                                      "base_seed":  2654435769
+                                                  },
+                                    "timing_boundary":  "public resident GPU API call through device completion; excludes upload, readback, and validation",
+                                    "output_allocation":  "caller-owned output and reusable primitive workspace allocated before timing",
+                                    "correctness_checked":  true,
+                                    "samples_ms":  [
+                                                       16.0586,
+                                                       15.948299999999998,
+                                                       16.117,
+                                                       16.2355,
+                                                       15.902800000000001,
+                                                       15.929100000000002,
+                                                       15.7527
+                                                   ],
+                                    "median_ms":  15.948299999999998,
+                                    "throughput_items_per_second":  6270260780.145846,
+                                    "output_items":  100000000,
+                                    "memory":  {
+                                                   "model":  "known public input/output and timed I/O allocations",
+                                                   "primary_input_output_bytes":  1600000000,
+                                                   "workspace_bytes":  null,
+                                                   "total_known_buffer_bytes":  1600000000,
+                                                   "exclusions":  [
+                                                                      "unexposed algorithm workspace, allocator caching, and Massively reduction readback storage",
+                                                                      "validation readback buffers",
+                                                                      "driver-managed allocations"
+                                                                  ]
+                                               }
+                                }
+                 }
+             ],
+    "failures":  [
+
+                 ],
+    "aggregates":  [
+                       {
+                           "source":  "published",
+                           "workload":  "sort_full_width",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      15.7429,
+                                                      15.7664,
+                                                      15.6371,
+                                                      15.753699999999998,
+                                                      15.677300000000002,
+                                                      15.6772,
+                                                      15.7051,
+                                                      15.4243,
+                                                      15.6764
+                                                  ],
+                           "median_of_process_medians_ms":  15.677300000000002,
+                           "adapter":  {
+                                           "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                           "vendor":  4318,
+                                           "device":  9989,
+                                           "device_type":  "DiscreteGpu",
+                                           "backend":  "Vulkan"
+                                       },
+                           "adapter_key":  "NVIDIA GeForce RTX 4070 Ti SUPER|4318|9989|DiscreteGpu|Vulkan",
+                           "adapter_consistent":  true
+                       },
+                       {
+                           "source":  "checkout",
+                           "workload":  "sort_full_width",
+                           "items":  100000000,
+                           "process_medians_ms":  [
+                                                      15.6828,
+                                                      15.7845,
+                                                      15.8411,
+                                                      15.8004,
+                                                      15.589,
+                                                      15.6269,
+                                                      15.743299999999998,
+                                                      15.669,
+                                                      15.948299999999998
+                                                  ],
+                           "median_of_process_medians_ms":  15.743299999999998,
+                           "adapter":  {
+                                           "name":  "NVIDIA GeForce RTX 4070 Ti SUPER",
+                                           "vendor":  4318,
+                                           "device":  9989,
+                                           "device_type":  "DiscreteGpu",
+                                           "backend":  "Vulkan"
+                                       },
+                           "adapter_key":  "NVIDIA GeForce RTX 4070 Ti SUPER|4318|9989|DiscreteGpu|Vulkan",
+                           "adapter_consistent":  true
+                       }
+                   ],
+    "comparisons":  [
+                        {
+                            "workload":  "sort_full_width",
+                            "items":  100000000,
+                            "published_ms":  15.677300000000002,
+                            "checkout_ms":  15.743299999999998,
+                            "change_percent":  0.42099085939539815,
+                            "adapter_match":  true,
+                            "passed":  true
+                        }
+                    ],
+    "gate_evaluated":  true,
+    "gate_passed":  true
+}

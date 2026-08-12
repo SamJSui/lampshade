@@ -37,6 +37,9 @@ Starting with 0.10, WGPU 29 is Lampshade's compatibility baseline; the 0.9
 release and `release/wgpu30` preserve the WGPU 30 line. The adjacent
 [downstream spike report](benchmarks/2026-08-12-downstream-adoption-spikes.md)
 separates promising Gaussian-splatting integrations from release readiness.
+The [0.11 release report](benchmarks/2026-08-12-lampshade-0.11-release.md)
+records the clean same-runtime regression gate and physical SoA correctness
+validation on NVIDIA Vulkan, Apple Metal, and Intel Vulkan.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
