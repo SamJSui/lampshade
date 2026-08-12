@@ -281,8 +281,7 @@ fn reduce_to_host_timed(
 
     let receive_started = Instant::now();
     receiver.recv()??;
-    let value =
-        bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range().into_mapped_range()?)[0];
+    let value = bytemuck::cast_slice::<u8, u32>(&slice.get_mapped_range().into_mapped_range()?)[0];
     staging.unmap();
     let receive_and_read_ms = receive_started.elapsed().as_secs_f64() * 1_000.0;
     let phases = ReductionReadbackPhases {

@@ -124,9 +124,7 @@ impl SortInput {
     pub fn generate(items: u32, workload: Workload) -> Self {
         assert!(matches!(
             workload,
-            Workload::SortBounded16
-                | Workload::SortFullWidth
-                | Workload::SortCountedFullWidth
+            Workload::SortBounded16 | Workload::SortFullWidth | Workload::SortCountedFullWidth
         ));
         let mut state = GENERATOR_BASE_SEED ^ items;
         let mut keys = Vec::with_capacity(items as usize);
@@ -298,10 +296,7 @@ pub fn public_buffer_memory(
     let primary = match (implementation, workload) {
         ("wgpu-primitives" | "lampshade", Workload::ReduceSum) => 4 * items + 8,
         ("massively", Workload::ReduceSum) => 4 * items,
-        (
-            "wgpu-primitives" | "lampshade",
-            Workload::SortBounded16 | Workload::SortFullWidth,
-        ) => {
+        ("wgpu-primitives" | "lampshade", Workload::SortBounded16 | Workload::SortFullWidth) => {
             16 * items
         }
         ("wgpu-primitives" | "lampshade", Workload::SortCountedFullWidth) => 16 * items + 4,
