@@ -5,6 +5,8 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+## 0.11.0 - 2026-08-12
+
 ### Added
 
 - Add a fixed-count `KeyValueSoaSorter` API that owns the count metadata needed
