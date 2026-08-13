@@ -22,6 +22,8 @@ older `lampshade::v2` path remains as a deprecated compatibility alias.
 - `RunLengthOutput`: unique-value and run-length views that share one
   GPU-resident run count. The input may be unsorted; sorting first produces one
   run per distinct key.
+- `Recorder::argmin_by_key`: reduces a fixed or GPU-counted `KeyValue` view to
+  one lexicographic minimum in a caller-owned output view.
 - `reserve_workspace` and `reserve_count`: explicit pre-recording pipeline,
   workspace, and count-metadata creation. A `WorkspaceRequirements` builder
   selects only the operations and fixed/counting modes the command stream

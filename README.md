@@ -5,9 +5,9 @@
 [![Docs.rs](https://docs.rs/lampshade/badge.svg)](https://docs.rs/lampshade)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Lampshade provides fast, composable GPU histograms, reduction, predicate masks,
-prefix scan, stream compaction, run-length encoding, and unsigned integer radix
-sort for Rust applications using wgpu and WGSL.
+Lampshade provides fast, composable GPU histograms, reduction, argmin selection,
+predicate masks, prefix scan, stream compaction, run-length encoding, and
+unsigned integer radix sort for Rust applications using wgpu and WGSL.
 
 ## Benchmarks
 
@@ -18,7 +18,7 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.10.1 on WGPU 29 and the
+runs identical resident workloads against crates.io 0.11.0 on WGPU 29 and the
 current checkout, writes raw runs and process medians to JSON, and enforces a
 2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
@@ -28,6 +28,9 @@ verifies the 0.8 rename against its published 0.7 predecessor.
 The [key-only sort report](benchmarks/2026-08-11-key-only-sort.md) records the
 fixed-length `u32` 8-bit path, large-input validation, and its unchanged
 key/value control.
+The [ArgMin-by-key report](benchmarks/2026-08-12-argmin-by-key.md) records the
+new fixed and GPU-counted selector, its full-sort application baseline, and the
+published-0.11 regression gate.
 The [0.9 release report](benchmarks/2026-08-11-lampshade-0.9-release.md)
 records the crates.io 0.8 regression gate, final key-sort/RLE characterization,
 and identical-package validation on RTX, Jetson Orin, Intel, and Apple GPUs.
@@ -136,6 +139,7 @@ the pinned baseline and reproduction harness.
 
 - Portable 1-256-bin `u32` histograms with workgroup-private counters.
 - Wrapping sum, minimum, and maximum reduction for `u32` values.
+- Lexicographic argmin selection for `(u32 key, u32 value)` records.
 - Inclusive and exclusive `u32` prefix scan.
 - Reusable comparison predicates that produce compaction-ready masks.
 - Stable compaction of `u32` values and `KeyValue` records.
@@ -218,8 +222,8 @@ let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
 
 ```rust
 use lampshade::{
-    Compactor, Context, MaskGenerator, Reducer, RunLengthEncoder, Scanner, Sorter,
-    U32Predicate,
+    ArgminByKey, Compactor, Context, KeyValue, MaskGenerator, Reducer,
+    RunLengthEncoder, Scanner, Sorter, U32Predicate,
 };
 
 #[tokio::main]
@@ -227,6 +231,7 @@ async fn main() -> Result<(), lampshade::Error> {
     let context = Context::init().await?;
     let generator = MaskGenerator::from_context(&context);
     let mut reducer = Reducer::from_context(&context);
+    let mut argmin = ArgminByKey::from_context(&context);
     let mut scanner = Scanner::from_context(&context);
     let mut compactor = Compactor::from_context(&context);
     let mut run_length = RunLengthEncoder::from_context(&context);
@@ -239,6 +244,12 @@ async fn main() -> Result<(), lampshade::Error> {
 
     assert_eq!(mask, [0, 1, 0, 1, 1, 0]);
     assert_eq!(reducer.sum(&input).await?, 66);
+    assert_eq!(
+        argmin
+            .argmin(&[KeyValue::new(7, 3), KeyValue::new(7, 1)])
+            .await?,
+        KeyValue::new(7, 1),
+    );
     assert_eq!(scanner.scan_exclusive(&[3, 1, 4, 1]).await?, [0, 3, 4, 8]);
     assert_eq!(compactor.compact(&input, &mask).await?, [17, 22, 11]);
     assert_eq!(
@@ -356,6 +367,9 @@ stabilization evidence.
   partial value; later passes repeat over the partials until one value remains.
   A count plan builds the hierarchy and indirect dispatch arguments from a
   GPU-resident length.
+- **Argmin by key:** each workgroup selects one lexicographic `(key, value)`
+  minimum, then later passes reduce those candidates to one record. This avoids
+  sorting every record when an application needs only the best candidate.
 - **Predicate mask:** one thread evaluates each value or `KeyValue` field and
   writes a `0` or `1`.
 - **Scan:** workgroups scan local ranges, recursively scan block totals, then add
@@ -392,12 +406,13 @@ $env:WGPU_PRIMITIVES_PROFILE_VALIDATE = '1'
 cargo run --release --example profile_primitives
 ```
 
-Cases include histogram, reduction, scan, sort, predicate, value compaction,
-and key/value compaction at selectable sizes and selectivities. Run-length
-encoding exposes the same timestamp-span API and has a dedicated Criterion
-bench across multiple average run lengths. Its dense GPU-counted control is
-reported against capacity, because counted RLE deliberately scans that full
-capacity even when the resident count is sparse. See the
+Cases include histogram, reduction, argmin-by-key, scan, sort, predicate,
+value compaction, and key/value compaction at selectable sizes and
+selectivities. Run-length encoding exposes the same timestamp-span API and has
+a dedicated Criterion bench across multiple average run lengths. Its dense
+GPU-counted control is reported against capacity, because counted RLE
+deliberately scans that full capacity even when the resident count is sparse.
+See the
 [RTX RLE benchmark](benchmarks/2026-08-11-run-length-encoding.md) for the
 source-pinned 1M-100M result.
 

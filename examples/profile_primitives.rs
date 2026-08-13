@@ -2,18 +2,19 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use lampshade::{
-    Compactor, Context, GpuProfile, Histogram, KeyValue, KeyValueCompactor, KeyValueSorter,
-    MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
+    ArgminByKey, Compactor, Context, GpuProfile, Histogram, KeyValue, KeyValueCompactor,
+    KeyValueSorter, MaskGenerator, Reducer, Scanner, Sorter, U32Predicate, U32Reduction,
 };
 use wgpu::util::DeviceExt;
 
 const DEFAULT_INPUT_SIZES: [usize; 3] = [1_000_000, 10_000_000, 100_000_000];
 const DEFAULT_SAMPLES: usize = 5;
 const DEFAULT_WARMUP_MS: u64 = 1_000;
-const DEFAULT_CASES: [ProfileCase; 9] = [
+const DEFAULT_CASES: [ProfileCase; 10] = [
     ProfileCase::Predicate(50),
     ProfileCase::Histogram256,
     ProfileCase::ReductionSum,
+    ProfileCase::ArgminByKey,
     ProfileCase::Scan,
     ProfileCase::Compact(50),
     ProfileCase::KeyValueCompact(50),
@@ -27,6 +28,7 @@ enum ProfileCase {
     Predicate(u32),
     Histogram256,
     ReductionSum,
+    ArgminByKey,
     Scan,
     Compact(u32),
     KeyValueCompact(u32),
@@ -83,6 +85,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 ProfileCase::ReductionSum => {
                     profile_reduction_sum(&context, item_count, &config).await?
+                }
+                ProfileCase::ArgminByKey => {
+                    profile_argmin_by_key(&context, item_count, &config).await?
                 }
                 ProfileCase::Scan => profile_scan(&context, item_count, &config).await?,
                 ProfileCase::Compact(selectivity) => {
@@ -234,6 +239,65 @@ async fn profile_reduction_sum(
             .into());
         }
         println!("validation,reduction_sum,{item_count},passed,1");
+    }
+    Ok(())
+}
+
+async fn profile_argmin_by_key(
+    context: &Context,
+    item_count: usize,
+    config: &ProfileConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let input: Vec<_> = deterministic_keys(item_count)
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| KeyValue::new(key, index as u32))
+        .collect();
+    let gpu_input = create_input(context, "Profile Argmin Input", &input);
+    let gpu_output = create_output(
+        context,
+        "Profile Argmin Output",
+        ArgminByKey::output_buffer_size(),
+    );
+    let mut selector = ArgminByKey::from_context(context);
+
+    warm_up(
+        config.warmup,
+        || selector.argmin_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32),
+        context,
+    )?;
+    let wall = measure_wall(
+        config.samples,
+        || selector.argmin_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32),
+        context,
+    )?;
+    let _ = selector
+        .profile_argmin_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
+        .await?;
+    let mut profiles = Vec::with_capacity(config.samples);
+    for _ in 0..config.samples {
+        profiles.push(
+            selector
+                .profile_argmin_gpu_to_gpu(&gpu_input, &gpu_output, item_count as u32)
+                .await?,
+        );
+    }
+    report("argmin_by_key", item_count, wall, &profiles);
+
+    if profile_validation_enabled() {
+        let actual = selector.argmin(&input).await?;
+        let expected = input
+            .iter()
+            .copied()
+            .min_by_key(|item| (item.key, item.value))
+            .ok_or("argmin validation input is empty")?;
+        if actual != expected {
+            return Err(format!(
+                "argmin_by_key validation failed: expected {expected:?}, got {actual:?}"
+            )
+            .into());
+        }
+        println!("validation,argmin_by_key,{item_count},passed,1");
     }
     Ok(())
 }
@@ -839,6 +903,7 @@ fn profile_cases() -> Result<Vec<ProfileCase>, Box<dyn std::error::Error>> {
             match value {
                 "histogram_256" => Ok(ProfileCase::Histogram256),
                 "reduction_sum" => Ok(ProfileCase::ReductionSum),
+                "argmin_by_key" => Ok(ProfileCase::ArgminByKey),
                 "scan" => Ok(ProfileCase::Scan),
                 "key_sort" => Ok(ProfileCase::KeySort),
                 "key_value_bounded16" => Ok(ProfileCase::KeyValueBounded16),

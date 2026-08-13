@@ -19,7 +19,8 @@ Methods such as `Sorter::sort(&mut self, input: &[u32])` and
 `Reducer::sum(&mut self, input: &[u32])` accept borrowed CPU data, upload it,
 run the primitive, and return an owned result. `Histogram::histogram` returns
 an owned bin vector, while `RunLengthEncoder::encode` returns owned unique-value
-and run-length vectors.
+and run-length vectors. `ArgminByKey::argmin` returns the lexicographically
+smallest `KeyValue` record without sorting the remaining records.
 These are the smallest paths from ordinary Rust code to a correct GPU result.
 
 The input borrow lasts across `.await` because the async function may still
@@ -85,6 +86,8 @@ reduction while preparing shared count metadata at most once per command
 stream. Run-length encoding consumes either a fixed or resident input extent
 and returns unique-value and length views sharing a new resident run count. The
 views borrow caller-owned buffers; they do not own allocations or submit work.
+Argmin-by-key accepts either extent and writes one deterministic `KeyValue`
+result, using the identity `(u32::MAX, u32::MAX)` for an empty extent.
 
 The application-shaped `particle_pipeline` example extends those views to the
 existing `KeyValue { key, value }` record. One recorder generates a depth mask,
@@ -117,6 +120,9 @@ Private code owns the mechanisms that public methods share:
 - run-length encoding marks adjacent run heads, scans them into run indices,
   and uses separate ordered scatter/finalize dispatches so no kernel assumes
   cross-workgroup synchronization.
+- argmin-by-key reduces 256 records per workgroup and recursively reduces the
+  resulting candidates; its counted path reads and clamps a GPU-resident
+  length without a host synchronization point.
 - `GpuCountPlan` owns a cached preparation binding and bounded reduction/sort
   metadata for one count buffer and capacity. Counted sort defaults to indirect
   dispatch, while an explicit capacity strategy is available when benchmarks
