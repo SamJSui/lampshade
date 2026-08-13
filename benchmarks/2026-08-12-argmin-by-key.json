@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-12T19:00:20-05:00",
+  "candidate": {
+    "revision": "98fd1c4c1fa8ff350726917692f393f7b134c170",
+    "dirty": false,
+    "source_manifest_sha256": "31c2a832afc59c88052c9de6c5cd9e31518d8c8b93e1299b66b3aa3a664272c9"
+  },
+  "environment": {
+    "adapter": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "backend": "Vulkan",
+    "driver": "NVIDIA 591.86",
+    "runtime_stack": "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4"
+  },
+  "argmin_methodology": {
+    "aggregation": "median of three independent Criterion slope estimates",
+    "timing_boundary": "command recording, submission, GPU execution, and completion wait; excludes upload and validation readback",
+    "samples_below_10m": 30,
+    "measurement_seconds_below_10m": 5,
+    "samples_at_10m": 10,
+    "measurement_seconds_at_10m": 15,
+    "warmup_seconds": 3,
+    "correctness_checked": true
+  },
+  "argmin_results": [
+    {
+      "items": 4096,
+      "raw_resident_process_us": [85.965, 86.163, 85.695],
+      "fixed_process_us": [86.782, 86.877, 86.629],
+      "counted_dense_process_us": [88.079, 89.347, 88.619],
+      "counted_10pct_process_us": [88.926, 89.273, 88.352],
+      "sort_process_us": [276.947, 279.189, 275.587],
+      "medians_us": {
+        "raw_resident": 85.965,
+        "fixed": 86.782,
+        "counted_dense": 88.619,
+        "counted_10pct": 88.926,
+        "sort": 276.947
+      },
+      "fixed_vs_raw_percent": 0.95,
+      "counted_dense_vs_fixed_percent": 2.12,
+      "counted_10pct_vs_fixed_percent": 2.47,
+      "sort_over_fixed_speedup": 3.19
+    },
+    {
+      "items": 65536,
+      "raw_resident_process_us": [87.989, 88.612, 87.923],
+      "fixed_process_us": [88.901, 88.608, 88.586],
+      "counted_dense_process_us": [90.769, 91.589, 89.572],
+      "counted_10pct_process_us": [90.073, 90.769, 89.550],
+      "sort_process_us": [289.340, 288.759, 288.461],
+      "medians_us": {
+        "raw_resident": 87.989,
+        "fixed": 88.608,
+        "counted_dense": 90.769,
+        "counted_10pct": 90.073,
+        "sort": 288.759
+      },
+      "fixed_vs_raw_percent": 0.70,
+      "counted_dense_vs_fixed_percent": 2.44,
+      "counted_10pct_vs_fixed_percent": 1.65,
+      "sort_over_fixed_speedup": 3.26
+    },
+    {
+      "items": 131072,
+      "raw_resident_process_us": [105.140, 104.871, 104.936],
+      "fixed_process_us": [105.117, 105.713, 108.491],
+      "counted_dense_process_us": [108.410, 107.966, 108.742],
+      "counted_10pct_process_us": [106.864, 107.719, 106.941],
+      "sort_process_us": [302.672, 305.368, 304.297],
+      "medians_us": {
+        "raw_resident": 104.936,
+        "fixed": 105.713,
+        "counted_dense": 108.410,
+        "counted_10pct": 106.941,
+        "sort": 304.297
+      },
+      "fixed_vs_raw_percent": 0.74,
+      "counted_dense_vs_fixed_percent": 2.55,
+      "counted_10pct_vs_fixed_percent": 1.16,
+      "sort_over_fixed_speedup": 2.88
+    },
+    {
+      "items": 1000000,
+      "raw_resident_process_us": [132.777, 130.898, 131.491],
+      "fixed_process_us": [131.282, 131.518, 130.883],
+      "counted_dense_process_us": [134.897, 134.598, 135.029],
+      "counted_10pct_process_us": [132.867, 133.161, 132.877],
+      "sort_process_us": [463.511, 465.679, 465.016],
+      "medians_us": {
+        "raw_resident": 131.491,
+        "fixed": 131.282,
+        "counted_dense": 134.897,
+        "counted_10pct": 132.877,
+        "sort": 465.016
+      },
+      "fixed_vs_raw_percent": -0.16,
+      "counted_dense_vs_fixed_percent": 2.75,
+      "counted_10pct_vs_fixed_percent": 1.21,
+      "sort_over_fixed_speedup": 3.54
+    },
+    {
+      "items": 10000000,
+      "raw_resident_process_us": [326.545, 322.738, 320.737],
+      "fixed_process_us": [322.338, 321.522, 323.584],
+      "counted_dense_process_us": [350.640, 349.968, 350.569],
+      "counted_10pct_process_us": [322.904, 322.008, 323.224],
+      "sort_process_us": [2110.002, 2145.778, 2138.674],
+      "medians_us": {
+        "raw_resident": 322.738,
+        "fixed": 322.338,
+        "counted_dense": 350.569,
+        "counted_10pct": 322.904,
+        "sort": 2138.674
+      },
+      "fixed_vs_raw_percent": -0.12,
+      "counted_dense_vs_fixed_percent": 8.76,
+      "counted_10pct_vs_fixed_percent": 0.18,
+      "sort_over_fixed_speedup": 6.63
+    }
+  ],
+  "release_regression": {
+    "baseline": "crates.io lampshade 0.11.0",
+    "threshold_percent": 2.0,
+    "initial_generated_at_utc": "2026-08-12T23:57:13.3916677Z",
+    "initial_passed_rows": 16,
+    "initial_total_rows": 18,
+    "initial_comparison_columns": ["workload", "items", "change_percent"],
+    "initial_comparisons": [
+      ["reduce_sum", 1000000, 0.10],
+      ["sort_bounded16", 1000000, -0.21],
+      ["sort_full_width", 1000000, 0.02],
+      ["sort_counted_full_width", 1000000, 0.18],
+      ["exclusive_scan", 1000000, -0.32],
+      ["compact_50", 1000000, 4.39],
+      ["reduce_sum", 10000000, -0.65],
+      ["sort_bounded16", 10000000, -0.42],
+      ["sort_full_width", 10000000, 0.15],
+      ["sort_counted_full_width", 10000000, -0.73],
+      ["exclusive_scan", 10000000, 0.60],
+      ["compact_50", 10000000, 0.54],
+      ["reduce_sum", 100000000, -0.12],
+      ["sort_bounded16", 100000000, 2.16],
+      ["sort_full_width", 100000000, -1.44],
+      ["sort_counted_full_width", 100000000, 0.95],
+      ["exclusive_scan", 100000000, 0.26],
+      ["compact_50", 100000000, -0.03]
+    ],
+    "rechecks": [
+      {
+        "workload": "compact_50",
+        "items": 1000000,
+        "generated_at_utc": "2026-08-12T23:58:10.0877168Z",
+        "published_process_medians_ms": [0.1722, 0.1731, 0.1722, 0.1706, 0.1835, 0.1778, 0.1715, 0.1744, 0.1793],
+        "checkout_process_medians_ms": [0.1823, 0.1730, 0.1751, 0.1818, 0.1731, 0.1711, 0.1732, 0.1700, 0.1721],
+        "published_median_ms": 0.1731,
+        "checkout_median_ms": 0.1731,
+        "change_percent": 0.0,
+        "passed": true
+      },
+      {
+        "workload": "sort_bounded16",
+        "items": 100000000,
+        "generated_at_utc": "2026-08-13T00:00:00.9778825Z",
+        "published_process_medians_ms": [8.5474, 8.7477, 8.7016, 8.9096, 8.8171, 8.8286, 8.8801, 8.7006, 8.8720],
+        "checkout_process_medians_ms": [8.6043, 8.8198, 8.6140, 8.7950, 8.7620, 8.7869, 8.7492, 8.5988, 8.9014],
+        "published_median_ms": 8.8171,
+        "checkout_median_ms": 8.7620,
+        "change_percent": -0.6249,
+        "passed": true
+      }
+    ],
+    "final_gate_passed": true
+  },
+  "limitations": [
+    "results are specific to the recorded NVIDIA Vulkan adapter and driver",
+    "Apple Metal, Intel Vulkan, Jetson, and browser runtime execution were not measured",
+    "wasm32 library compilation passed but is not browser runtime validation"
+  ]
+}

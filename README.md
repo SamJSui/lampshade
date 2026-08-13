@@ -28,6 +28,9 @@ verifies the 0.8 rename against its published 0.7 predecessor.
 The [key-only sort report](benchmarks/2026-08-11-key-only-sort.md) records the
 fixed-length `u32` 8-bit path, large-input validation, and its unchanged
 key/value control.
+The [ArgMin-by-key report](benchmarks/2026-08-12-argmin-by-key.md) records the
+new fixed and GPU-counted selector, its full-sort application baseline, and the
+published-0.11 regression gate.
 The [0.9 release report](benchmarks/2026-08-11-lampshade-0.9-release.md)
 records the crates.io 0.8 regression gate, final key-sort/RLE characterization,
 and identical-package validation on RTX, Jetson Orin, Intel, and Apple GPUs.
