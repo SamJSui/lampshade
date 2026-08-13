@@ -10,6 +10,14 @@ the `wgpu-primitives` package name.
 - Lexicographic `ArgminByKey` selection for fixed and GPU-counted `KeyValue`
   buffers, including slice, immediate, recording, timestamp-profiling, typed
   pipeline, validation, example, and raw-kernel comparison coverage.
+- A public API contract that classifies convenience, immediate-submit,
+  recording, prepared-recording, and profiling behavior, including their
+  synchronization and resource-creation boundaries.
+- CI gates for Rust 1.87 MSRV compatibility, warning-denied rustdoc,
+  all-feature WebAssembly compilation, extracted-package consumer compilation,
+  and semver compatibility. The 0.12 check records its intentional breaking
+  pre-1.0 cleanup against 0.11; versions after 0.12 are checked as
+  patch-compatible against the 0.12 baseline.
 
 ### Fixed
 
@@ -20,6 +28,12 @@ the `wgpu-primitives` package name.
 
 - Move the published-release performance baseline to Lampshade 0.11.0 so
   future WGPU 29 changes are compared against the current release.
+- Remove the deprecated `lampshade::v2` alias. Import the unchanged typed API
+  from `lampshade::pipeline`.
+- Make `Error` non-exhaustive so future validation improvements do not force a
+  major release. Downstream matches now require a fallback arm.
+- Explicitly scope `pipeline` to GPU-counted composition. Scan, histogram, and
+  separate-buffer SoA sorting remain supported direct primitive APIs.
 
 ## 0.11.0 - 2026-08-12
 

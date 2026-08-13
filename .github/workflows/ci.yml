@@ -11,6 +11,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.87.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-1.87.0
+      - name: Check the declared minimum Rust version
+        run: cargo check --lib
+
+  api-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the compatibility baseline
+        id: baseline
+        run: python3 scripts/semver_policy.py >> "$GITHUB_OUTPUT"
+      - name: Test the compatibility policy
+        run: python3 -m unittest discover -s scripts -p test_semver_policy.py
+      - name: Check public API change policy
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          baseline-version: ${{ steps.baseline.outputs.baseline }}
+          release-type: ${{ steps.baseline.outputs.release_type }}
+
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +55,7 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Check WebAssembly library target
-        run: cargo check --target wasm32-unknown-unknown --lib
+        run: cargo check --target wasm32-unknown-unknown --all-features --lib
       - name: Run unit and GPU integration tests
         env:
           WGPU_BACKEND: vulkan
@@ -69,9 +95,16 @@ jobs:
           python3 -m unittest discover -s benchmarks/release-regression -p test_run.py
           python3 benchmarks/release-regression/run.py --quick --backend vulkan --output target/release-regression/ci.json
       - name: Check documentation
-        run: cargo test --doc
+        run: |
+          cargo test --doc
+          RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
       - name: Verify package contents
         run: cargo package
+      - name: Check a consumer of the extracted package
+        run: |
+          PACKAGE_VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          rustfmt --edition 2024 --check validation/package-consumer/src/main.rs
+          python3 validation/package-consumer/run.py "target/package/lampshade-$PACKAGE_VERSION"
       - name: Check final wgpu-primitives compatibility package
         run: |
           cargo fmt --manifest-path compat/wgpu-primitives/Cargo.toml -- --check

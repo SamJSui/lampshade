@@ -3,7 +3,8 @@
 `lampshade::pipeline` is the stable recording-first API for resident GPU
 composition. It uses a small common vocabulary instead of repeating raw
 buffers, lengths, count plans, and preparation order in every primitive. The
-older `lampshade::v2` path remains as a deprecated compatibility alias.
+deprecated `lampshade::v2` alias was removed in 0.12; see the
+[migration note](migration-0.12.md).
 
 ## Implemented
 
@@ -29,6 +30,11 @@ older `lampshade::v2` path remains as a deprecated compatibility alias.
   selects only the operations and fixed/counting modes the command stream
   needs. Per-operation bind groups and small uniform buffers may still be
   created while recording.
+
+The typed recorder deliberately covers the operations that benefit from shared
+GPU-resident extent metadata. Scan, histogram, and separate-buffer SoA sorting
+remain direct primitive APIs. The complete execution, allocation, and scope
+contract is recorded in the [public API inventory](public-api.md).
 
 Views accept aligned nonzero offsets. Inputs, outputs, and counts participating
 in one primitive must use distinct underlying buffer handles even when their
