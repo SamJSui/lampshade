@@ -18,8 +18,8 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.11.0 on WGPU 29 and the
-0.12 development checkout, writes raw runs and process medians to JSON, and
+runs identical resident workloads against crates.io 0.12.0 on WGPU 29 and the
+0.12.1 development checkout, writes raw runs and process medians to JSON, and
 enforces a 2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
@@ -458,7 +458,7 @@ cargo check --release --examples --benches
 cargo test --doc
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo package
-python3 validation/package-consumer/run.py target/package/lampshade-0.12.0
+python3 validation/package-consumer/run.py target/package/lampshade-0.12.1
 ```
 
 Criterion benches cover each primitive plus `counted_pipeline` and the
