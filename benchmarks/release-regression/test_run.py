@@ -21,9 +21,9 @@ class ReleaseRegressionTests(unittest.TestCase):
         manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
         contents = manifest.read_text(encoding="utf-8")
 
-        self.assertEqual(release_regression.BASELINE_VERSION, "0.11.0")
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.12.0")
         self.assertIn('name = "lampshade-release-baseline-runner"', contents)
-        self.assertIn('lampshade = "=0.11.0"', contents)
+        self.assertIn('lampshade = "=0.12.0"', contents)
         self.assertNotIn('package = "wgpu-primitives"', contents)
 
     def test_runtime_stack_comes_from_the_locked_dependency_graph(self):
@@ -47,7 +47,7 @@ class ReleaseRegressionTests(unittest.TestCase):
     def test_candidate_version_does_not_require_a_root_lockfile(self):
         manifest = Path(__file__).parents[2] / "Cargo.toml"
 
-        self.assertEqual(release_regression.package_version(manifest), "0.12.0")
+        self.assertEqual(release_regression.package_version(manifest), "0.12.1")
 
     def test_path_consumers_lock_the_current_checkout_version(self):
         root = Path(__file__).parents[2]
@@ -60,7 +60,7 @@ class ReleaseRegressionTests(unittest.TestCase):
         for lock in locks:
             packages = tomllib.loads(lock.read_text(encoding="utf-8"))["package"]
             versions = [package["version"] for package in packages if package["name"] == "lampshade"]
-            self.assertEqual(versions, ["0.12.0"], lock)
+            self.assertEqual(versions, ["0.12.1"], lock)
 
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
