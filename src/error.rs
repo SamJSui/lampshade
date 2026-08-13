@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Errors returned while preparing or executing a GPU algorithm.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     RequestAdapter(wgpu::RequestAdapterError),
     RequestDevice(wgpu::RequestDeviceError),

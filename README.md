@@ -19,8 +19,8 @@ comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
 runs identical resident workloads against crates.io 0.11.0 on WGPU 29 and the
-current checkout, writes raw runs and process medians to JSON, and enforces a
-2% regression budget.
+0.12 development checkout, writes raw runs and process medians to JSON, and
+enforces a 2% regression budget.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
 The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
@@ -162,14 +162,14 @@ separately.
 
 ## Installation
 
-Lampshade 0.11 uses wgpu 29 so its buffers compose directly with current
+Lampshade 0.12 uses wgpu 29 so its buffers compose directly with current
 graphics projects. Tokio is listed because the executable quick start below
 uses `#[tokio::main]`; library development dependencies do not propagate to
 applications.
 
 ```toml
 [dependencies]
-lampshade = "0.11"
+lampshade = "0.12"
 wgpu = "29"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
@@ -358,6 +358,12 @@ resident composition, and private kernel/runtime layers. The
 [typed-pipeline guide](docs/typed-pipeline.md) records the API contract and
 stabilization evidence.
 
+The [public API inventory](docs/public-api.md) distinguishes convenience,
+immediate-submit, recording, prepared-recording, and profiling behavior. It
+also records why scan, histogram, and separate-buffer SoA sort remain direct
+primitive APIs instead of being forced into `pipeline`. Users upgrading from
+0.11 should read the short [0.12 migration note](docs/migration-0.12.md).
+
 ## How it works
 
 - **Histogram:** each workgroup accumulates up to 256 counters in shared memory,
@@ -418,13 +424,19 @@ source-pinned 1M-100M result.
 
 ## Roadmap
 
-1. Validate AMD, more Intel and Apple GPUs, and additional driver versions.
-2. Grow the CUB-like private kernel/workspace engine behind the existing safe,
-   Thrust-like Rust APIs; split crates only when usage evidence justifies it.
-3. Improve portable key-width detection for GPU-resident inputs.
-4. Add derived primitives only when real workloads justify their API and cost.
-5. Revisit full-width scatter when hardware counters or a new algorithm provide
-   evidence for at least a 5% gain.
+1. Use 0.12 for the final intentional pre-1.0 contract cleanup: publish the
+   API inventory, remove the deprecated `v2` alias, and make `Error`
+   extensible.
+2. Use the 0.13 compatibility policy to reject public API breaks relative to
+   0.12 while continuously testing the MSRV, documentation, WebAssembly build,
+   and packaged-crate consumer.
+3. Maintain physical release coverage on NVIDIA Vulkan, Intel Vulkan, and
+   Apple Metal; treat AMD, DX12, Jetson, and browser runtime as additional
+   coverage until they can be automated reliably.
+4. Validate the release candidate through at least two out-of-tree application
+   fixtures with output parity and source-pinned evidence, then soak a 1.0 RC
+   without intentional public breaks.
+5. Add derived primitives only when real workloads justify their API and cost.
 
 New primitives require a resident-buffer API, deterministic boundary tests,
 CPU-reference validation, and reproducible benchmarks.
@@ -434,10 +446,14 @@ CPU-reference validation, and reproducible benchmarks.
 ```sh
 cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo +1.87.0 check --lib
+cargo check --target wasm32-unknown-unknown --all-features --lib
 cargo test --release --lib --tests
 cargo check --release --examples --benches
 cargo test --doc
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo package
+python3 validation/package-consumer/run.py target/package/lampshade-0.12.0
 ```
 
 Criterion benches cover each primitive plus `counted_pipeline` and the

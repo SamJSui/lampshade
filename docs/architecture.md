@@ -180,3 +180,9 @@ should follow this order:
 
 This gives Rust users one obvious dependency now while preserving a path toward
 a broader CUB/Thrust-like WebGPU ecosystem later.
+
+The [public API contract](public-api.md) classifies the convenience,
+immediate-submit, raw-recording, typed-recording, prepared, and profiling
+boundaries. In particular, workspace reservation is not a crate-wide
+allocation-free-recording promise; only explicitly documented prepared
+`record_reserved_*` methods carry that guarantee.
