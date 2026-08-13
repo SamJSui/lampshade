@@ -27,6 +27,7 @@ pub struct KeyValueSorter {
     counted: Option<CountedSorter>,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    adapter_info: Option<wgpu::AdapterInfo>,
 }
 
 impl KeyValueSorter {
@@ -37,6 +38,7 @@ impl KeyValueSorter {
             counted: None,
             device: device.clone(),
             queue: queue.clone(),
+            adapter_info: None,
         }
     }
 
@@ -44,9 +46,9 @@ impl KeyValueSorter {
     /// fast path is available.
     ///
     /// NVIDIA Vulkan adapters with enabled, fixed 32-wide subgroups use the
-    /// 8-bit radix kernel. Discrete NVIDIA Vulkan devices without compatible
-    /// subgroups use the 4-bit kernel, and all remaining adapters use the
-    /// portable 2-bit kernel.
+    /// 8-bit radix kernel. Compatible Intel Vulkan and discrete NVIDIA Vulkan
+    /// devices without compatible subgroups use the 4-bit kernel; remaining
+    /// adapters use the portable 2-bit kernel.
     pub fn new_for_adapter(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -57,6 +59,7 @@ impl KeyValueSorter {
             counted: None,
             device: device.clone(),
             queue: queue.clone(),
+            adapter_info: Some(adapter_info.clone()),
         }
     }
 
@@ -331,11 +334,15 @@ impl KeyValueSorter {
 
     fn counted(&mut self) -> &mut CountedSorter {
         if self.counted.is_none() {
-            self.counted = Some(CountedSorter::new(
-                &self.device,
-                &self.queue,
-                SortItemKind::KeyValue,
-            ));
+            self.counted = Some(match &self.adapter_info {
+                Some(adapter_info) => CountedSorter::new_for_adapter(
+                    &self.device,
+                    &self.queue,
+                    SortItemKind::KeyValue,
+                    adapter_info,
+                ),
+                None => CountedSorter::new(&self.device, &self.queue, SortItemKind::KeyValue),
+            });
         }
         self.counted
             .as_mut()

@@ -26,6 +26,9 @@ the `wgpu-primitives` package name.
 
 ### Changed
 
+- Route GPU-counted key/value sorts through the existing 4-bit radix
+  variant on compatible Intel Vulkan adapters instead of always using the
+  2-bit portable kernel. Apple Metal retains the measured 2-bit baseline.
 - Move the published-release performance baseline to Lampshade 0.11.0 so
   future WGPU 29 changes are compared against the current release.
 - Remove the deprecated `lampshade::v2` alias. Import the unchanged typed API
@@ -34,6 +37,14 @@ the `wgpu-primitives` package name.
   major release. Downstream matches now require a fallback arm.
 - Explicitly scope `pipeline` to GPU-counted composition. Scan, histogram, and
   separate-buffer SoA sorting remain supported direct primitive APIs.
+
+### Performance
+
+- Reduce the full portable SoA pack-sort-unpack pipeline by 17.02% at 1M and
+  25.29% at 10M items on Intel Alder Lake-N Vulkan. The
+  [counted-radix report](benchmarks/2026-08-13-portable-soa-counted-radix.md)
+  records process medians, physical correctness, the unchanged RTX native
+  path, and the rejected Metal experiments.
 
 ## 0.11.0 - 2026-08-12
 

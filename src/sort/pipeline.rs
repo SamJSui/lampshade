@@ -110,7 +110,14 @@ impl RadixVariant {
         matches!(self, Self::NvidiaVulkanSubgroup)
     }
 
-    fn bits_per_pass(self) -> u32 {
+    pub(super) fn counted_variant(self) -> Self {
+        match self {
+            Self::IntelVulkanWide | Self::NvidiaVulkanWide => self,
+            Self::Portable | Self::NvidiaVulkanSubgroup => Self::Portable,
+        }
+    }
+
+    pub(super) fn bits_per_pass(self) -> u32 {
         match self {
             Self::Portable => 2,
             Self::IntelVulkanWide | Self::NvidiaVulkanWide => 4,
@@ -455,6 +462,26 @@ mod tests {
                 true,
                 true,
             ),
+            RadixVariant::Portable
+        );
+    }
+
+    #[test]
+    fn counted_sort_reuses_only_the_compatible_wide_variants() {
+        assert_eq!(
+            RadixVariant::IntelVulkanWide.counted_variant(),
+            RadixVariant::IntelVulkanWide
+        );
+        assert_eq!(
+            RadixVariant::NvidiaVulkanWide.counted_variant(),
+            RadixVariant::NvidiaVulkanWide
+        );
+        assert_eq!(
+            RadixVariant::NvidiaVulkanSubgroup.counted_variant(),
+            RadixVariant::Portable
+        );
+        assert_eq!(
+            RadixVariant::Portable.counted_variant(),
             RadixVariant::Portable
         );
     }

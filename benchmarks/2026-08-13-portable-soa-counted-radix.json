@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-13T14:17:53.1623946-05:00",
+  "source": {
+    "base_commit": "b95cba617b61ef91e37f0155854f70d293f63150",
+    "branch": "perf/portable-soa",
+    "dirty": true,
+    "manifest": {
+      "algorithm": "SHA-256 over ordinal-sorted path + LF-normalized UTF-8 content",
+      "paths": [
+        "Cargo.toml",
+        "examples/profile_portable_soa.rs",
+        "src/scan/**/*",
+        "src/sort/**/*"
+      ],
+      "file_count": 30,
+      "sha256": "7a90f56574f2b82e15f1d70f2914180340521243c7ce78b17d11e6d5c18c1cb4"
+    }
+  },
+  "method": {
+    "items": [1000000, 10000000],
+    "warmups_per_process": 4,
+    "samples_per_process": 11,
+    "processes": 3,
+    "timing_boundary": "command encoding excluded; queue submit through completion included",
+    "reported_value": "median of process medians after subtracting the same-process empty submission median",
+    "correctness": "full key order, key/value association, duplicate stability, counted prefix, and same-encoder GPU count validated before timing",
+    "control": "portable forces the existing 2-bit counted kernel; selected applies adapter routing"
+  },
+  "adapters": {
+    "intel": {
+      "name": "Intel(R) Graphics (ADL-N)",
+      "backend": "Vulkan",
+      "os": "Linux 7.0.0-28-generic x86_64",
+      "driver_package": "mesa-vulkan-drivers 25.2.8-0ubuntu0.24.04.2"
+    },
+    "apple": {
+      "name": "Apple M3 Pro",
+      "backend": "Metal",
+      "os": "macOS 15.6.1 (24G90) arm64"
+    },
+    "nvidia": {
+      "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "backend": "Vulkan",
+      "driver": "591.86"
+    }
+  },
+  "full_pipeline_net_ms": {
+    "intel": {
+      "1000000": {
+        "portable_process_medians": [36.606414, 36.535109, 36.843424],
+        "selected_process_medians": [30.984410, 30.376616, 30.351169],
+        "portable_median": 36.606414,
+        "selected_median": 30.376616,
+        "change_percent": -17.0183
+      },
+      "10000000": {
+        "portable_process_medians": [367.047794, 372.767068, 396.224694],
+        "selected_process_medians": [277.858976, 278.773431, 278.483755],
+        "portable_median": 372.767068,
+        "selected_median": 278.483755,
+        "change_percent": -25.2928
+      }
+    },
+    "apple": {
+      "1000000": {
+        "portable_process_medians": [5.886875, 7.077041, 7.509708],
+        "selected_process_medians": [5.878500, 7.126000, 5.484041],
+        "interpretation": "inconclusive because identical routing produced bimodal completion times"
+      },
+      "10000000": {
+        "portable_process_medians": [32.978832, 33.497707, 32.922334],
+        "selected_process_medians": [33.000501, 32.921292, 32.951709],
+        "portable_median": 32.978832,
+        "selected_median": 32.951709,
+        "change_percent": -0.0822,
+        "interpretation": "parity; both labels route to the same 2-bit implementation"
+      }
+    }
+  },
+  "intel_sort_stage_net_ms": {
+    "1000000": {
+      "portable_process_medians": [35.023194, 35.145663, 35.213991],
+      "selected_process_medians": [29.086586, 29.165202, 28.512038]
+    },
+    "10000000": {
+      "portable_process_medians": [351.930940, 352.380196, 358.359572],
+      "selected_process_medians": [260.754878, 260.047767, 260.828311]
+    }
+  },
+  "nvidia_native_control": {
+    "items": 1000000,
+    "full_pipeline_net_process_medians_ms": [0.685700, 0.676500, 0.578100, 0.570100, 0.568600],
+    "median_ms": 0.578100,
+    "interpretation": "diagnostic only; the native SoA source and routing are unchanged by this patch"
+  },
+  "published_release_regression_gate": {
+    "baseline": "crates.io lampshade 0.11.0",
+    "runtime": "wgpu 29",
+    "adapter": "NVIDIA GeForce RTX 4070 Ti SUPER / Vulkan / 591.86",
+    "processes": 3,
+    "sizes": [1000000, 10000000, 100000000],
+    "workloads_per_size": 6,
+    "passed_rows": 18,
+    "total_rows": 18,
+    "threshold_percent": 2.0,
+    "largest_regression_percent": 1.8142,
+    "counted_full_width_changes_percent": [-0.2948, -0.3863, 0.0190],
+    "candidate_source_manifest_sha256": "3e153487608d3fa3c39bfde2ed08515134001db6e431918b55602eba2ed8243c"
+  },
+  "rejected_apple_experiments": {
+    "four_bit_10000000_change_percent": -0.14,
+    "three_bit_10000000_change_percent": 0.33,
+    "decision": "retain the 2-bit Metal baseline because neither experiment met the 5% acceptance threshold"
+  }
+}
