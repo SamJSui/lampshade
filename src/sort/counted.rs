@@ -8,7 +8,7 @@ use crate::{
     scan::Scanner,
 };
 
-use super::pipeline::SortItemKind;
+use super::pipeline::{RadixVariant, SortItemKind};
 
 const U32_SIZE_BYTES: u64 = size_of::<u32>() as u64;
 const UNIFORM_SIZE_BYTES: u64 = 16;
@@ -57,6 +57,8 @@ struct CountedSortPipelines {
     scatter: wgpu::ComputePipeline,
     vt: u32,
     block_size: u32,
+    bits_per_pass: u32,
+    bucket_count: u32,
     item_size_bytes: u64,
 }
 
@@ -66,7 +68,26 @@ impl CountedSorter {
             device: device.clone(),
             queue: queue.clone(),
             scanner: Scanner::new(device, queue),
-            pipelines: CountedSortPipelines::new(device, item_kind),
+            pipelines: CountedSortPipelines::new(device, item_kind, RadixVariant::Portable),
+            item_size_bytes: item_kind.size_bytes(),
+            workspace: None,
+        }
+    }
+
+    pub(super) fn new_for_adapter(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        item_kind: SortItemKind,
+        adapter_info: &wgpu::AdapterInfo,
+    ) -> Self {
+        let variant =
+            RadixVariant::for_adapter(item_kind, adapter_info, device.features(), &device.limits())
+                .counted_variant();
+        Self {
+            device: device.clone(),
+            queue: queue.clone(),
+            scanner: Scanner::new(device, queue),
+            pipelines: CountedSortPipelines::new(device, item_kind, variant),
             item_size_bytes: item_kind.size_bytes(),
             workspace: None,
         }
@@ -79,7 +100,9 @@ impl CountedSorter {
         let capacity_bytes =
             common::math::checked_byte_size(u64::from(capacity), self.item_size_bytes)?;
         let capacity_blocks = capacity.div_ceil(self.pipelines.items_per_block());
-        let histogram_items = capacity_blocks.checked_mul(4).ok_or(Error::SizeOverflow)?;
+        let histogram_items = capacity_blocks
+            .checked_mul(self.pipelines.bucket_count())
+            .ok_or(Error::SizeOverflow)?;
         let histogram_bytes =
             common::math::checked_byte_size(u64::from(histogram_items), U32_SIZE_BYTES)?;
         self.ensure_workspace(capacity_bytes, histogram_bytes)?;
@@ -133,7 +156,7 @@ impl CountedSorter {
         let Some(problem) = self.prepare(input, output, count, capacity)? else {
             return Ok(());
         };
-        let pass_count = pass_count(key_bits);
+        let pass_count = pass_count(key_bits, self.pipelines.bits_per_pass());
         self.record_commands(
             encoder,
             input,
@@ -192,7 +215,7 @@ impl CountedSorter {
             output,
             count,
             problem,
-            pass_count(key_bits),
+            pass_count(key_bits, self.pipelines.bits_per_pass()),
             dispatch,
             None,
         )
@@ -213,7 +236,7 @@ impl CountedSorter {
         let Some(problem) = self.prepare(input, output, count, capacity)? else {
             return Ok(GpuProfile::empty());
         };
-        let pass_count = pass_count(key_bits);
+        let pass_count = pass_count(key_bits, self.pipelines.bits_per_pass());
         let spans_per_pass = self
             .scanner
             .compute_pass_count(problem.histogram_items)
@@ -269,7 +292,9 @@ impl CountedSorter {
 
         let items_per_block = self.pipelines.items_per_block();
         let capacity_blocks = capacity.div_ceil(items_per_block);
-        let histogram_items = capacity_blocks.checked_mul(4).ok_or(Error::SizeOverflow)?;
+        let histogram_items = capacity_blocks
+            .checked_mul(self.pipelines.bucket_count())
+            .ok_or(Error::SizeOverflow)?;
         let histogram_bytes =
             common::math::checked_byte_size(u64::from(histogram_items), U32_SIZE_BYTES)?;
         self.ensure_workspace(capacity_bytes, histogram_bytes)?;
@@ -317,6 +342,7 @@ impl CountedSorter {
             &self.device,
             problem,
             pass_count,
+            self.pipelines.bits_per_pass(),
             self.device.limits().min_uniform_buffer_offset_alignment,
         );
         let mut bind_groups = Vec::with_capacity(pass_count as usize * 2);
@@ -470,7 +496,7 @@ impl CountedSorter {
 }
 
 impl CountedSortPipelines {
-    fn new(device: &wgpu::Device, item_kind: SortItemKind) -> Self {
+    fn new(device: &wgpu::Device, item_kind: SortItemKind, radix_variant: RadixVariant) -> Self {
         let prepare_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Counted Sort Dispatch Preparation Layout"),
             entries: &[
@@ -499,10 +525,24 @@ impl CountedSortPipelines {
         });
         let limits = device.limits();
         let (vt, block_size) = workgroup_config(&limits);
-        let source = include_str!("counted.wgsl")
+        let bits_per_pass = radix_variant.bits_per_pass();
+        let bucket_count = 1 << bits_per_pass;
+        let bucket_group_count = bucket_count / 4;
+        let raw_source = if bits_per_pass == 4 {
+            include_str!("counted_wide.wgsl")
+        } else {
+            include_str!("counted.wgsl")
+        };
+        let source = raw_source
             .replace("{{VT}}", &vt.to_string())
             .replace("{{BLOCK_SIZE}}", &block_size.to_string())
             .replace("{{MAX_WORKGROUPS_X}}", &MAX_WORKGROUPS_X.to_string())
+            .replace("{{RADIX_BUCKETS}}", &bucket_count.to_string())
+            .replace("{{RADIX_BUCKET_GROUPS}}", &bucket_group_count.to_string())
+            .replace(
+                "{{LOCAL_HISTOGRAM_SIZE}}",
+                &(block_size * bucket_group_count).to_string(),
+            )
             .replace("{{ITEM_TYPE}}", item_kind.shader_item_type())
             .replace("{{KEY_ACCESS}}", item_kind.shader_key_access());
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -538,12 +578,22 @@ impl CountedSortPipelines {
             scatter,
             vt,
             block_size,
+            bits_per_pass,
+            bucket_count,
             item_size_bytes: item_kind.size_bytes(),
         }
     }
 
     const fn items_per_block(&self) -> u32 {
         self.vt * self.block_size
+    }
+
+    const fn bits_per_pass(&self) -> u32 {
+        self.bits_per_pass
+    }
+
+    const fn bucket_count(&self) -> u32 {
+        self.bucket_count
     }
 
     fn prepare_dispatch(
@@ -664,6 +714,7 @@ fn create_uniform_buffer(
     device: &wgpu::Device,
     problem: CountedProblem,
     pass_count: u32,
+    bits_per_pass: u32,
     min_alignment: u32,
 ) -> (wgpu::Buffer, u64) {
     let stride = u64::from(min_alignment).max(UNIFORM_SIZE_BYTES);
@@ -672,7 +723,7 @@ fn create_uniform_buffer(
     for radix_pass in 0..pass_count as usize {
         let offset = radix_pass * words_per_uniform;
         data[offset..offset + 4].copy_from_slice(&[
-            radix_pass as u32 * 2,
+            radix_pass as u32 * bits_per_pass,
             problem.capacity_items,
             problem.capacity_blocks,
             0,
@@ -739,8 +790,8 @@ fn workspace_capacity(requested: u64) -> Result<u64, Error> {
     }
 }
 
-fn pass_count(key_bits: u32) -> u32 {
-    key_bits.max(1).div_ceil(2)
+fn pass_count(key_bits: u32, bits_per_pass: u32) -> u32 {
+    key_bits.max(1).div_ceil(bits_per_pass)
 }
 
 fn dispatch_dimensions(workgroups: u32) -> (u32, u32) {
@@ -787,11 +838,15 @@ mod tests {
 
     #[test]
     fn counted_passes_preserve_output_parity() {
-        assert_eq!(pass_count(0), 1);
-        assert_eq!(pass_count(1), 1);
-        assert_eq!(pass_count(2), 1);
-        assert_eq!(pass_count(3), 2);
-        assert_eq!(pass_count(32), 16);
+        assert_eq!(pass_count(0, 2), 1);
+        assert_eq!(pass_count(1, 2), 1);
+        assert_eq!(pass_count(2, 2), 1);
+        assert_eq!(pass_count(3, 2), 2);
+        assert_eq!(pass_count(32, 2), 16);
+        assert_eq!(pass_count(0, 4), 1);
+        assert_eq!(pass_count(4, 4), 1);
+        assert_eq!(pass_count(5, 4), 2);
+        assert_eq!(pass_count(32, 4), 8);
     }
 
     #[test]

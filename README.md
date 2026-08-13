@@ -43,6 +43,9 @@ separates promising Gaussian-splatting integrations from release readiness.
 The [0.11 release report](benchmarks/2026-08-12-lampshade-0.11-release.md)
 records the clean same-runtime regression gate and physical SoA correctness
 validation on NVIDIA Vulkan, Apple Metal, and Intel Vulkan.
+The [GPU-counted radix report](benchmarks/2026-08-13-portable-soa-counted-radix.md)
+records the Intel portable-SoA speedup, Metal parity, and rejected Metal
+experiments.
 The [GPU-resident count report](benchmarks/2026-08-09-gpu-resident-counts.md)
 separates isolated scheduling cost from full compaction-to-sort/reduction
 results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
@@ -393,9 +396,11 @@ primitive APIs instead of being forced into `pipeline`. Users upgrading from
 - **Radix sort:** stable least-significant-digit passes ping-pong between buffers.
   Known key-width bounds reduce the pass count. Compatible NVIDIA Vulkan
   devices use 8-bit or 4-bit paths, capable Intel Vulkan devices use a 4-bit
-  path, and other adapters retain the portable 2-bit path. GPU-counted sorting
-  uses the portable kernel with either count-proportional indirect dispatch or
-  explicit capacity dispatch while preserving the same stable ordering contract.
+  path, and other adapters retain the portable 2-bit path. GPU-counted
+  key/value sorting inherits compatible NVIDIA and Intel adapter routes while
+  preserving the same stable ordering contract. GPU-counted key-only sorting
+  and remaining key/value adapters use the 2-bit kernel with count-proportional
+  indirect dispatch or explicit capacity dispatch.
 
 ## Profiling
 
