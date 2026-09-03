@@ -21,9 +21,9 @@ class ReleaseRegressionTests(unittest.TestCase):
         manifest = Path(__file__).with_name("published-runner") / "Cargo.toml"
         contents = manifest.read_text(encoding="utf-8")
 
-        self.assertEqual(release_regression.BASELINE_VERSION, "0.12.0")
+        self.assertEqual(release_regression.BASELINE_VERSION, "0.12.1")
         self.assertIn('name = "lampshade-release-baseline-runner"', contents)
-        self.assertIn('lampshade = "=0.12.0"', contents)
+        self.assertIn('lampshade = "=0.12.1"', contents)
         self.assertNotIn('package = "wgpu-primitives"', contents)
 
     def test_runtime_stack_comes_from_the_locked_dependency_graph(self):
@@ -37,7 +37,7 @@ class ReleaseRegressionTests(unittest.TestCase):
 
         self.assertEqual(
             release_regression.resolved_wgpu_stack(candidate_manifest),
-            "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+            "wgpu 30.0.1; wgpu-core 30.0.1; wgpu-hal 30.0.1; wgpu-types 30.0.1",
         )
         self.assertEqual(
             release_regression.resolved_wgpu_stack(baseline_manifest),
@@ -47,7 +47,7 @@ class ReleaseRegressionTests(unittest.TestCase):
     def test_candidate_version_does_not_require_a_root_lockfile(self):
         manifest = Path(__file__).parents[2] / "Cargo.toml"
 
-        self.assertEqual(release_regression.package_version(manifest), "0.12.1")
+        self.assertEqual(release_regression.package_version(manifest), "0.13.0")
 
     def test_path_consumers_lock_the_current_checkout_version(self):
         root = Path(__file__).parents[2]
@@ -60,7 +60,7 @@ class ReleaseRegressionTests(unittest.TestCase):
         for lock in locks:
             packages = tomllib.loads(lock.read_text(encoding="utf-8"))["package"]
             versions = [package["version"] for package in packages if package["name"] == "lampshade"]
-            self.assertEqual(versions, ["0.12.1"], lock)
+            self.assertEqual(versions, ["0.13.0"], lock)
 
     def test_aggregates_process_medians_and_applies_threshold(self):
         adapter = {"name": "GPU", "vendor": 1, "device": 2, "device_type": "discrete_gpu", "backend": "vulkan"}
@@ -130,6 +130,20 @@ class ReleaseRegressionTests(unittest.TestCase):
             release_regression.passes_gate(
                 [{"error": "runner failed"}], [slow_same_adapter], 1, True
             )
+        )
+
+    def test_gate_description_distinguishes_disabled_modes(self):
+        self.assertEqual(
+            release_regression.gate_description(True, False),
+            "not evaluated: quick smoke test",
+        )
+        self.assertEqual(
+            release_regression.gate_description(False, True),
+            "not evaluated: cross-runtime characterization",
+        )
+        self.assertEqual(
+            release_regression.gate_description(False, False),
+            "candidate increase must not exceed threshold_percent",
         )
 
 

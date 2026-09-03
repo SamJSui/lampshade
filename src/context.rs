@@ -28,6 +28,7 @@ impl Context {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await?;
         let adapter_info = adapter.get_info();
@@ -84,19 +85,10 @@ mod tests {
     use super::{context_features, reliable_subgroup_scan};
 
     fn adapter(name: &str, vendor: u32, backend: wgpu::Backend) -> wgpu::AdapterInfo {
-        wgpu::AdapterInfo {
-            name: name.to_owned(),
-            vendor,
-            device: 0,
-            device_type: wgpu::DeviceType::Other,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend,
-            subgroup_min_size: 0,
-            subgroup_max_size: 0,
-            transient_saves_memory: false,
-        }
+        let mut adapter = wgpu::AdapterInfo::new(wgpu::DeviceType::Other, backend);
+        adapter.name = name.to_owned();
+        adapter.vendor = vendor;
+        adapter
     }
 
     #[test]

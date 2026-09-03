@@ -313,7 +313,9 @@ fn read_pair(context: &Context, buffer: &wgpu::Buffer) -> KeyValue {
         .expect("argmin readback callback did not run")
         .expect("argmin readback mapping failed");
     let result = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("argmin readback mapped range unavailable");
         bytemuck::from_bytes::<KeyValue>(&mapped).to_owned()
     };
     staging.unmap();

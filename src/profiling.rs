@@ -127,7 +127,7 @@ impl TimestampRecorder {
         receiver.await.map_err(|_| Error::ReadbackChannelClosed)??;
 
         let timestamps: Vec<u64> = {
-            let data = slice.get_mapped_range();
+            let data = slice.get_mapped_range()?;
             bytemuck::cast_slice(&data).to_vec()
         };
         self.readback_buffer.unmap();

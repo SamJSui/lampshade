@@ -60,7 +60,9 @@ fn validate_gpu_output(
         .recv()
         .expect("validation callback did not run")
         .expect("validation mapping failed");
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .expect("run-length validation mapped range unavailable");
     let words: &[u32] = bytemuck::cast_slice(&mapped);
     assert_eq!(words[0] as usize, expected_values.len());
     assert_eq!(&words[1..1 + expected_values.len()], expected_values);

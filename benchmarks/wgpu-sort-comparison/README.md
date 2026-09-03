@@ -3,7 +3,7 @@
 This harness reproduces the direct stable key-value sort comparison without
 mixing incompatible wgpu types in one process:
 
-- `lampshade-runner` uses the current checkout and wgpu 29.
+- `lampshade-runner` uses the current checkout and wgpu 30.
 - `wgpu-sort-runner` pins `wgpu_sort` at
   `4cb640e8cae28eba0149d470c5168cc2853466dd` and wgpu 0.20.1.
 - `common` owns the xorshift input generator, configuration schema, aggregation

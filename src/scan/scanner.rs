@@ -504,18 +504,10 @@ mod tests {
 
     #[test]
     fn routes_integrated_nvidia_vulkan_scans_to_portable() {
-        let adapter = |vendor, device_type| wgpu::AdapterInfo {
-            name: String::new(),
-            vendor,
-            device: 0,
-            device_type,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend: wgpu::Backend::Vulkan,
-            subgroup_min_size: 0,
-            subgroup_max_size: 0,
-            transient_saves_memory: false,
+        let adapter = |vendor, device_type| {
+            let mut adapter = wgpu::AdapterInfo::new(device_type, wgpu::Backend::Vulkan);
+            adapter.vendor = vendor;
+            adapter
         };
         assert!(!reliable_subgroup_scan(&adapter(
             0x10de,

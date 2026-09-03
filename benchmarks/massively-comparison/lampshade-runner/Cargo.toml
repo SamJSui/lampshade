@@ -10,4 +10,4 @@ lampshade = { path = "../../.." }
 massively-benchmark-common = { path = "../common" }
 pollster = "0.4"
 serde_json = "1"
-wgpu = "29.0.4"
+wgpu = "30.0.1"

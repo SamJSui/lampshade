@@ -132,7 +132,9 @@ async fn run() {
         .expect("readback channel closed")
         .expect("failed to map particle readback");
 
-    let bytes = mapped.get_mapped_range();
+    let bytes = mapped
+        .get_mapped_range()
+        .expect("particle readback mapped range unavailable");
     let selected = bytemuck::cast_slice::<u8, u32>(&bytes[..4])[0] as usize;
     let sorted: &[KeyValue] = bytemuck::cast_slice(&bytes[8..]);
     assert_eq!(selected, 5);

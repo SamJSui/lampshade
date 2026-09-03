@@ -93,7 +93,7 @@ jobs:
           cargo fmt --manifest-path benchmarks/release-regression/published-runner/Cargo.toml -- --check
           cargo clippy --locked --manifest-path benchmarks/release-regression/published-runner/Cargo.toml -- -D warnings
           python3 -m unittest discover -s benchmarks/release-regression -p test_run.py
-          python3 benchmarks/release-regression/run.py --quick --backend vulkan --output target/release-regression/ci.json
+          python3 benchmarks/release-regression/run.py --quick --backend vulkan --characterize --output target/release-regression/ci.json
       - name: Check documentation
         run: |
           cargo test --doc

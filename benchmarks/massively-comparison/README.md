@@ -3,7 +3,7 @@
 This harness compares the overlapping public GPU primitives in Lampshade and
 [Massively 0.96.0](https://crates.io/crates/massively). The two implementations run in
 separate processes so dependency graphs, allocators, and GPU runtime state stay
-isolated. The Lampshade candidate uses wgpu 29 while Massively uses wgpu 30;
+isolated. The Lampshade candidate and Massively both use wgpu 30, but
 separate processes avoid mixing their public GPU types. Massively is pinned exactly in
 `Cargo.lock`; its `v0.96` source revision is
 `ef9de55190529be98203aca207edab9d560d312e`.

@@ -25,7 +25,7 @@ $benchmarkRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $benchmarkRoot '..\..')).Path
 $targetRoot = Join-Path $repoRoot 'target\release-regression'
 $safeRepoRoot = $repoRoot.Replace('\', '/')
-$baselineVersion = '0.12.0'
+$baselineVersion = '0.12.1'
 if (-not $OutputPath) {
     $OutputPath = Join-Path $benchmarkRoot 'results\latest.json'
 }
@@ -235,6 +235,13 @@ $adaptersPassed = @($comparisons | Where-Object { -not $_.adapter_match }).Count
 $timingGateDisabled = [bool]$Quick -or [bool]$Characterize
 $regressionPassed = $timingGateDisabled -or @($comparisons | Where-Object { -not $_.passed }).Count -eq 0
 $gatePassed = $failures.Count -eq 0 -and $comparisons.Count -eq $expected -and $adaptersPassed -and $regressionPassed
+$gateDescription = if ($Characterize) {
+    'not evaluated: cross-runtime characterization'
+} elseif ($Quick) {
+    'not evaluated: quick smoke test'
+} else {
+    'candidate increase must not exceed threshold_percent'
+}
 $artifact = [pscustomobject][ordered]@{
     schema_version = 1; generated_at_utc = [DateTime]::UtcNow.ToString('o')
     host = @{ hostname = [Environment]::MachineName; architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
@@ -245,7 +252,7 @@ $artifact = [pscustomobject][ordered]@{
         source_manifest_sha256 = $sourceManifest; source_files = $sourceFiles
     }
     config = @{ backend = $Backend; items = $Items; workloads = $Workloads; processes = $Processes; threshold_percent = $ThresholdPercent; quick = [bool]$Quick; characterize = [bool]$Characterize }
-    methodology = @{ timing = 'identical public resident API and completion boundary per source'; aggregation = 'median of independent process medians'; gate = $(if ($Characterize) { 'not evaluated: cross-runtime characterization' } else { 'candidate increase must not exceed threshold_percent' }) }
+    methodology = @{ timing = 'identical public resident API and completion boundary per source'; aggregation = 'median of independent process medians'; gate = $gateDescription }
     runs = $runs; failures = $failures; aggregates = $aggregates; comparisons = $comparisons
     gate_evaluated = -not $timingGateDisabled; gate_passed = $gatePassed
 }

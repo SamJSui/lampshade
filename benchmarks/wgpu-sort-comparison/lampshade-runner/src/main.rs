@@ -125,7 +125,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             "WGPU_SORT_BENCH_IMPLEMENTATION_REVISION",
             "working-tree",
         ),
-        wgpu_version: "28.0.0".into(),
+        wgpu_version: "30.0.1".into(),
         adapter: adapter_metadata(&context),
         config: config.clone(),
         generator: GeneratorMetadata::current(),
@@ -200,7 +200,9 @@ fn read_buffer<T: bytemuck::Pod>(
         timeout: None,
     })?;
     receiver.recv()??;
-    let values = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+    let mapped = slice.get_mapped_range()?;
+    let values = bytemuck::cast_slice(&mapped).to_vec();
+    drop(mapped);
     staging.unmap();
     Ok(values)
 }

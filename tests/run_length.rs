@@ -574,7 +574,12 @@ async fn read_range(
         })
         .unwrap();
     receiver.await.unwrap().unwrap();
-    let output = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
+    let output = bytemuck::cast_slice(
+        &slice
+            .get_mapped_range()
+            .expect("run-length readback mapped range unavailable"),
+    )
+    .to_vec();
     staging.unmap();
     output
 }

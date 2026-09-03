@@ -41,6 +41,7 @@ async fn run(config: Config) -> Result<(), AnyError> {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|error| io::Error::other(format!("failed to request adapter: {error}")))?;
@@ -454,7 +455,9 @@ fn validate_final_output(
         .map_err(|error| io::Error::other(format!("validation map failed: {error}")))?;
 
     {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice.get_mapped_range().map_err(|error| {
+            io::Error::other(format!("validation mapped range failed: {error}"))
+        })?;
         let selected = bytemuck::cast_slice::<u8, u32>(&mapped[..4])[0] as usize;
         if selected != expected_selected {
             return Err(io::Error::other(format!(

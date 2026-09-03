@@ -219,7 +219,9 @@ async fn read_pod<T: bytemuck::Pod>(
         .await
         .expect("benchmark validation callback")
         .expect("benchmark validation map");
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .expect("benchmark validation mapped range unavailable");
     let result = bytemuck::cast_slice(&mapped).to_vec();
     drop(mapped);
     staging.unmap();

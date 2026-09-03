@@ -18,9 +18,10 @@ for both libraries. Inputs are deterministic, outputs are validated, and reporte
 comparisons are medians of independent process medians.
 
 The [published-release regression harness](benchmarks/release-regression/README.md)
-runs identical resident workloads against crates.io 0.12.0 on WGPU 29 and the
-0.12.1 development checkout, writes raw runs and process medians to JSON, and
-enforces a 2% regression budget.
+runs identical resident workloads against crates.io 0.12.1 on WGPU 29 and the
+0.13 development checkout on WGPU 30. The migration run writes raw samples and
+process medians to JSON while treating cross-runtime timing as characterization,
+not a same-stack regression gate.
 The [0.8 typed-pipeline stabilization report](benchmarks/2026-08-10-typed-pipeline-stabilization.md)
 records the final fixed-path gate and targeted rechecks.
 The [Lampshade migration report](benchmarks/2026-08-11-lampshade-migration.md)
@@ -36,8 +37,8 @@ records the crates.io 0.8 regression gate, final key-sort/RLE characterization,
 and identical-package validation on RTX, Jetson Orin, Intel, and Apple GPUs.
 The [WGPU 29 candidate report](benchmarks/2026-08-11-wgpu29-release.md)
 records an RTX pass and the accepted WGPU 29 Metal completion-boundary cost.
-Starting with 0.10, WGPU 29 is Lampshade's compatibility baseline; the 0.9
-release and `release/wgpu30` preserve the WGPU 30 line. The adjacent
+Lampshade 0.10 through 0.12 use WGPU 29; 0.13 returns the current development
+line to WGPU 30. The adjacent
 [downstream spike report](benchmarks/2026-08-12-downstream-adoption-spikes.md)
 separates promising Gaussian-splatting integrations from release readiness.
 The [0.11 release report](benchmarks/2026-08-12-lampshade-0.11-release.md)
@@ -52,8 +53,8 @@ results on RTX, Intel, and two Jetsons, plus fixed-path regression controls.
 
 The comparison tables below are historical pre-0.10 measurements using the
 runtime versions stated in their linked reports. They remain algorithmic
-baselines, not evidence for the WGPU 29 release candidate; the 0.10 regression
-and downstream integration reports supersede them where available.
+baselines, not evidence for the current release candidate; source-pinned
+release and downstream integration reports supersede them where available.
 
 ### Against Massively 0.96
 
@@ -165,10 +166,9 @@ separately.
 
 ## Installation
 
-Lampshade 0.12 uses wgpu 29 so its buffers compose directly with current
-graphics projects. Tokio is listed because the executable quick start below
-uses `#[tokio::main]`; library development dependencies do not propagate to
-applications.
+The latest crates.io release, Lampshade 0.12, uses wgpu 29. Tokio is listed
+because the executable quick start below uses `#[tokio::main]`; library
+development dependencies do not propagate to applications.
 
 ```toml
 [dependencies]
@@ -179,9 +179,10 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 The predecessor was published as `wgpu-primitives = "0.7"`. Existing users can
 move to Lampshade and change Rust imports from `wgpu_primitives` to `lampshade`.
-Choose Lampshade 0.9 or the `release/wgpu30` branch for wgpu 30. Use Lampshade
-0.10 onward for wgpu 29; wgpu buffer types from different major versions are
-not interchangeable.
+Current `main` prepares Lampshade 0.13 on wgpu 30. Until 0.13 is published,
+test it with a Git or path dependency and use `wgpu = "30"`. Upgrade both
+dependencies together because public wgpu types from different major versions
+are not interchangeable. See the [0.13 migration note](docs/migration-0.13.md).
 
 ### Separate key/value buffers
 
@@ -432,9 +433,9 @@ source-pinned 1M-100M result.
 1. Use 0.12 for the final intentional pre-1.0 contract cleanup: publish the
    API inventory, remove the deprecated `v2` alias, and make `Error`
    extensible.
-2. Use the 0.13 compatibility policy to reject public API breaks relative to
-   0.12 while continuously testing the MSRV, documentation, WebAssembly build,
-   and packaged-crate consumer.
+2. Use 0.13 for the intentional wgpu 30 public-type migration, then reject
+   public API breaks across the 0.13 patch line while continuously testing the
+   MSRV, documentation, WebAssembly build, and packaged-crate consumer.
 3. Maintain physical release coverage on NVIDIA Vulkan, Intel Vulkan, and
    Apple Metal; treat AMD, DX12, Jetson, and browser runtime as additional
    coverage until they can be automated reliably.
@@ -458,7 +459,7 @@ cargo check --release --examples --benches
 cargo test --doc
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo package
-python3 validation/package-consumer/run.py target/package/lampshade-0.12.1
+python3 validation/package-consumer/run.py target/package/lampshade-0.13.0
 ```
 
 Criterion benches cover each primitive plus `counted_pipeline` and the

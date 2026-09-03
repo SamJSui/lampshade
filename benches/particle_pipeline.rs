@@ -305,7 +305,9 @@ fn validate(context: &Context, buffers: &ParticleBuffers, expected: &[KeyValue])
         .expect("particle validation channel closed")
         .expect("failed to map particle validation");
     {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("particle validation mapped range unavailable");
         let selected = bytemuck::cast_slice::<u8, u32>(&mapped[..4])[0] as usize;
         let records: &[KeyValue] = bytemuck::cast_slice(&mapped[8..8 + expected.len() * 8]);
         assert_eq!(selected, expected.len());

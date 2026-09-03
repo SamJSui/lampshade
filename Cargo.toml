@@ -1,6 +1,6 @@
 [package]
 name = "lampshade"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 rust-version = "1.87.0"
 description = "Fast, composable GPU primitives for Rust applications using wgpu and WGSL."
@@ -26,7 +26,7 @@ include = [
 ]
 
 [dependencies]
-wgpu = "29.0.4"
+wgpu = "30.0.1"
 bytemuck = { version = "1.24", features = ["derive"] }
 futures = "0.3.31"
 log = "0.4.29"

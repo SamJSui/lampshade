@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-BASELINE_VERSION = "0.12.0"
+BASELINE_VERSION = "0.12.1"
 DEFAULT_ITEMS = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_WORKLOADS = (
     "reduce_sum",
@@ -112,16 +112,24 @@ def passes_gate(
     failures: list[dict[str, Any]],
     comparisons: list[dict[str, Any]],
     expected_comparisons: int,
-    quick: bool,
+    timing_gate_disabled: bool,
 ) -> bool:
     adapters_passed = all(row["adapter_match"] for row in comparisons)
-    regression_passed = quick or all(row["passed"] for row in comparisons)
+    regression_passed = timing_gate_disabled or all(row["passed"] for row in comparisons)
     return (
         not failures
         and len(comparisons) == expected_comparisons
         and adapters_passed
         and regression_passed
     )
+
+
+def gate_description(quick: bool, characterize: bool) -> str:
+    if characterize:
+        return "not evaluated: cross-runtime characterization"
+    if quick:
+        return "not evaluated: quick smoke test"
+    return "candidate increase must not exceed threshold_percent"
 
 
 def command_output(command: list[str], cwd: Path) -> str:
@@ -379,11 +387,7 @@ def main() -> int:
         "methodology": {
             "timing": "identical public resident API and completion boundary per source",
             "aggregation": "median of independent process medians",
-            "gate": (
-                "not evaluated: cross-runtime characterization"
-                if args.characterize
-                else "candidate increase must not exceed threshold_percent"
-            ),
+            "gate": gate_description(args.quick, args.characterize),
         },
         "runs": runs,
         "failures": failures,

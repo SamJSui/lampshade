@@ -311,7 +311,9 @@ fn map_scalar(
         .expect("count readback channel closed")
         .expect("count readback mapping failed");
     let value = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("count readback mapped range unavailable");
         bytemuck::cast_slice::<u8, u32>(&mapped)[0]
     };
     staging.unmap();
@@ -364,7 +366,9 @@ fn read_u32(context: &Context, source: &wgpu::Buffer, len: usize) -> Vec<u32> {
         .expect("validation readback channel closed")
         .expect("validation readback mapping failed");
     let values = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("validation readback mapped range unavailable");
         bytemuck::cast_slice(&mapped).to_vec()
     };
     staging.unmap();

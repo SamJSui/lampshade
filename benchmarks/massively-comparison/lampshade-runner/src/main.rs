@@ -14,6 +14,8 @@ use wgpu::util::DeviceExt;
 
 type AnyError = Box<dyn std::error::Error>;
 
+// This runner is shared with the published-release regression harness. wgpu 29
+// returns BufferView directly, while wgpu 30 returns Result<BufferView, _>.
 trait IntoMappedRange {
     fn into_mapped_range(self) -> Result<wgpu::BufferView, AnyError>;
 }
@@ -64,7 +66,7 @@ async fn run() -> Result<(), AnyError> {
         ),
         runtime_stack: runtime_metadata(
             "MASSIVELY_BENCH_RUNTIME_STACK",
-            "wgpu 29.0.4; wgpu-core 29.0.4; wgpu-hal 29.0.4; wgpu-types 29.0.4",
+            "wgpu 30.0.1; wgpu-core 30.0.1; wgpu-hal 30.0.1; wgpu-types 30.0.1",
         ),
         adapter: adapter_metadata(&context),
         config: config.clone(),

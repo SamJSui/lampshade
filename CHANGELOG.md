@@ -5,6 +5,21 @@ the `wgpu-primitives` package name.
 
 ## Unreleased
 
+### Changed
+
+- Move the public GPU runtime from wgpu 29.0.4 to wgpu 30.0.1. Lampshade API
+  names, buffer layouts, and kernels are unchanged, but application-owned wgpu
+  types must come from wgpu 30. Lampshade 0.12 remains available for wgpu 29
+  consumers; see the [0.13 migration note](docs/migration-0.13.md).
+- Compare the 0.13 candidate with published Lampshade 0.12.1 using the release
+  harness's cross-runtime characterization mode instead of applying the
+  same-runtime 2% regression gate.
+
+### Added
+
+- Restore `Error::MapRange` so wgpu 30 mapped-range access failures propagate
+  through Lampshade's host-returning and profiling APIs.
+
 ## 0.12.1 - 2026-08-13
 
 ### Changed

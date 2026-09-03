@@ -91,10 +91,10 @@ Lampshade has validated for the selected adapter.
 
 ## Compatibility policy
 
-Lampshade exposes wgpu types directly. Lampshade 1.x therefore remains on the
-wgpu 29 public type line; any incompatible wgpu upgrade requires a new
-Lampshade major release. Compatible wgpu 29 patch releases remain allowed by
-the Cargo dependency requirement.
+Lampshade exposes wgpu types directly. Lampshade 0.13 therefore moves the public
+type line from wgpu 29 to wgpu 30 as an intentional pre-1.0 compatibility break.
+Lampshade patch releases remain on the same wgpu major. After Lampshade 1.0, an
+incompatible wgpu upgrade requires a new Lampshade major release.
 
 The public `Error` enum is non-exhaustive beginning in 0.12 so validation can
 become more precise without forcing a Lampshade major release. Consumers must
@@ -103,3 +103,6 @@ include a wildcard arm when matching it.
 The deprecated `lampshade::v2` alias is removed in 0.12. Replace
 `lampshade::v2::*` with `lampshade::pipeline::*`; the underlying types and
 behavior are unchanged. See the [0.12 migration note](migration-0.12.md).
+
+For the wgpu 29 to 30 public-type migration, see the
+[0.13 migration note](migration-0.13.md).

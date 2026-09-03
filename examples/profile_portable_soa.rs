@@ -368,7 +368,9 @@ fn read_pod<T: bytemuck::Pod>(context: &Context, buffer: &wgpu::Buffer, len: usi
     pollster::block_on(receiver)
         .expect("validation channel closed")
         .expect("validation map failed");
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .expect("validation mapped range unavailable");
     let result = bytemuck::cast_slice(&mapped).to_vec();
     drop(mapped);
     staging.unmap();

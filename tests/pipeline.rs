@@ -538,7 +538,9 @@ async fn run_key_value_pipeline(
         .unwrap();
     receiver.await.unwrap().unwrap();
     let result = {
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("pipeline readback mapped range unavailable");
         let count = bytemuck::cast_slice::<u8, u32>(&mapped[..4])[0] as usize;
         bytemuck::cast_slice::<u8, KeyValue>(&mapped[8..])[..count].to_vec()
     };

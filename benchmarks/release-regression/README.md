@@ -7,12 +7,13 @@ crates are not.
 This harness compares the current Lampshade checkout against its last published
 predecessor using the same deterministic inputs, public resident APIs,
 completion boundary, correctness checks, and process-median aggregation. The
-baseline runner depends on crates.io `lampshade = "=0.12.0"` and wgpu 29; the
+baseline runner depends on crates.io `lampshade = "=0.12.1"` and wgpu 29; the
 candidate runner depends on the Lampshade repository checkout.
 
-This is now a same-runtime regression gate: the published baseline and current
-checkout both use wgpu 29. Historical 0.9/wgpu 30 to 0.10/wgpu 29 artifacts
-remain migration characterizations rather than same-stack performance gates.
+The 0.13 candidate uses wgpu 30, so this comparison is a cross-runtime
+characterization rather than a same-stack performance gate. Use
+`-Characterize` or `--characterize`: correctness, complete runs, and adapter
+identity remain required, but timing deltas are not release failures.
 
 The default matrix covers the established reduction, fixed key/value sort,
 scan, and compaction controls plus the counted full-width key/value path changed
@@ -21,27 +22,27 @@ by the 0.10 candidate.
 Quick build, correctness, and artifact validation (timings are informational):
 
 ```powershell
-benchmarks/release-regression/run.ps1 -Quick -Backend vulkan
+benchmarks/release-regression/run.ps1 -Quick -Backend vulkan -Characterize
 ```
 
 Formal validation uses three independent processes at 1M, 10M, and 100M:
 
 ```powershell
 benchmarks/release-regression/run.ps1 -Backend vulkan `
+  -Characterize `
   -OutputPath benchmarks/release-regression/results/latest.json
 ```
 
 On macOS or Linux, use the equivalent Python entry point:
 
 ```bash
-python3 benchmarks/release-regression/run.py --quick
+python3 benchmarks/release-regression/run.py --quick --characterize
 ```
 
 The Python entry point selects Metal on macOS and Vulkan elsewhere unless
 `--backend` is supplied explicitly.
 
-For a deliberate future cross-runtime migration, preserve measurements without
-treating the different runtime stacks as a next-release threshold gate:
+On macOS, the corresponding formal migration characterization is:
 
 ```bash
 python3 benchmarks/release-regression/run.py --backend metal --characterize
