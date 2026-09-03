@@ -3,7 +3,7 @@
 All notable changes to Lampshade are documented here. Releases before 0.8 used
 the `wgpu-primitives` package name.
 
-## Unreleased
+## 0.13.0 - 2026-09-03
 
 ### Changed
 

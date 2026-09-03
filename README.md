@@ -166,23 +166,22 @@ separately.
 
 ## Installation
 
-The latest crates.io release, Lampshade 0.12, uses wgpu 29. Tokio is listed
-because the executable quick start below uses `#[tokio::main]`; library
-development dependencies do not propagate to applications.
+Lampshade 0.13 uses wgpu 30. Applications using wgpu 29 can remain on
+Lampshade 0.12. Tokio is listed because the executable quick start below uses
+`#[tokio::main]`; library development dependencies do not propagate to applications.
 
 ```toml
 [dependencies]
-lampshade = "0.12"
-wgpu = "29"
+lampshade = "0.13"
+wgpu = "30"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 The predecessor was published as `wgpu-primitives = "0.7"`. Existing users can
 move to Lampshade and change Rust imports from `wgpu_primitives` to `lampshade`.
-Current `main` prepares Lampshade 0.13 on wgpu 30. Until 0.13 is published,
-test it with a Git or path dependency and use `wgpu = "30"`. Upgrade both
-dependencies together because public wgpu types from different major versions
-are not interchangeable. See the [0.13 migration note](docs/migration-0.13.md).
+Upgrade Lampshade and wgpu together because public wgpu types from different
+major versions are not interchangeable. See the
+[0.13 migration note](docs/migration-0.13.md).
 
 ### Separate key/value buffers
 

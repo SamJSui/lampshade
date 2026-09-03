@@ -7,7 +7,7 @@ accepts and returns public wgpu types.
 
 ## Update both dependencies
 
-After Lampshade 0.13 is published, change the application manifest from:
+Change the application manifest from:
 
 ```toml
 [dependencies]
