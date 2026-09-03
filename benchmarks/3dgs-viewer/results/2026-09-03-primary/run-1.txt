@@ -1,0 +1,16 @@
+# Publication normalization: only the private absolute model path was replaced with its filename.
+gpu_before=NVIDIA GeForce RTX 4070 Ti SUPER, 610.88, P8, 46, 15.39 W, 210 MHz, 405 MHz
+benchmark=lampshade-3dgs-production-v2
+adapter_name="NVIDIA GeForce RTX 4070 Ti SUPER" vendor=0x10de device=0x2705 device_type=DiscreteGpu backend=Vulkan
+driver="NVIDIA" driver_info="610.88"
+model="cactus_splat3_30kSteps_719k_splats.ply" splats=695779 resolution=1024x1024
+warmups=20 samples=31 first=baseline timestamp_period_ns=1
+validation=byte-identical-before-and-after non_background_pixels=1048576 lampshade_accelerated=true
+scope=preprocess+sort+render; command_encoding=excluded; wall=instrumented-serialized-submit-to-completion; gpu=encoder-timestamps
+wall_baseline_median_ms=5.976900 wall_candidate_median_ms=2.662100 wall_reduction_pct=55.460 wall_speedup=2.2452
+gpu_baseline_median_ms=5.881856 gpu_candidate_median_ms=2.575360 gpu_reduction_pct=56.215 gpu_speedup=2.2839
+raw_wall_baseline_ms=6.363400,6.350800,6.647500,6.357400,6.352800,6.634300,6.363600,6.367700,6.369300,6.342100,6.652300,5.691100,5.977200,5.688300,5.725000,5.976900,5.708200,6.269600,6.312300,5.699700,5.680800,5.697400,5.690800,5.715200,5.955000,5.688200,5.692800,5.708700,5.982900,5.701400,5.692600
+raw_wall_candidate_ms=2.939700,2.939300,2.944900,2.930200,2.947200,2.962800,2.931000,2.929600,2.961500,2.954900,2.945200,2.643200,2.657700,2.637200,2.660600,2.658300,2.662100,2.659000,2.655600,2.640500,2.939100,2.662200,2.648200,2.642200,2.659400,2.637400,2.658400,2.674000,2.663400,2.644400,2.644200
+raw_gpu_baseline_ms=6.280192,6.258688,6.554624,6.256640,6.256640,6.545408,6.272000,6.256640,6.258688,6.255616,6.568960,5.604352,5.884928,5.605376,5.605376,5.888000,5.613568,6.181888,6.116352,5.606400,5.605376,5.605376,5.605376,5.605376,5.873664,5.605376,5.605376,5.607424,5.881856,5.606400,5.605376
+raw_gpu_candidate_ms=2.845696,2.845696,2.854912,2.846720,2.846720,2.846720,2.845696,2.844672,2.846720,2.845696,2.860032,2.562048,2.576384,2.560000,2.562048,2.561024,2.561024,2.565120,2.577408,2.560000,2.855936,2.576384,2.562048,2.560000,2.575360,2.560000,2.558976,2.560000,2.571264,2.560000,2.561024
+gpu_after=NVIDIA GeForce RTX 4070 Ti SUPER, 610.88, P0, 51, 52.07 W, 1545 MHz, 10501 MHz

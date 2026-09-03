@@ -1,0 +1,18 @@
+[package]
+name = "lampshade-3dgs-production-benchmark"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+wgpu-3dgs-viewer = { git = "https://github.com/SamJSui/wgpu-3dgs-viewer", rev = "466025c8a9e566ac69ddea1f71388b1daf3a13e0", features = ["lampshade-sort"] }
+lampshade = "0.13"
+wgpu = "30.0.1"
+glam = "0.33"
+bytemuck = "1.25"
+pollster = "1.0"
+
+[patch.crates-io]
+wgpu-3dgs-core = { git = "https://github.com/LioQing/wgpu-3dgs-core" }
+
+[workspace]

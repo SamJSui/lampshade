@@ -1,0 +1,15 @@
+{
+  "wall_baseline_median_of_process_medians_ms": 5.6556,
+  "wall_candidate_median_of_process_medians_ms": 2.6242,
+  "wall_speedup_from_aggregate_medians": 2.1551710997637374,
+  "wall_reduction_pct_from_aggregate_medians": 53.59997170945612,
+  "wall_paired_speedup_median": 2.153939901740488,
+  "wall_paired_reduction_pct_median": 53.57344932456326,
+  "gpu_baseline_median_of_process_medians_ms": 5.553152,
+  "gpu_candidate_median_of_process_medians_ms": 2.537472,
+  "gpu_speedup_from_aggregate_medians": 2.188458434221146,
+  "gpu_reduction_pct_from_aggregate_medians": 54.3057348331182,
+  "gpu_paired_speedup_median": 2.189341945902301,
+  "gpu_paired_reduction_pct_median": 54.324174810990236,
+  "gpu_after_all_runs": "NVIDIA GeForce RTX 4070 Ti SUPER, 610.88, P0, 51, 44.94 W, 1500 MHz, 10501 MHz"
+}
